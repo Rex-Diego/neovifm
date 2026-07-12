@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neovifm.dev/protocol/neovifm-core-v0.schema.json",
+  "title": "NeoVifm Core Protocol v0",
+  "oneOf": [
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/snapshot" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["protocol", "version", "type", "sequence", "payload"],
+      "properties": {
+        "protocol": { "const": "neovifm-core" },
+        "version": { "const": 0 },
+        "type": { "type": "string" },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "payload": { "type": "object" }
+      }
+    },
+    "decimalString": {
+      "type": "string",
+      "pattern": "^-?[0-9]+$"
+    },
+    "unsignedDecimalString": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "hexBytes": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{2})*$"
+    },
+    "hello": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "hello" },
+            "payload": {
+              "type": "object",
+              "required": ["implementation", "capabilities"],
+              "properties": {
+                "implementation": { "type": "string", "minLength": 1 },
+                "capabilities": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "name_display",
+        "name_bytes_hex",
+        "path_display",
+        "path_bytes_hex",
+        "kind",
+        "size_bytes",
+        "mtime_unix_ms",
+        "selected",
+        "hidden"
+      ],
+      "properties": {
+        "name_display": { "type": "string" },
+        "name_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+        "path_display": { "type": "string" },
+        "path_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+        "kind": {
+          "enum": [
+            "directory",
+            "file",
+            "symlink",
+            "executable",
+            "fifo",
+            "socket",
+            "char-device",
+            "block-device",
+            "unknown"
+          ]
+        },
+        "size_bytes": { "$ref": "#/$defs/unsignedDecimalString" },
+        "mtime_unix_ms": { "$ref": "#/$defs/decimalString" },
+        "inode": { "$ref": "#/$defs/unsignedDecimalString" },
+        "mode_octal": { "type": "string", "pattern": "^[0-7]+$" },
+        "attributes_hex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "selected": { "type": "boolean" },
+        "hidden": { "type": "boolean" },
+        "stat_error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "type": "integer" },
+            "message": { "type": "string" }
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "snapshot" },
+            "payload": {
+              "type": "object",
+              "required": [
+                "cwd_display",
+                "cwd_bytes_hex",
+                "generated_at_unix_ms",
+                "cursor",
+                "entry_count",
+                "entries"
+              ],
+              "properties": {
+                "cwd_display": { "type": "string" },
+                "cwd_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+                "generated_at_unix_ms": { "$ref": "#/$defs/decimalString" },
+                "cursor": { "type": "integer", "minimum": -1 },
+                "entry_count": { "type": "integer", "minimum": 0 },
+                "entries": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/entry" }
+                }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "entry_count": { "const": 0 } } },
+                  "then": { "properties": { "cursor": { "const": -1 } } }
+                },
+                {
+                  "if": { "properties": { "entry_count": { "minimum": 1 } } },
+                  "then": { "properties": { "cursor": { "minimum": 0 } } }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "error" },
+            "payload": {
+              "type": "object",
+              "required": ["code", "message", "retryable"],
+              "properties": {
+                "code": { "type": "string", "minLength": 1 },
+                "message": { "type": "string" },
+                "retryable": { "type": "boolean" },
+                "path_display": { "type": "string" },
+                "path_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+                "os_error": { "type": "integer" }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

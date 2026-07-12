@@ -52,6 +52,15 @@ nodist_pkgdata_DATA = ../data/vifm-help.txt
 
 bin_PROGRAMS = vifm
 
+noinst_PROGRAMS = neovifm-core-probe
+
+neovifm_core_probe_SOURCES = \
+	neovifm/core_probe.c \
+	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/snapshot_json.c neovifm/snapshot_json.h \
+	utils/parson.c utils/parson.h \
+	utils/utf8proc.c utils/utf8proc.h utils/utf8proc_data.inc
+
 dist_bin_SCRIPTS = vifm-pause vifm-screen-split vifm-convert-dircolors
 
 dist_man_MANS = ../data/man/vifm.1 \

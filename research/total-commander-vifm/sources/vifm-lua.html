@@ -1,0 +1,2043 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Documentation - Vifm</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    <link href="/style.css" rel="stylesheet"
+          type="text/css"/>
+    <link href="/feed.xml" rel="alternate"
+          type="application/rss+xml" title="Vifm.info News"/>
+    <link href="/images/favicon.png?v=3D2" rel="shortcut icon"
+          type="image/png">
+
+    <script type="text/javascript">
+      function enableGif(obj)
+      {
+        obj.src = obj.src.replace('-preview.gif', '.gif');
+      }
+
+      function disableGif(obj)
+      {
+        obj.src = obj.src.replace('.gif', '-preview.gif');
+      }
+    </script>
+</head>
+
+<body>
+    <div id="outer">
+        <div id="menu">
+          <ul>
+                          <li>
+                <a href="/"
+                   title="Main page with news"
+                   data-name="News"
+                   class="section "
+                   accesskey="1">
+                  News                </a>
+              </li>
+                          <li>
+                <a href="/docs/"
+                   title="HTML versions of documentation"
+                   data-name="Documentation"
+                   class="section  current"
+                   accesskey="2">
+                  Documentation                </a>
+              </li>
+                          <li>
+                <a href="/cheatsheets"
+                   title="Keyboard cheatsheet"
+                   data-name="Cheatsheets"
+                   class="section "
+                   accesskey="3">
+                  Cheatsheets                </a>
+              </li>
+                          <li>
+                <a href="/downloads"
+                   title="Download links"
+                   data-name="Downloads"
+                   class="section "
+                   accesskey="4">
+                  Downloads                </a>
+              </li>
+                          <li>
+                <a href="/colorschemes"
+                   title="Color schemes"
+                   data-name="Themes"
+                   class="section "
+                   accesskey="5">
+                  Themes                </a>
+              </li>
+                          <li>
+                <a href="/gallery"
+                   title="Demonstration of look&feel"
+                   data-name="Screenshots"
+                   class="section "
+                   accesskey="6">
+                  Screenshots                </a>
+              </li>
+                          <li>
+                <a href="/contact"
+                   title="How to send feedback"
+                   data-name="Contact"
+                   class="section "
+                   accesskey="7">
+                  Contact                </a>
+              </li>
+                          <li>
+                <a href="https://q2a.vifm.info/"
+                   title="Question2Answer site for support"
+                   data-name="Q&A"
+                   class="section external"
+                   accesskey="8">
+                  Q&A<img src="/images/external-link.svg"/>                </a>
+              </li>
+                          <li>
+                <a href="https://wiki.vifm.info/"
+                   title="Wiki site"
+                   data-name="Wiki"
+                   class="section external"
+                   accesskey="9">
+                  Wiki<img src="/images/external-link.svg"/>                </a>
+              </li>
+                          <li>
+                <a href="https://lists.sourceforge.net/lists/listinfo/vifm-announce"
+                   title="Mailing list subscription"
+                   data-name="Mailing List"
+                   class="section external"
+                   accesskey="10">
+                  Mailing List<img src="/images/external-link.svg"/>                </a>
+              </li>
+                      </ul>
+          <span class="icons">
+            <a href="/vifm.keyring">
+              <img src="/images/key.svg" height="35px"
+                   title="PGP public key used for signing releases"/>
+            </a>
+            <a href="/feed.xml">
+              <img src="/images/rss.svg" height="34px"
+                   title="RSS Feed"/>
+            </a>
+          </span>
+        </div>
+
+        <div id="header">
+          <img class="logo" src="/images/logo.svg" title="Logo"/>
+          <h1><a href="/">Vifm</a></h1>
+          <h2>Vifm is a file manager with curses interface, which provides Vim-like environment for managing objects within file systems, extended with some useful ideas from mutt.<br/>If you use vi, Vifm gives you complete keyboard control over your files without having to learn a new set of commands.</h2>
+        </div>
+
+        <div id="content">
+            
+<table>
+  <tr>
+    <td class="sidebar">
+      <div class="docs-title">For v0.14.4           (31 May 2026)</div>
+      <ul>
+                  <li>
+            <a href="/docs/v0.14.4/vifm-app.txt"
+               class="">
+                vifm-app.txt            </a>
+          </li>
+                  <li>
+            <a href="/docs/v0.14.4/vifm-lua.txt"
+               class="current">
+                vifm-lua.txt            </a>
+          </li>
+                  <li>
+            <a href="/docs/v0.14.4/vifm-plugin.txt"
+               class="">
+                vifm-plugin.txt            </a>
+          </li>
+                  <li>
+            <a href="/docs/v0.14.4/vifm.1"
+               class="">
+                vifm.1            </a>
+          </li>
+              </ul>
+
+      <div class="docs-title">All versions</div>
+      <ul>
+                            <li>
+            <a href="/docs/v0.14.4/vifm-lua.txt"
+                 class="current">
+              v0.14.4            </a>
+          </li>
+                            <li>
+            <a href="/docs/v0.14.3/vifm-lua.txt"
+                 class="">
+              v0.14.3            </a>
+          </li>
+                            <li>
+            <a href="/docs/v0.14.2/vifm-lua.txt"
+                 class="">
+              v0.14.2            </a>
+          </li>
+                            <li>
+            <a href="/docs/v0.14.1/vifm-lua.txt"
+                 class="">
+              v0.14.1            </a>
+          </li>
+                            <li>
+            <a href="/docs/v0.14/vifm-lua.txt"
+                 class="">
+              v0.14            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.13/vifm-lua.txt"
+                 class="">
+              v0.13            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.12.1/vifm-lua.txt"
+                 class="">
+              v0.12.1            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.12/vifm-lua.txt"
+                 class="">
+              v0.12            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.11/vifm-lua.txt"
+                 class="">
+              v0.11            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.10.1/vifm-lua.txt"
+                 class="">
+              v0.10.1            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.10/vifm-lua.txt"
+                 class="">
+              v0.10            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.9.1/vifm-lua.txt"
+                 class="">
+              v0.9.1            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.9/vifm-lua.txt"
+                 class="">
+              v0.9            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.8.2/vifm-lua.txt"
+                 class="">
+              v0.8.2            </a>
+          </li>
+                            <li>
+            <a href="/docs/v0.8.1a/vifm-lua.txt"
+                 class="">
+              v0.8.1a            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.8.1/vifm-lua.txt"
+                 class="">
+              v0.8.1            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.8/vifm-lua.txt"
+                 class="">
+              v0.8            </a>
+          </li>
+                                      <li>
+            <a href="/docs/v0.7.8/vifm-lua.txt"
+                 class="">
+              v0.7.8            </a>
+          </li>
+                        </ul>
+    </td>
+
+    <td class="docs">
+      <div id="mainContent" class="docs vimdoc">
+        <pre>          <span class="flh"><a name="vifm-lua.txt" href="#vifm-lua.txt" class="t">vifm-lua.txt</a>    For Vifm version 1.0  Last change: 2026 Jan 13</span>
+
+ Email for bugs and suggestions: <span class="s">&lt;xaizek@posteo.net&gt;</span>
+
+<span class="n">Note:</span> this is very much work in progress.  Everything can change up to
+complete removal of this interface (that's an unlikely scenario though).
+
+Current API version: v0.2.0
+
+<a href="vifm-lua.txt#vifm-lua-status" class="l">vifm-lua-status</a>      Status of plugins.
+<a href="vifm-lua.txt#vifm-lua-plugins" class="l">vifm-lua-plugins</a>     Sample plugins.
+<a href="vifm-lua.txt#vifm-lua-why" class="l">vifm-lua-why</a>         Generic reasoning behind this API.
+<a href="vifm-lua.txt#vifm-lua-design" class="l">vifm-lua-design</a>      Generic ideas about the design.
+<a href="vifm-lua.txt#vifm-lua-evolution" class="l">vifm-lua-evolution</a>   Plans on Lua API.
+<a href="vifm-lua.txt#vifm-lua-loading" class="l">vifm-lua-loading</a>     Which plugins get loaded.
+<a href="vifm-lua.txt#vifm-lua-libs" class="l">vifm-lua-libs</a>        What Lua libraries are available.
+<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a>    Lua handlers concept.
+<a href="vifm-lua.txt#vifm-lua-events" class="l">vifm-lua-events</a>      Description of event types.
+<a href="vifm-lua.txt#vifm-lua-caps" class="l">vifm-lua-caps</a>        What using Lua in Vifm buys you.
+<a href="vifm-lua.txt#vifm-lua-api" class="l">vifm-lua-api</a>         Root-level API.
+<a href="vifm-lua.txt#vifm-l_vifm" class="l">vifm-l_vifm</a>          <span class="e">vifm</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.abbrevs" class="l">vifm-l_vifm.abbrevs</a>  <span class="e">vifm.abbrevs</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.cmds" class="l">vifm-l_vifm.cmds</a>     <span class="e">vifm.cmds</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.events" class="l">vifm-l_vifm.events</a>   <span class="e">vifm.events</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.fs" class="l">vifm-l_vifm.fs</a>       <span class="e">vifm.fs</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.keys" class="l">vifm-l_vifm.keys</a>     <span class="e">vifm.keys</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.menus" class="l">vifm-l_vifm.menus</a>    <span class="e">vifm.menus</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.opts" class="l">vifm-l_vifm.opts</a>     <span class="e">vifm.opts</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.plugin" class="l">vifm-l_vifm.plugin</a>   <span class="e">vifm.plugin</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.plugins" class="l">vifm-l_vifm.plugins</a>  <span class="e">vifm.plugins</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.sb" class="l">vifm-l_vifm.sb</a>       <span class="e">vifm.sb</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.sessions" class="l">vifm-l_vifm.sessions</a> <span class="e">vifm.sessions</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.tabs" class="l">vifm-l_vifm.tabs</a>     <span class="e">vifm.tabs</span> global table.
+<a href="vifm-lua.txt#vifm-l_vifm.version" class="l">vifm-l_vifm.version</a>  <span class="e">vifm.version</span> global table.
+<a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a>     <span class="e">VifmEntry</span> type.
+<a href="vifm-lua.txt#vifm-l_VifmJob" class="l">vifm-l_VifmJob</a>       <span class="e">VifmJob</span> type.
+<a href="vifm-lua.txt#vifm-l_VifmTab" class="l">vifm-l_VifmTab</a>       <span class="e">VifmTab</span> type.
+<a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>      <span class="e">VifmView</span> type.
+<a href="vifm-lua.txt#vifm-lua-index" class="l">vifm-lua-index</a>       Index of all Vifm entities in the API.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-status" href="#vifm-lua-status" class="t">vifm-lua-status</a>
+
+Pre-pre-alpha.  Just figuring out the basics, trying things out and shaping
+the design.  API is nowhere near being complete and there are some weird
+ideas which can significantly affect their structure.
+
+There is no manual page that corresponds to this document.  Rather significant
+changes are expected, so until things stabilize, only one version will be
+maintained.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-plugins" href="#vifm-lua-plugins" class="t">vifm-lua-plugins</a>
+
+Since API is not stable at all, example plugins are stored in code repository
+of Vifm and are thus bound to corresponding revision of the application.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-why" href="#vifm-lua-why" class="t">vifm-lua-why</a>
+
+Think of Lua API as a way to reach deeper into the internals of Vifm.  This
+isn't a replacement of existing functionality, but a richer way of interacting
+with the core behind it.
+
+One of the primary motivations were deficiencies in integrations with external
+applications.  Communicating results of calling them back to Vifm was
+problematic, there was simply no good way of doing it reliably.
+
+Regular :commands are a form of user-interface by design, which has various
+implications that limit their abilities.  For example, you can't reliably check
+if a command succeeded and different commands treat same arguments differently
+for the purpose of ease of use, which however makes automation harder.  When
+things like that start to get in the way, it's a good idea to reimplement
+relevant functionality in Lua.
+
+On top of that users' preferences differ and contradict each other, this can
+lead to proliferation of options to account for very fine-grained details.
+It's better to let users implement their wild and highly specific ideas on their
+own rather than trying to squeeze all possible use case into the application.
+The useful functionality developed on the side can eventually make its way to
+the code base.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-design" href="#vifm-lua-design" class="t">vifm-lua-design</a>
+
+The intent is for Lua to be a way of extending the core.  It's not meant
+neither as a replacement of :commands nor as a continuation of it.  Instead
+it's supposed to be a more low-level way of interacting with the core and
+extending it.
+
+One implication is that there is no builtin way of calling Lua from :commands
+or vice versa.  This gets too ugly too quickly, hence they are separated except
+for certain well-defined extension points where Lua parts integrate with
+:commands.
+
+Therefore one should think of :commands as a user-facing interface and Lua
+part as an internal extension language with wider range of possibilities.
+
+<span class="h">Callback safety</span>
+
+Whenever Vifm invokes a Lua function from C code, there is a danger that Lua
+will break some invariant.  To account for this, all API calls (including
+things like table indexing) are classified as either "safe" or "unsafe".
+Safe ones can be called from anywhere, but unsafe API is not always
+accessible.  As an example, you can't change directory of any view or add a
+view column from a view column handler.
+
+Unsafe API is marked with <span class="s">{unsafe}</span> in its description.  If description of a
+handler doesn't say that it's run in a safe environment, it can use unsafe API
+as well.  In order to allow use of unsafe API, an execution of a handler might
+be postponed until Vifm reaches a state where it holds the least amount of
+assumptions about what's going on, such handlers are marked as <span class="s">{delayed}</span>.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-evolution" href="#vifm-lua-evolution" class="t">vifm-lua-evolution</a>
+
+Lua version is fixed at 5.4 and is bundled as part of Vifm to avoid plugin
+compatibility issues.
+
+At the moment API can change, but the idea is to figure out key principles of
+organization, kinds of entities, naming strategy, ways to extend, etc. and
+fix them.  Initial stable version of the API doesn't need to be exhaustive,
+just sensible and relatively future proof.  Future releases should extend
+functionality rather than change it (unless absolutely necessary).  Doing this
+needs usage cases along with success and failure stories, so feedback is
+welcome.
+
+Current design principles:
+ 1. Callbacks in Lua accept a table and return one (if they return anything).
+    This allows adding new fields to both input and output while staying
+    backward compatible and readable at the cost of being a bit more verbose.
+
+<span class="h">Random ideas</span>
+
+Use camelCase?
+Use tables more often?  Supposed to be more extensible.
+Make "description" a required argument?
+
+Add VifmJob:succeeded() ?
+Add VifmJob:haserrors() ?
+
+Map options to arrays when possible, like for set options ?
+Forbid use of option abbreviations ?
+Technically options are also part of user-interface and maybe shouldn't be
+exposed in this way.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-loading" href="#vifm-lua-loading" class="t">vifm-lua-loading</a>
+
+There are two lists of plugins that affect plugin loading: whitelist and
+blacklist.  Here's how they function:
+ 1. If whitelist isn't empty, only plugins in the list can be loaded.  Trying to
+    load any other plugin fails.  Contents of blacklist is ignored.
+ 2. If whitelist is empty and blacklist isn't, loading anything that's not in
+    the blacklist is allowed.
+
+The whitelist is meant to help testing plugins in isolation for debugging
+purposes.
+
+The blacklist can be used to temporarily disable broken or just unused plugins
+as well as for debugging.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-libs" href="#vifm-lua-libs" class="t">vifm-lua-libs</a>
+
+The following standard libraries are enabled:
+ * basic (core global functions)
+ * table manipulation (<span class="e">tbl</span> table)
+ * package library (<span class="e">require</span> global and <span class="e">package</span> table)
+ * string manipulation (<span class="e">string</span> table)
+ * input and output (<span class="e">io</span> table)
+ * mathematical functions (<span class="e">math</span> table)
+ * time subset of OS facilities (<span class="e">clock</span>, <span class="e">date</span>, <span class="e">difftime</span> and <span class="e">time</span>
+   elements) and <span class="e">tmpname</span> of <span class="e">os</span> table
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-plugins" href="#vifm-plugins" class="t">vifm-plugins</a>
+
+Loading of plugins is performed after processing contents of <a href="vifm-app.txt#vifm-vifmrc" class="l">vifm-vifmrc</a>.
+Plugins are searched in the directories specified via <a href="vifm-app.txt#vifm---plugins-dir" class="l">vifm---plugins-dir</a>
+command-line option and the last specified directory is searched first.  Then
+$VIFM/plugins/ is enumerated in search of plugins.  Directories or symbolic
+links to directories are considered as candidates.  Those starting with a dot
+are ignored.
+
+For example, running Vifm like
+<span class="e"></span>
+<span class="e">  vifm --plugins-dir dirA --plugins-dir ~/dirB</span>
+<span class="e"></span>
+results in search for plugins in this order of directories:
+ 1. $PWD/dirA
+ 2. ~/dirB
+ 3. $VIFM/plugins
+The order matters as it defines which of the conflicting plugins gets
+loaded (see below on name conflicts).  Such an ordering allows shadowing
+plugins from default location.
+
+Implications of the default order of initialization:
+ * :commands defined in configuration have precedence over :commands defined by
+   plugins
+ * :commands from plugins can't be used during startup
+
+You can load plugins explicitly by calling <span class="e">:plugin load</span> command inside
+<a href="vifm-app.txt#vifm-vifmrc" class="l">vifm-vifmrc</a>.  From then on things defined by plugins can be used in
+configuration.
+
+All plugins are required to contain <span class="e">init.lua</span> file at their root.  This file
+gets processed and its return value is interpreted as plugin data.  The return
+value must be a table.  The table is stored in a <span class="e">vifm.plugins.all</span> dictionary
+with a key that corresponds to the plugin's name.  At the moment the name of a
+plugin is the name of its directory.  Name of a plugin must be unique (names
+that differ by only by case are considered unique) or loading it will be
+skipped.
+
+Global variables created by one plugin are local to that plugin and won't
+affect or be visible to other plugins.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-handlers" href="#vifm-lua-handlers" class="t">vifm-lua-handlers</a>
+
+Lua handlers are extension points within existing command-system of Vifm
+which enable invoking plugin functionality in a well-defined manner.
+
+A handler is a named Lua function, which is registered via a call to
+<a href="vifm-lua.txt#vifm-l_vifm.addhandler%28%29" class="l">vifm-l_vifm.addhandler()</a>.  The call specifies "partial name" which is
+prepended with a namespace ("<span class="e">#pluginname#</span>" string) behind the scenes to form
+a full name.  This is done to avoid conflicts between plugins.
+
+The scope of handlers is limited to extensions that accept and return all
+relevant information on each invocation.  Things like keys or commands can't
+be handled this way because they need to communicate metadata about how to
+call them.
+
+Handlers are executed in a safe environment and can't call API marked as
+<span class="s">{unsafe}</span>.
+
+A handler can be used in place of an external program in <a href="vifm-app.txt#vifm-%3Afiletype" class="l">vifm-:filetype</a> or
+<a href="vifm-app.txt#vifm-%3Afilextype" class="l">vifm-:filextype</a> commands like this:
+<span class="e">  filetype {*.png} #pluginname#open</span>
+<span class="e"></span>
+A handler can be used in place of an external viewer in <a href="vifm-app.txt#vifm-%3Afileviewer" class="l">vifm-:fileviewer</a>
+command like this:
+<span class="e">  fileviewer {*.vim} #pluginname#view --strip-comments %c</span>
+<span class="e"></span>
+A viewer can also be called through <a href="vifm-app.txt#vifm-%25q" class="l">vifm-%q</a>:
+<span class="e">  :!#pluginname#something %q</span>
+<span class="e"></span>
+A handler can be used to generate <a href="vifm-app.txt#vifm-%27statusline%27" class="l">vifm-'statusline'</a> or <a href="vifm-app.txt#vifm-%27tabline%27" class="l">vifm-'tabline'</a>
+value like this:
+<span class="e">  set statusline=#pluginname#statusline</span>
+<span class="e">  set tabline=#pluginname#tabline</span>
+<span class="e"></span>
+Below is a specification of input and output for different kinds of handlers.
+
+<span class="h">:filetype or :filextype handler</span>
+
+Fields of <span class="s">{info}</span> argument for <span class="s">{handler}</span>.handler for :file[x]type:
+ - "command" (string)
+   Command which handles the file.
+ - "entry" (table)
+   Information about a file list entry as an instance of <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a>.
+
+There is no return value.
+
+<span class="h">:fileviewer handler</span>
+
+Fields of <span class="s">{info}</span> argument:
+ - "command" (string)
+   Command with which the viewer was invoked.
+ - "path" (string)
+   Path to the file which is being viewed.
+ - "x" (integer)
+   X coordinate of the preview area in characters.
+ - "y" (integer)
+   Y coordinate of the preview area in characters.
+ - "width" (integer)
+   Width of the preview area in characters.
+ - "height" (integer)
+   Height of the preview area in characters.
+
+Fields of returned table:
+ - "lines" (array of strings)
+   Preview text.
+
+<span class="h">'statusline' handler</span>
+
+Fields of <span class="s">{info}</span> argument:
+ - "view" (<a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>)
+   Current view.
+ - "width" (integer)
+   Width of the status line.
+
+Fields of returned table:
+ - "format" (string)
+   Value for <a href="vifm-app.txt#vifm-%27statusline%27" class="l">vifm-'statusline'</a>.
+
+<span class="h">'tabline' handler</span>
+
+Fields of <span class="s">{info}</span> argument:
+ - "other" (boolean)
+   Whether this is for the tabline of inactive pane in case of pane tabs.
+ - "width" (integer)
+   Width of the tab line.
+
+Fields of returned table:
+ - "format" (string)
+   Value for <a href="vifm-app.txt#vifm-%27tabline%27" class="l">vifm-'tabline'</a>.
+
+<span class="h">'vicmd' or 'vixcmd' handler</span>
+
+Editor is invoked by Vifm in several different contexts with generally
+different input data and sometimes different expectations (like waiting until
+editing is finished).  This is why a handler needs to process several kinds of
+actions which correspond to those contexts.
+
+Format of returned table is currently the same for all actions:
+ - "success" (boolean)
+   Whether opening editor was successful.  If we're interested in the result
+   of editing (e.g., for bulk renaming), success condition also implies
+   receiving non-zero exit code from the editor.
+
+There is also common field of the input table:
+ - "command" (string)
+   Command specified in one of the options.
+
+"open-help" action
+
+Occurs on <a href="vifm-app.txt#vifm-%3Ahelp" class="l">vifm-:help</a> command if <a href="vifm-app.txt#vifm-%27vimhelp%27" class="l">vifm-'vimhelp'</a> is set.  Should open
+documentation in Vim's format and position cursor at the specified topic (help
+tag).
+
+Fields of <span class="s">{info}</span> argument:
+ - "action" (string)
+   "open-help" string.
+ - "topic" (string)
+   Help topic (help tag).
+ - "vimdocdir" (string)
+   Path to parent of doc/ directory with documentation in Vim format with tags
+   file.
+
+"edit-one" action
+
+Occurs on:
+ - <a href="vifm-app.txt#vifm-%3Ahelp" class="l">vifm-:help</a> command if <a href="vifm-app.txt#vifm-%27vimhelp%27" class="l">vifm-'vimhelp'</a> is unset
+ - pressing <a href="vifm-app.txt#vifm-v_v" class="l">vifm-v_v</a> key in view mode
+ - opening file from a menu
+ - opening file with a FUSE mounter using <a href="vifm-app.txt#vifm-i" class="l">vifm-i</a>
+ - using <a href="vifm-app.txt#vifm-q%3A" class="l">vifm-q:</a>, <a href="vifm-app.txt#vifm-q%2F" class="l">vifm-q/</a> and <a href="vifm-app.txt#vifm-q%3F" class="l">vifm-q?</a> commands in normal mode
+ - requests to provide file names (like on :copy? or <a href="vifm-app.txt#vifm-%3Arename" class="l">vifm-:rename</a>)
+
+Should open single file at an optionally specified location (line, column) and
+support waiting until editing has finished.
+
+Fields of <span class="s">{info}</span> argument:
+ - "action" (string)
+   "edit-one" string.
+ - "path" (string)
+   Path to the file to open.
+ - "mustwait" (boolean)
+   Whether handler must not return until editor has exited.
+ - "line" (integer) (optional)
+   Line number at which to open the file.
+ - "column" (integer) (optional)
+   Column number at which to open the file.  Present only if "line" field is
+   present.
+
+"edit-many" action
+
+Occurs on:
+ - opening selection or current file on <a href="vifm-app.txt#vifm-Enter" class="l">vifm-Enter</a> key in normal mode
+ - using <a href="vifm-app.txt#vifm-%3Aedit" class="l">vifm-:edit</a> command
+
+Should open one or multiple files in an editor, likely as a list of buffers or
+tabs.
+
+Fields of <span class="s">{info}</span> argument:
+ - "action" (string)
+   "edit-many" string.
+ - "paths" (array of strings)
+   Paths to the files to open.
+
+"edit-list" action
+
+Occurs on pressing <a href="vifm-app.txt#vifm-m_v" class="l">vifm-m_v</a> key in view mode.  Should open list of files or
+quickfix entries in an editor as a navigation list.
+
+Fields of <span class="s">{info}</span> argument:
+ - "action" (string)
+   "edit-list" string.
+ - "current" (integer)
+   Position of the current entry.
+ - "entries" (array of strings)
+   List of entries to pass to an editor.
+ - "isquickfix" (boolean)
+   Whether input entries are of the form "path[:line[:column]][:text]".
+   Because such lists come from external tools, this information is determined
+   using a simple heuristic and might not always be correct.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-events" href="#vifm-lua-events" class="t">vifm-lua-events</a>
+
+These are types of events that can be subscribed to via
+<a href="vifm-lua.txt#vifm-l_vifm.events.listen%28%29" class="l">vifm-l_vifm.events.listen()</a>.
+
+<span class="c">                                              </span> <a name="vifm-lua-event-app.exit" href="#vifm-lua-event-app.exit" class="t">vifm-lua-event-app.exit</a>
+<span class="h">"app.exit" event</span>
+
+Occurs before Vifm exits normally.  Does not happen on <a href="vifm-app.txt#vifm-%3Arestart" class="l">vifm-:restart</a>.
+
+<span class="c">                                              </span> <a name="vifm-lua-event-app.fsop" href="#vifm-lua-event-app.fsop" class="t">vifm-lua-event-app.fsop</a>
+<span class="h">"app.fsop" event</span>
+
+Occurs after a successful execution of a file-system operation.
+
+Fields of the only table parameter:
+ - "op" (string)
+   Type of an operation (see below for a list).
+ - "path" (string)
+   Source path or the only path affected by the operation.
+ - "target" (string) (optional)
+   Destination path or target of a symbolic link.
+ - "isdir" (boolean)
+   Whether operation is performed on a directory.
+ - "fromtrash" (boolean) (optional)
+   "move" operation sets the flag if "path" points inside a trash directory,
+   meaning that file was restored or otherwise moved from trash.
+ - "totrash" (boolean) (optional)
+   "move" operation sets the flag if "target" points inside a trash directory,
+   meaning that file was deleted to trash.
+
+Operation types:
+ - "copy"
+   Copying a file/directory from one location to another.
+ - "create"
+   Creation of a file/directory.
+ - "move"
+   Moving a file/directory from one location to another.  Includes renames,
+   moves across partition boundaries, deletion to trash and moving out of
+   trash.
+ - "remove"
+   Removal of a file/directory.  This includes symbolic link removal on
+   changing its target.
+ - "symlink"
+   Creation of a symbolic link, which might be a second step of updating its
+   target.
+
+The list of operations isn't complete, to be extended as needed.
+
+Operations performed in background aren't reported.
+
+<span class="n">Note:</span> a bulk rename that contains a cycle ("a" -&gt; "b" -&gt; "a" being the
+shortest one) will be reported the way it's performed, that is including
+temporary renames (e.g., "a -&gt; a_", "b -&gt; a", "a_ -&gt; b").
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-caps" href="#vifm-lua-caps" class="t">vifm-lua-caps</a>
+
+This is what one can do by using Lua at the moment:
+ * :commands in Lua with completion (<a href="vifm-lua.txt#vifm-l_vifm.cmds" class="l">vifm-l_vifm.cmds</a>)
+ * save and reset options (e.g., some kind of presets) (<a href="vifm-lua.txt#vifm-l_vifm.opts" class="l">vifm-l_vifm.opts</a>)
+ * custom columns (<a href="vifm-lua.txt#vifm-l_vifm.addcolumntype%28%29" class="l">vifm-l_vifm.addcolumntype()</a>)
+ * :filetype/:filextype/:fileviewer/%q handlers in Lua (<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a>)
+ * <span class="o">'statusline'</span> and <span class="o">'tabline'</span> generators in Lua (<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a>)
+ * fully integrate an arbitrary editor by changing <a href="vifm-app.txt#vifm-%27vicmd%27" class="l">vifm-'vicmd'</a> or <a href="vifm-app.txt#vifm-%27vixcmd%27" class="l">vifm-'vixcmd'</a>
+   (<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a>), while builtin logic assumes compatibility with Vim
+ * starting background jobs that appear on a job bar (<a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>)
+ * starting background jobs to do something when they're over (see "onexit" of
+   <a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>)
+ * defining custom keys and selectors (<a href="vifm-lua.txt#vifm-l_vifm.keys.add%28%29" class="l">vifm-l_vifm.keys.add()</a>)
+ * defining custom command-line abbreviations (<a href="vifm-lua.txt#vifm-l_vifm.abbrevs.add%28%29" class="l">vifm-l_vifm.abbrevs.add()</a>)
+ * running code before exit and when a file operation is done (<a href="vifm-lua.txt#vifm-lua-events" class="l">vifm-lua-events</a>)
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-api" href="#vifm-lua-api" class="t">vifm-lua-api</a>
+
+Builtin <span class="e">print()</span> function puts messages to plugin's log (see <a href="vifm-app.txt#vifm-%3Aplugins" class="l">vifm-:plugins</a>
+menu).
+
+All API calls can raise errors:
+ * on generic internal issues (like out of memory)
+ * when argument is missing
+ * when argument has wrong type
+ * when required table key is missing
+ * when table key has wrong type
+ * if the API call is unsafe and is disallowed in current environment
+
+Indices passed in or returned by the API start at 1 as arrays do in Lua.
+
+The following callbacks can perform only safe API calls:
+ * all Lua handlers (<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a>)
+ * view column handlers (<a href="vifm-lua.txt#vifm-l_vifm.addcolumntype%28%29" class="l">vifm-l_vifm.addcolumntype()</a>)
+
+Interaction with the host happens through <span class="e">vifm</span> global table.  See <a href="vifm-lua.txt#vifm-l_vifm" class="l">vifm-l_vifm</a>.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm" href="#vifm-l_vifm" class="t">vifm-l_vifm</a>
+
+Global <span class="e">vifm</span> table is the entry-point to the API.
+
+vifm.abbrevs
+Table for managing command-line abbreviations.  See <a href="vifm-lua.txt#vifm-l_vifm.abbrevs" class="l">vifm-l_vifm.abbrevs</a>.
+
+vifm.cmds
+Table for managing command-line commands.  See <a href="vifm-lua.txt#vifm-l_vifm.cmds" class="l">vifm-l_vifm.cmds</a>.
+
+vifm.events
+Table for dealing with events.  See <a href="vifm-lua.txt#vifm-l_vifm.events" class="l">vifm-l_vifm.events</a>.
+
+vifm.fs
+Table for basic/low-level file-system operations.  See <a href="vifm-lua.txt#vifm-l_vifm.fs" class="l">vifm-l_vifm.fs</a>.
+
+vifm.keys
+Table for managing keys.  See <a href="vifm-lua.txt#vifm-l_vifm.keys" class="l">vifm-l_vifm.keys</a>.
+
+vifm.menus
+Table for managing menus.  See <a href="vifm-lua.txt#vifm-l_vifm.menus" class="l">vifm-l_vifm.menus</a>.
+
+vifm.opts
+Table for managing options.  See <a href="vifm-lua.txt#vifm-l_vifm.opts" class="l">vifm-l_vifm.opts</a>.
+
+vifm.plugin
+Table that provides API service for this plugin.  See <a href="vifm-lua.txt#vifm-l_vifm.plugin" class="l">vifm-l_vifm.plugin</a>.
+
+vifm.plugins
+Table for managing plugins.  See <a href="vifm-lua.txt#vifm-l_vifm.plugins" class="l">vifm-l_vifm.plugins</a>.
+
+vifm.sb
+Table for managing status bar.  See <a href="vifm-lua.txt#vifm-l_vifm.sb" class="l">vifm-l_vifm.sb</a>.
+
+vifm.sessions
+Table for managing sessions.  See <a href="vifm-lua.txt#vifm-l_vifm.sessions" class="l">vifm-l_vifm.sessions</a>.
+
+vifm.tabs
+Table for managing tabs.  See <a href="vifm-lua.txt#vifm-l_vifm.tabs" class="l">vifm-l_vifm.tabs</a>.
+
+vifm.version
+Table with version information.  See <a href="vifm-lua.txt#vifm-l_vifm.version" class="l">vifm-l_vifm.version</a>.
+
+vifm.addcolumntype({column})                   <a name="vifm-l_vifm.addcolumntype%28%29" href="#vifm-l_vifm.addcolumntype%28%29" class="t">vifm-l_vifm.addcolumntype()</a>
+Registers a new view column type to be used in <a href="vifm-app.txt#vifm-%27viewcolumns%27" class="l">vifm-'viewcolumns'</a> option.
+
+Possible fields of <span class="s">{column}</span>:
+ - "name" (string)
+   Name of the command.  Must consist of Latin characters and not start with
+   the lower case one (those are reserved for builtin columns).
+ - "handler" (function)
+   Handler which accepts <span class="s">{info}</span> and returns a table.  See below.
+ - "isprimary" (boolean) (default: false)
+   Whether this column is highlighted with file color and search match
+   is highlighted as well.
+
+<span class="s">{column}</span>.handler is executed in a safe environment and can't call API marked
+as <span class="s">{unsafe}</span>.
+
+Fields of <span class="s">{info}</span> argument for <span class="s">{column}</span>.handler:
+ - "entry" (table)
+   Information about a file list entry as an instance of <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a>.
+ - "width" (table)
+   Calculated width of the column.
+
+Fields of table returned by <span class="s">{column}</span>.handler:
+ - "text" (string)
+    Table cell's value as a string or convertible to it.
+ - "matchstart" (integer) (default: 0)
+    For a search match this is the end position of a substring found in
+    entry's name, zero otherwise.
+ - "matchend" (integer) (default: 0)
+    For a search match this is the end position of a substring found in
+    entry's name, zero otherwise.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if column was added.
+
+<span class="h">Raises an error:</span>
+  If <span class="s">{column}</span>.name has incorrect value.
+
+vifm.addhandler({handler})                     <a name="vifm-l_vifm.addhandler%28%29" href="#vifm-l_vifm.addhandler%28%29" class="t">vifm-l_vifm.addhandler()</a>
+Registers a new handler that will be accessible in viewers.  See
+<a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a> for general description and details about specific
+use-cases.
+
+Possible fields of <span class="s">{handler}</span>:
+ - "name" (string)
+   Partial name of the handler.  Must not contain any spaces.  Can be
+   #-separated list of names, e.g. "view#pdf".
+ - "handler" (function)
+   Handler which accepts <span class="s">{info}</span> and returns a table.  See below.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if handler was added, <span class="e">false</span> if a handler with such name already
+  exists.
+
+<span class="h">Raises an error:</span>
+  If <span class="s">{handler}</span>.name has incorrect value.
+
+vifm.currview()                                <a name="vifm-l_vifm.currview%28%29" href="#vifm-l_vifm.currview%28%29" class="t">vifm-l_vifm.currview()</a>
+Retrieves a reference to active view.
+
+<span class="h">Return:</span>
+  Returns an instance of <a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>.
+
+vifm.otherview()                               <a name="vifm-l_vifm.otherview%28%29" href="#vifm-l_vifm.otherview%28%29" class="t">vifm-l_vifm.otherview()</a>
+Retrieves a reference to inactive view.
+
+<span class="h">Return:</span>
+  Returns an instance of <a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>.
+
+vifm.errordialog({title}, <span class="s">{msg}</span>)               <a name="vifm-l_vifm.errordialog%28%29" href="#vifm-l_vifm.errordialog%28%29" class="t">vifm-l_vifm.errordialog()</a>
+Displays error dialog.
+
+<span class="h">Parameters:</span>
+  <span class="s">{title}</span>  Title of the dialog.
+  <span class="s">{msg}</span>    Contents of the dialog.
+
+vifm.expand({str})                             <a name="vifm-l_vifm.expand%28%29" href="#vifm-l_vifm.expand%28%29" class="t">vifm-l_vifm.expand()</a>
+Expands environment variables and macros in a string.
+
+<span class="h">Parameters:</span>
+  <span class="s">{str}</span>  String to expand.
+
+<span class="h">Return:</span>
+  Expanded string.
+
+vifm.fnamemodify({path}, <span class="s">{mods}</span>[, <span class="s">{base}</span>])     <a name="vifm-l_vifm.fnamemodify%28%29" href="#vifm-l_vifm.fnamemodify%28%29" class="t">vifm-l_vifm.fnamemodify()</a>
+Changes path according to modifiers.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to modify.
+  <span class="s">{mods}</span>  Modifiers to apply (<span class="e">:p</span>, <span class="e">:t</span>, etc.).
+  <span class="s">{base}</span>  Base directory for relative paths.
+          Default: path of active pane.
+
+<span class="h">Return:</span>
+  Modified path.
+
+vifm.escape({what})                            <a name="vifm-l_vifm.escape%28%29" href="#vifm-l_vifm.escape%28%29" class="t">vifm-l_vifm.escape()</a>
+Escapes input to make it suitable for use in an external command for current
+value of <a href="vifm-app.txt#vifm-%27shell%27" class="l">vifm-'shell'</a>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{what}</span>  String to escape.
+
+<span class="h">Return:</span>
+  Modified path.
+
+vifm.executable({what})                        <a name="vifm-l_vifm.executable%28%29" href="#vifm-l_vifm.executable%28%29" class="t">vifm-l_vifm.executable()</a>
+If <span class="s">{what}</span> is absolute or relative path, checks whether it exists and refers to
+an executable, otherwise checks whether command named <span class="s">{what}</span> is present in
+directories listed in $PATH.  Checks for various executable extensions on
+Windows.
+
+<span class="h">Parameters:</span>
+  <span class="s">{what}</span>  Path or command name to check.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if an executable was found.
+
+vifm.exists({path})                            <a name="vifm-l_vifm.exists%28%29" href="#vifm-l_vifm.exists%28%29" class="t">vifm-l_vifm.exists()</a>
+Checks existence of a path without resolving symbolic links.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to check.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if path exists.
+
+vifm.makepath({path})                          <a name="vifm-l_vifm.makepath%28%29" href="#vifm-l_vifm.makepath%28%29" class="t">vifm-l_vifm.makepath()</a>
+Creates target path and missing intermediate directories.
+
+This is <span class="s">{deprecated}</span>.  See <a href="vifm-lua.txt#vifm-l_vifm.fs.mkdir%28%29" class="l">vifm-l_vifm.fs.mkdir()</a> instead.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to create.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.  Trying to create path that already exists is not
+  considered to be an error.
+
+vifm.run({info})                               <a name="vifm-l_vifm.run%28%29" href="#vifm-l_vifm.run%28%29" class="t">vifm-l_vifm.run()</a>
+Runs an external command similar to <a href="vifm-app.txt#vifm-%3A%21" class="l">vifm-:!</a>.  Waits for it to finish if
+terminal multiplexer is not involved.
+
+Command is dispatched via a shell, but <a href="vifm-app.txt#vifm-%27shellcmdflag%27" class="l">vifm-'shellcmdflag'</a> is always
+ignored.
+
+Possible fields of <span class="s">{info}</span>:
+ - "cmd" (string)
+   Command to execute.
+ - "pause" (string) (default: "onerror")
+   When to pause after command execution: "never", "onerror", "always".
+ - "usetermmux" (boolean) (default: true)
+   Whether to open terminal multiplexer if support was enabled via
+   <a href="vifm-app.txt#vifm-%3Ascreen" class="l">vifm-:screen</a>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{info}</span>  Table with information about what and how to run.
+
+<span class="h">Return:</span>
+  Exit code of the command, see <a href="vifm-lua.txt#vifm-l_VifmJob%3Aexitcode%28%29" class="l">vifm-l_VifmJob:exitcode()</a> for details.
+  Mind that if terminal multiplexer is used, this will be exit code of a
+  command that communicates with the multiplexer.
+
+<span class="h">Raises an error:</span>
+  If <span class="s">{info}</span>.pause has incorrect value.
+
+vifm.startjob({job})                           <a name="vifm-l_vifm.startjob%28%29" href="#vifm-l_vifm.startjob%28%29" class="t">vifm-l_vifm.startjob()</a>
+Launches an external command as a background job.  Returns without waiting
+for it to finish.
+
+Command is dispatched via a shell, but <a href="vifm-app.txt#vifm-%27shellcmdflag%27" class="l">vifm-'shellcmdflag'</a> is always
+ignored.
+
+Possible fields of <span class="s">{job}</span>:
+ - "cmd" (string)
+   Command to execute.
+ - "description" (string) (default: "")
+   Description of the job to be displayed on the job bar (when "visible" key
+   is set to true).
+ - "iomode" (string) (default: "r")
+   Specifies mode of interaction with the job:
+    - "r" - reading output of the process (see <a href="vifm-lua.txt#vifm-l_VifmJob%3Astdout%28%29" class="l">vifm-l_VifmJob:stdout()</a>)
+    - "w" - providing input to the process (see <a href="vifm-lua.txt#vifm-l_VifmJob%3Astdin%28%29" class="l">vifm-l_VifmJob:stdin()</a>)
+    - ""  - no I/O interaction
+ - "onexit" (function) (default: <span class="e">nil</span>)
+   Handler to invoke when the job is done, gets the job as its only parameter.
+   The handler is <span class="s">{delayed}</span>.
+ - "mergestreams" (boolean) (default: false)
+   Whether to merge error stream of the command with its output stream.
+ - "pwd" (string) (default: ".")
+   Working directory of the new process.
+ - "visible" (boolean) (default: false)
+   Whether to show this job on a job bar.
+
+<span class="h">Parameters:</span>
+  <span class="s">{job}</span>  Table with information about a job.
+
+<span class="h">Return:</span>
+  Returns an instance of <a href="vifm-lua.txt#vifm-l_VifmJob" class="l">vifm-l_VifmJob</a>.
+
+<span class="h">Raises an error:</span>
+  If "iomode" has incorrect value.
+  If "pwd" doesn't specify an existing path.
+
+vifm.stdout()                                  <a name="vifm-l_vifm.stdout%28%29" href="#vifm-l_vifm.stdout%28%29" class="t">vifm-l_vifm.stdout()</a>
+Retrieves stream to which Vifm's standard stream was redirected.
+
+<span class="h">Return:</span>
+  The stream that can't be closed or <span class="e">nil</span> if output stream wasn't redirected
+  to a TTY (character device on Windows).  In the former case the same stream
+  is returned on each call.
+
+vifm.input({info})                             <a name="vifm-l_vifm.input%28%29" href="#vifm-l_vifm.input%28%29" class="t">vifm-l_vifm.input()</a>
+Prompts user for input via command-line prompt.
+
+Possible fields of <span class="s">{info}</span>:
+ - "prompt" (string)
+   Prompt invitation.
+ - "initial" (string) (default: "")
+   Initial input for the prompt.
+ - "complete" (string) (default: "")
+   How to complete input: "dir" (directories only), "file" (files and
+   directories), "" (no completion).
+
+<span class="h">Parameters:</span>
+  <span class="s">{info}</span>  Table with information about the prompt.
+
+<span class="h">Return:</span>
+  String on success or nil if the prompt was cancelled.
+
+<span class="h">Raises an error:</span>
+  If <span class="s">{info}</span>.complete has incorrect value.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.abbrevs" href="#vifm-l_vifm.abbrevs" class="t">vifm-l_vifm.abbrevs</a>
+
+This global <span class="e">vifm.abbrevs</span> table provides means of managing command-line
+abbreviations.
+
+vifm.abbrevs.add({abbrev})                     <a name="vifm-l_vifm.abbrevs.add%28%29" href="#vifm-l_vifm.abbrevs.add%28%29" class="t">vifm-l_vifm.abbrevs.add()</a>
+Registers a new command-line abbreviation.
+
+Possible fields of <span class="s">{abbrev}</span>:
+ - "lhs" (string)
+   Left-hand side of the abbreviation.
+ - "description" (string) (default: "")
+   Description of the abbreviation.
+ - "noremap" (boolean) (default: true)
+   Whether to ignore user mappings in "rhs" during expansion.
+ - "handler" (function)
+   Handler which accepts <span class="s">{info}</span> and returns <span class="s">{results}</span>.
+
+<span class="s">{abbrev}</span>.handler is executed in a safe environment and can't call API marked
+as <span class="s">{unsafe}</span>.
+
+Fields of <span class="s">{info}</span> argument for "handler":
+ - "lhs" (string)
+   Left-hand side of the abbreviation.
+
+Fields of <span class="s">{results}</span> return value of "handler":
+ - "rhs" (string)
+   Right-hand side of the abbreviation.
+In case of inappropriate <span class="s">{results}</span>, the abbreviation won't be expanded.
+
+This function is <span class="s">{unsafe}</span>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{abbrev}</span>  Table with information about an abbreviation.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.cmds" href="#vifm-l_vifm.cmds" class="t">vifm-l_vifm.cmds</a>
+
+This global <span class="e">vifm.cmds</span> table provides means of managing command-line commands.
+
+vifm.cmds.add({cmd})                           <a name="vifm-l_vifm.cmds.add%28%29" href="#vifm-l_vifm.cmds.add%28%29" class="t">vifm-l_vifm.cmds.add()</a>
+Registers a new :command of a kind that's equivalent to builtin commands.
+
+The word "parsing" below refers to processing of command-line arguments like
+removal of slashes used for escaping and skipping whitespace.
+
+Possible fields of <span class="s">{cmd}</span>:
+ - "name" (string)
+   Name of the command.
+ - "description" (string) (default: "")
+   Description of the command.
+ - "handler" (function)
+   Handler which accepts <span class="s">{info}</span>.
+ - "complete" (function)
+   Completion function which accepts <span class="s">{info}</span> and returns <span class="s">{results}</span>.
+ - "minargs" (integer) (default: 0)
+   Minimal number of arguments.
+ - "maxargs" (integer) (default: minargs)
+   Maximal number of arguments.  Negative number means "indefinite".
+ - "withrange" (boolean) (default: false)
+   Whether this command accepts a range.
+
+Fields of <span class="s">{info}</span> argument for "handler":
+ - "args" (string)
+   All arguments passed to the command.
+ - "argv" (array of strings)
+   Set of parsed arguments of the command.
+ - "range" (table)
+   Information about a range passed to the command or <span class="e">nil</span> for commands that
+   don't accept a range or when none is supplied.  Fields:
+    - "from" (integer)
+      1-based index of the first entry in the range.
+    - "to" (integer)
+      1-based index of the last entry in the range.  Equal to "from" if there
+      is only one element in the range.
+
+Fields of <span class="s">{info}</span> argument for "complete":
+ - "arg" (string)
+   Argument being completed.
+ - "args" (string)
+   Command-line up to cursor position (for cases when completion depends on
+   what comes before current argument).
+ - "argv" (array of strings)
+   Same as "args", but parsed into an array.
+
+Fields of <span class="s">{results}</span> return value of "complete":
+ - "offset" (integer) (default: 0)
+   Offset from beginning of the argument.  This is useful to avoid prepending
+   prefix that's common to all matches, thus completing only essential part.
+   For example, in case of "var=val" use offset=4 to complete part after "=".
+ - "matches" (array of strings or tables)
+   List of items in values of the table (keys are ignored).  Each list item
+   can either be a string or a table.  When item is a string it is used as a
+   completion match.  When item is a table it can contain these keys:
+    - "match" (string)
+      Use "match" as a completion match.
+    - "description" (string) (optional)
+      A string that will be showed along with the "match" but not inserted on
+      the command line.
+   All other items of unspecified types will be silently ignored.
+
+<span class="h">Parameters:</span>
+  <span class="s">{cmd}</span>  Table with information about a command.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+vifm.cmds.command({cmd})                       <a name="vifm-l_vifm.cmds.command%28%29" href="#vifm-l_vifm.cmds.command%28%29" class="t">vifm-l_vifm.cmds.command()</a>
+Registers a new :command that works exactly as those registered using
+<a href="vifm-app.txt#vifm-%3Acommand" class="l">vifm-:command</a> builtin command.
+
+Possible fields of <span class="s">{cmd}</span>:
+ - "name" (string)
+   Name of the command.
+ - "description" (string) (default: action)
+   Description of the command.
+ - "action" (string)
+   Value of the command.  See <a href="vifm-app.txt#vifm-%3Acommand" class="l">vifm-:command</a> for possible value.
+
+<span class="h">Parameters:</span>
+  <span class="s">{cmd}</span>  Table with information about a command.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+vifm.cmds.delcommand({name})                   <a name="vifm-l_vifm.cmds.delcommand%28%29" href="#vifm-l_vifm.cmds.delcommand%28%29" class="t">vifm-l_vifm.cmds.delcommand()</a>
+Removes :command added by <span class="e">vifm.cmds.command()</span>, basically being an equivalent
+of <a href="vifm-app.txt#vifm-%3Adelcommand" class="l">vifm-:delcommand</a> builtin command.
+
+<span class="h">Parameters:</span>
+  <span class="s">{name}</span>  Name of the command.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.events" href="#vifm-l_vifm.events" class="t">vifm-l_vifm.events</a>
+
+This global <span class="e">vifm.events</span> table groups items related to events.
+
+events.listen({event})                         <a name="vifm-l_vifm.events.listen%28%29" href="#vifm-l_vifm.events.listen%28%29" class="t">vifm-l_vifm.events.listen()</a>
+Registers a handler for an event.
+
+Possible fields of <span class="s">{event}</span>:
+ - "event" (string)
+   Name of event to listen for.  See <a href="vifm-lua.txt#vifm-lua-events" class="l">vifm-lua-events</a> for event descriptions.
+ - "handler" (function)
+   Handler to invoke when the event happens.
+
+Registering the same handler more than once for the same event has no effect.
+
+<span class="h">Parameters:</span>
+  <span class="s">{event}</span>  Table with information about event handling.
+
+<span class="h">Return:</span>
+  <span class="e">nil</span>
+
+<span class="h">Raises an error:</span>
+  On unknown event name.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.fs" href="#vifm-l_vifm.fs" class="t">vifm-l_vifm.fs</a>
+
+This global <span class="e">vifm.fs</span> table provides basic/low-level file-system operations.
+
+The main purpose is to allow plugins to perform file manipulations the same
+way in different environment, avoid invoking external applications and
+dealing with things like escaping.
+
+The implementation is the same that is used when <a href="vifm-app.txt#vifm-%27syscalls%27" class="l">vifm-'syscalls'</a> is enabled
+regardless of the value of the option.  This is to make behaviour more
+consistent across supported platforms and user configurations.
+
+These operations:
+ * synchronous
+ * non-interactive:
+   - no dialog on conflicts
+   - no dialog on errors
+   - can't be cancelled
+ * don't change undo history (can't be undone or redone)
+ * generate <a href="vifm-lua.txt#vifm-lua-event-app.fsop" class="l">vifm-lua-event-app.fsop</a> event
+
+fs.cp({from}, <span class="s">{to}</span>, <span class="s">{onconflict}</span>)              <a name="vifm-l_vifm.fs.cp%28%29" href="#vifm-l_vifm.fs.cp%28%29" class="t">vifm-l_vifm.fs.cp()</a>
+Copies a file/directory from <span class="s">{from}</span> to <span class="s">{to}</span>.
+
+Possible values of <span class="s">{onconflict}</span>:
+ - "append-tail"
+   For files: append the end of a file at <span class="s">{from}</span> to the corresponding file at
+              <span class="s">{to}</span> until they are of equal size if the latter is initially
+              shorter than the former.
+   For directories: fail if <span class="s">{to}</span> exists.
+ - "overwrite"
+   For files: remove <span class="s">{to}</span> file before placing a copy in its place.
+   For directories: merge <span class="s">{from}</span> into <span class="s">{to}</span> replacing matching files.
+ - "skip"
+   For files: avoid copying a path in <span class="s">{from}</span> if a corresponding path exists in
+              <span class="s">{to}</span>.
+   For directories: merge <span class="s">{from}</span> into <span class="s">{to}</span> skipping matching files.
+ - (default) "fail" or any other value
+   Return an error if <span class="s">{to}</span> already exists.
+
+<span class="h">Parameters:</span>
+  <span class="s">{from}</span>        Path to a file/directory to copy.
+  <span class="s">{to}</span>          Where the copy should be placed.
+  <span class="s">{onconflict}</span>  What to do if <span class="s">{to}</span> already exists.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+fs.ln({path}, <span class="s">{target}</span>)                        <a name="vifm-l_vifm.fs.ln%28%29" href="#vifm-l_vifm.fs.ln%28%29" class="t">vifm-l_vifm.fs.ln()</a>
+Creates or updates a symbolic link at <span class="s">{path}</span>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>    The path to a symbolic link.
+  <span class="s">{target}</span>  Where the link should point.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+fs.mkdir({path}, <span class="s">{onmissingparent}</span>)            <a name="vifm-l_vifm.fs.mkdir%28%29" href="#vifm-l_vifm.fs.mkdir%28%29" class="t">vifm-l_vifm.fs.mkdir()</a>
+Creates an empty directory at <span class="s">{path}</span>.
+
+Possible values of <span class="s">{onmissingparent}</span>:
+ - "create"
+   Try to create all missing path components.
+ - (default) "fail" or any other value
+   Return an error if parent of the <span class="s">{path}</span> doesn't exist.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>             The path at which a new directory should be created.
+  <span class="s">{onmissingparent}</span>  What to do if parent of the <span class="s">{path}</span> doesn't exist.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+fs.mkfile({path})                              <a name="vifm-l_vifm.fs.mkfile%28%29" href="#vifm-l_vifm.fs.mkfile%28%29" class="t">vifm-l_vifm.fs.mkfile()</a>
+Creates an empty file at <span class="s">{path}</span>.  Fails if that path already exists.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  The path at which a new file should be created.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+fs.mv({from}, <span class="s">{to}</span>, <span class="s">{onconflict}</span>)              <a name="vifm-l_vifm.fs.mv%28%29" href="#vifm-l_vifm.fs.mv%28%29" class="t">vifm-l_vifm.fs.mv()</a>
+The interface matches that of <a href="vifm-lua.txt#vifm-l_vifm.fs.cp%28%29" class="l">vifm-l_vifm.fs.cp()</a>, but <span class="s">{from}</span> is moved instead
+of being copied.
+
+fs.rm({path})                                  <a name="vifm-l_vifm.fs.rm%28%29" href="#vifm-l_vifm.fs.rm%28%29" class="t">vifm-l_vifm.fs.rm()</a>
+Removes a single file or a directory with all of its contents.  Fails if
+<span class="s">{path}</span> doesn't exist.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to a file/directory that should be removed.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+fs.rmdir({path})                               <a name="vifm-l_vifm.fs.rmdir%28%29" href="#vifm-l_vifm.fs.rmdir%28%29" class="t">vifm-l_vifm.fs.rmdir()</a>
+Removes an empty directory.  Fails if <span class="s">{path}</span> doesn't exist.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to the empty directory that should be removed.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.keys" href="#vifm-l_vifm.keys" class="t">vifm-l_vifm.keys</a>
+
+This global <span class="e">vifm.keys</span> table provides means of managing key bindings.
+
+keys.add({key})                                <a name="vifm-l_vifm.keys.add%28%29" href="#vifm-l_vifm.keys.add%28%29" class="t">vifm-l_vifm.keys.add()</a>
+Registers in one or several modes:
+ * a new user-defined key which might replace an existing one
+ * a new selector which must not conflict with an existing one
+
+Possible fields of <span class="s">{key}</span>:
+ - "shortcut" (string)
+   Left-hand side of the mapping.
+ - "description" (string) (default: "")
+   Description of the key.
+ - "modes" (array of strings)
+   List of modes to register the key in.  Supported values: cmdline, nav,
+   normal, visual, menus, view and dialogs (sort, attributes, change and file
+   info).  Unsupported values are ignored.
+ - "isselector" (boolean) (default: false)
+   Whether this handler defines a selector rather than a regular key.
+ - "followedby" (string) (default: "none")
+   "none", "selector" (e.g., "j" in "dj") or "keyarg" (e.g., "q" in "'q").
+ - "handler" (function)
+   Handler which accepts <span class="s">{info}</span> and returns a table for selector handlers.
+   See below.
+
+<span class="s">{key}</span>.handler for selectors is executed in a safe environment and can't call
+API marked as <span class="s">{unsafe}</span>.
+
+Fields of <span class="s">{info}</span> argument for <span class="s">{key}</span>.handler:
+ - "count" (integer)
+   Count preceding the key or nil if none.
+ - "register" (string)
+   Register name or nil if none was specified.
+ - "indexes" (table) (present if key is followed by selector)
+   Table of indexes returned by selector key.
+ - "keyarg" (string) (present if key is followed by keyarg)
+   Key argument (e.g., "x" in "mx" sequence).
+
+Fields of table returned by <span class="s">{key}</span>.handler for selectors:
+ - "indexes" (array of integers)
+   Table of indexes of entries of the current view (<a href="vifm-lua.txt#vifm-l_vifm.currview%28%29" class="l">vifm-l_vifm.currview()</a>)
+   that were selected for the operation.  Invalid, nonexistent and duplicate
+   indexes are silently ignored.  Indexes are sorted before processing.
+ - "cursorpos" (integer) (optional)
+   New position of the cursor.  Non-integer values are ignored.
+
+<span class="h">Parameters:</span>
+  <span class="s">{key}</span>  Table with information about a key.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.menus" href="#vifm-l_vifm.menus" class="t">vifm-l_vifm.menus</a>
+
+This global <span class="e">vifm.menus</span> table groups items related to menus.
+
+vifm.menus.loadcustom({menu})                   <a name="vifm-l_vifm.menus.loadcustom%28%29" href="#vifm-l_vifm.menus.loadcustom%28%29" class="t">vifm-l_vifm.menus.loadcustom()</a>
+Loads a menu with a custom list of items.
+
+Possible fields of <span class="s">{menu}</span>:
+ - "title" (string)
+   Title of the menu.
+ - "items" (array of strings)
+   List of items.  Shouldn't be empty.
+ - "view" (<a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>) (default: <span class="e">vifm.currview()</span>)
+   View associated with the menu.  Navigation will happen in this view if
+   enabled.  <span class="n">Note:</span> the value is currently limited to views of the current
+   tab(s).
+ - "withnavigation" (boolean) (default: false)
+   When true, the items are considered to be paths that terminate at <span class="e">:</span>
+   optionally followed by line and column numbers (like for <a href="vifm-app.txt#vifm-%25M" class="l">vifm-%M</a>).
+   Otherwise, the behaviour is like for <a href="vifm-app.txt#vifm-%25m" class="l">vifm-%m</a>.
+
+This function is <span class="s">{unsafe}</span>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{menu}</span>  Table with information about the custom view.
+
+<span class="h">Return:</span>
+  <span class="e">false</span> if the list of items is empty, one of the items can't be converted
+        to a string or if <span class="s">{menu}</span>.view doesn't refer to the the view as
+        <span class="e">vifm.currview()</span> or <span class="e">vifm.otherview()</span>.
+  <span class="e">true</span> on success.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.opts" href="#vifm-l_vifm.opts" class="t">vifm-l_vifm.opts</a>
+
+This global <span class="e">vifm.opts</span> table groups items related to options in general.
+
+opts.global (table)                            <a name="vifm-l_vifm.opts.global" href="#vifm-l_vifm.opts.global" class="t">vifm-l_vifm.opts.global</a>
+Table that provides access to global options.  The mapping between option
+types and Lua types is quite obvious:
+ - boolean option   -&gt; boolean type
+ - integer option   -&gt; number type
+ - any other option -&gt; string type
+ - bad option       -&gt; nil type
+
+Assigning global options is <span class="s">{unsafe}</span>.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.plugin" href="#vifm-l_vifm.plugin" class="t">vifm-l_vifm.plugin</a>
+
+Table with information about current plugin and operations for it.
+
+plugin.name (string)                           <a name="vifm-l_vifm.plugin.name" href="#vifm-l_vifm.plugin.name" class="t">vifm-l_vifm.plugin.name</a>
+Name of the plugin.
+
+plugin.path (string)                           <a name="vifm-l_vifm.plugin.path" href="#vifm-l_vifm.plugin.path" class="t">vifm-l_vifm.plugin.path</a>
+Full path to plugin's root directory.
+
+plugin.require({modname})                      <a name="vifm-l_vifm.plugin.require%28%29" href="#vifm-l_vifm.plugin.require%28%29" class="t">vifm-l_vifm.plugin.require()</a>
+Plugin-specific <span class="e">require</span>, which loads Lua modules relative to plugin's root.
+Does not create a global variable for the module.
+
+This function is <span class="s">{unsafe}</span>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{modname}</span>  Name of the module, similar to the argument for <span class="e">require</span>.
+
+<span class="h">Return:</span>
+  Return value of the module or <span class="e">nil</span> on error.
+
+<span class="h">Raises an error:</span>
+  On issues with finding or running the module.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.plugins" href="#vifm-l_vifm.plugins" class="t">vifm-l_vifm.plugins</a>
+
+This global <span class="e">vifm.plugins</span> table groups items related to plugins.
+
+plugins.all (table)                            <a name="vifm-l_vifm.plugins.all" href="#vifm-l_vifm.plugins.all" class="t">vifm-l_vifm.plugins.all</a>
+Table that contains all plugins indexed by their names.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.sb" href="#vifm-l_vifm.sb" class="t">vifm-l_vifm.sb</a>
+
+This global <span class="e">vifm.sb</span> table groups functions for managing status bar.  It
+contains the following items:
+
+sb.info({msg})                                 <a name="vifm-l_vifm.sb.info%28%29" href="#vifm-l_vifm.sb.info%28%29" class="t">vifm-l_vifm.sb.info()</a>
+Displays a regular message on status bar.
+
+<span class="h">Parameters:</span>
+  <span class="s">{msg}</span>  Message to display.
+
+sb.error({msg})                                <a name="vifm-l_vifm.sb.error%28%29" href="#vifm-l_vifm.sb.error%28%29" class="t">vifm-l_vifm.sb.error()</a>
+Displays an error message on status bar.
+
+<span class="h">Parameters:</span>
+  <span class="s">{msg}</span>  Message to display.
+
+sb.quick({msg})                                <a name="vifm-l_vifm.sb.quick%28%29" href="#vifm-l_vifm.sb.quick%28%29" class="t">vifm-l_vifm.sb.quick()</a>
+Displays a quick message on status bar.  It's discarded on first redraw and
+isn't stored in the history of messages.
+
+<span class="h">Parameters:</span>
+  <span class="s">{msg}</span>  Message to display.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.sessions" href="#vifm-l_vifm.sessions" class="t">vifm-l_vifm.sessions</a>
+
+This global <span class="e">vifm.sessions</span> table provides means for inspecting and
+controlling sessions.
+
+sessions.current()                             <a name="vifm-l_vifm.sessions.current" href="#vifm-l_vifm.sessions.current" class="t">vifm-l_vifm.sessions.current</a>
+Retrieves name of the current session.
+
+<span class="h">Return:</span>
+  <span class="e">nil</span> if there is no active session or its name as a string otherwise.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.tabs" href="#vifm-l_vifm.tabs" class="t">vifm-l_vifm.tabs</a>
+
+This global <span class="e">vifm.tabs</span> table provides means for inspecting and controlling
+tabs.
+
+tabs.get([{query}])                            <a name="vifm-l_vifm.tabs.get%28%29" href="#vifm-l_vifm.tabs.get%28%29" class="t">vifm-l_vifm.tabs.get()</a>
+Retrieves a tab.  Omitting <span class="s">{query}</span> is equivalent to passing an empty one.
+
+Possible fields of <span class="s">{query}</span>:
+ - "index" (integer) (default: <span class="e">tabs.getcurrent()</span>)
+   Index of the tab.
+ - "other" (boolean) (default: false)
+   Whether to get a pane tab from inactive view.  Ignored if global tabs are
+   active.
+
+<span class="h">Return:</span>
+  Returns an instance of <a href="vifm-lua.txt#vifm-l_VifmTab" class="l">vifm-l_VifmTab</a> or <span class="e">nil</span> if index is out of range.
+
+<span class="h">Raises an error:</span>
+  If tab index is out of range.
+
+tabs.getcount([{query}])                       <a name="vifm-l_vifm.tabs.getcount%28%29" href="#vifm-l_vifm.tabs.getcount%28%29" class="t">vifm-l_vifm.tabs.getcount()</a>
+Retrieves number of open tabs.
+
+Possible fields of <span class="s">{query}</span>:
+ - "other" (boolean) (default: false)
+   Whether to operate on tab from inactive view.  Ignored if global tabs are
+   active.
+
+<span class="h">Return:</span>
+  Returns the count as an integer.
+
+tabs.getcurrent([{query}])                     <a name="vifm-l_vifm.tabs.getcurrent%28%29" href="#vifm-l_vifm.tabs.getcurrent%28%29" class="t">vifm-l_vifm.tabs.getcurrent()</a>
+Retrieves index of current tab.
+
+Possible fields of <span class="s">{query}</span>:
+ - "other" (boolean) (default: false)
+   Whether to operate on tab from inactive view.  Ignored if global tabs are
+   active.
+
+<span class="h">Return:</span>
+  Returns the index as an integer.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_vifm.version" href="#vifm-l_vifm.version" class="t">vifm-l_vifm.version</a>
+
+This global <span class="e">vifm.version</span> table provides information about Vifm and Lua API.
+It contains the following items:
+
+version.app.str (string)                       <a name="vifm-l_vifm.version.app.str" href="#vifm-l_vifm.version.app.str" class="t">vifm-l_vifm.version.app.str</a>
+Version of Vifm as a string.
+
+version.api.major (integer)                    <a name="vifm-l_vifm.version.api.major" href="#vifm-l_vifm.version.api.major" class="t">vifm-l_vifm.version.api.major</a>
+Major version of Lua API.  Should become 1 when API design settles and then
+remain at 1.
+
+version.api.minor (integer)                    <a name="vifm-l_vifm.version.api.minor" href="#vifm-l_vifm.version.api.minor" class="t">vifm-l_vifm.version.api.minor</a>
+Minor version of Lua API.
+
+version.api.patch (integer)                    <a name="vifm-l_vifm.version.api.patch" href="#vifm-l_vifm.version.api.patch" class="t">vifm-l_vifm.version.api.patch</a>
+Patch version of Lua API.
+
+version.api.has({feature})                     <a name="vifm-l_vifm.version.api.has%28%29" href="#vifm-l_vifm.version.api.has%28%29" class="t">vifm-l_vifm.version.api.has()</a>
+Checks presence of a feature.  There are no features to test yet.
+
+<span class="h">Parameters:</span>
+  <span class="s">{feature}</span>  Name of the feature
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if the feature is present and <span class="e">false</span> otherwise.
+
+<span class="c">                                            </span> <a name="vifm-l_vifm.version.api.atleast%28%29" href="#vifm-l_vifm.version.api.atleast%28%29" class="t">vifm-l_vifm.version.api.atleast()</a>
+version.api.atleast({major}, <span class="s">{minor}</span>, <span class="s">{patch}</span>)
+Checks version of Lua API.
+
+<span class="h">Parameters:</span>
+  <span class="s">{major}</span>  Value to check <span class="e">version.api.major</span> against.
+  <span class="s">{minor}</span>  Value to check <span class="e">version.api.minor</span> against. (default: 0)
+  <span class="s">{patch}</span>  Value to check <span class="e">version.api.patch</span> against. (default: 0)
+
+<span class="h">Return:</span>
+  <span class="e">true</span> if the version is equal or more recent than the specified one.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_VifmEntry" href="#vifm-l_VifmEntry" class="t">vifm-l_VifmEntry</a>
+
+Instances of this type are used in filetype <a href="vifm-lua.txt#vifm-lua-handlers" class="l">vifm-lua-handlers</a> and in
+callbacks of <a href="vifm-lua.txt#vifm-l_vifm.addcolumntype%28%29" class="l">vifm-l_vifm.addcolumntype()</a>.  They are also returned by:
+ * <a href="vifm-lua.txt#vifm-l_VifmView%3Aentries%28%29" class="l">vifm-l_VifmView:entries()</a> iterator
+ * <a href="vifm-lua.txt#vifm-l_VifmView%3Aentry%28%29" class="l">vifm-l_VifmView:entry()</a>
+ * <a href="vifm-lua.txt#vifm-l_VifmView%3Aselected%28%29" class="l">vifm-l_VifmView:selected()</a> iterator
+
+Fields of this table are just copies, changing their values won't affect state
+of the application.
+
+VifmEntry.classify (table)                     <a name="vifm-l_VifmEntry.classify" href="#vifm-l_VifmEntry.classify" class="t">vifm-l_VifmEntry.classify</a>
+Table that describes name decorations.  Its fields:
+ - "prefix" (string)
+   File name prefix.
+ - "suffix" (string)
+   File name suffix.
+
+VifmEntry.name (string)                        <a name="vifm-l_VifmEntry.name" href="#vifm-l_VifmEntry.name" class="t">vifm-l_VifmEntry.name</a>
+Name of the file.
+
+VifmEntry.location (string)                    <a name="vifm-l_VifmEntry.location" href="#vifm-l_VifmEntry.location" class="t">vifm-l_VifmEntry.location</a>
+Location of the file.
+
+VifmEntry.size (integer)                       <a name="vifm-l_VifmEntry.size" href="#vifm-l_VifmEntry.size" class="t">vifm-l_VifmEntry.size</a>
+Size of the file in bytes.
+
+VifmEntry.atime (integer)                      <a name="vifm-l_VifmEntry.atime" href="#vifm-l_VifmEntry.atime" class="t">vifm-l_VifmEntry.atime</a>
+File access time (e.g., read, executed).  In seconds since the Unix epoch.
+
+VifmEntry.ctime (integer)                      <a name="vifm-l_VifmEntry.ctime" href="#vifm-l_VifmEntry.ctime" class="t">vifm-l_VifmEntry.ctime</a>
+File change time (changes in metadata, like mode).  In seconds since the
+Unix epoch.
+
+VifmEntry.mtime (integer)                      <a name="vifm-l_VifmEntry.mtime" href="#vifm-l_VifmEntry.mtime" class="t">vifm-l_VifmEntry.mtime</a>
+File modification time (when file contents is changed).  In seconds since
+the Unix epoch.
+
+VifmEntry.type (string)                        <a name="vifm-l_VifmEntry.type" href="#vifm-l_VifmEntry.type" class="t">vifm-l_VifmEntry.type</a>
+Type of the entry.  See <a href="vifm-app.txt#vifm-filetype%28%29" class="l">vifm-filetype()</a> for the list of values.
+
+VifmEntry.isdir (boolean)                      <a name="vifm-l_VifmEntry.isdir" href="#vifm-l_VifmEntry.isdir" class="t">vifm-l_VifmEntry.isdir</a>
+True if an entry is either a directory or a symbolic link to a directory.
+
+VifmEntry.folded (boolean)                     <a name="vifm-l_VifmEntry.folded" href="#vifm-l_VifmEntry.folded" class="t">vifm-l_VifmEntry.folded</a>
+Whether this entry is folded.
+
+VifmEntry.selected (boolean)                   <a name="vifm-l_VifmEntry.selected" href="#vifm-l_VifmEntry.selected" class="t">vifm-l_VifmEntry.selected</a>
+Whether this entry is selected.
+
+VifmEntry.match (boolean)                      <a name="vifm-l_VifmEntry.match" href="#vifm-l_VifmEntry.match" class="t">vifm-l_VifmEntry.match</a>
+Whether this entry is a search match.
+
+VifmEntry.matchstart (integer)                 <a name="vifm-l_VifmEntry.matchstart" href="#vifm-l_VifmEntry.matchstart" class="t">vifm-l_VifmEntry.matchstart</a>
+For a search match this is the start position of a substring found in name,
+zero otherwise.
+
+VifmEntry.matchend (integer)                   <a name="vifm-l_VifmEntry.matchend" href="#vifm-l_VifmEntry.matchend" class="t">vifm-l_VifmEntry.matchend</a>
+For a search match this is the end position of a substring found in name,
+zero otherwise.
+
+VifmEntry:gettarget()                          <a name="vifm-l_VifmEntry.gettarget%28%29" href="#vifm-l_VifmEntry.gettarget%28%29" class="t">vifm-l_VifmEntry.gettarget()</a>
+Gets target of a symbolic link (not to be confused with real path resolution).
+
+<span class="h">Return:</span>
+  Returns target as a string.
+
+<span class="h">Raises an error:</span>
+  If entry doesn't correspond to a symbolic link.
+  If resolving symbolic link has failed.
+
+VifmEntry:mimetype()                           <a name="vifm-l_VifmEntry.mimetype%28%29" href="#vifm-l_VifmEntry.mimetype%28%29" class="t">vifm-l_VifmEntry.mimetype()</a>
+Gets a MIME type.  Resolves target of symbolic links.
+
+<span class="h">Return:</span>
+  Returns MIME type as a string, or <span class="e">nil</span> if no MIME type recognisers are
+  available.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_VifmJob" href="#vifm-l_VifmJob" class="t">vifm-l_VifmJob</a>
+
+Instances of this type are returned by <a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>.
+
+VifmJob:wait()                                 <a name="vifm-l_VifmJob%3Await%28%29" href="#vifm-l_VifmJob%3Await%28%29" class="t">vifm-l_VifmJob:wait()</a>
+Waits for the job to finish.
+
+<span class="h">Raises an error:</span>
+  If waiting has failed.
+
+VifmJob:exitcode()                             <a name="vifm-l_VifmJob%3Aexitcode%28%29" href="#vifm-l_VifmJob%3Aexitcode%28%29" class="t">vifm-l_VifmJob:exitcode()</a>
+Retrieves exit code of the command.
+
+Waits for the job to finish.
+
+<span class="h">Return:</span>
+  Returns an integer number that represents exit code.  The value is <span class="e">-x</span> if
+  the application was killed by signal <span class="e">x</span>.  <span class="e">-127</span> or <span class="e">-128</span> means that
+  tracking the application has failed in some way.
+
+<span class="h">Raises an error:</span>
+  If waiting has failed.
+
+VifmJob:pid()                                  <a name="vifm-l_VifmJob%3Apid%28%29" href="#vifm-l_VifmJob%3Apid%28%29" class="t">vifm-l_VifmJob:pid()</a>
+Retrieves process ID of a command that is (or was) associated with the job.
+
+<span class="h">Return:</span>
+  Returns an integer that represents the ID.
+
+VifmJob:stdin()                                <a name="vifm-l_VifmJob%3Astdin%28%29" href="#vifm-l_VifmJob%3Astdin%28%29" class="t">vifm-l_VifmJob:stdin()</a>
+Retrieves stream associated with standard input of the job.
+
+<span class="h">Return:</span>
+  Returns file stream from standard I/O library of Lua.
+
+<span class="h">Raises an error:</span>
+  If the job wasn't started with "w" I/O mode (see <a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>).
+  If input stream object is already closed.
+
+VifmJob:stdout()                               <a name="vifm-l_VifmJob%3Astdout%28%29" href="#vifm-l_VifmJob%3Astdout%28%29" class="t">vifm-l_VifmJob:stdout()</a>
+Retrieves stream associated with standard output of the job.  Includes error
+stream if <span class="e">mergestreams</span> was set to <span class="e">true</span>.
+
+<span class="h">Return:</span>
+  Returns file stream from standard I/O library of Lua.
+
+<span class="h">Raises an error:</span>
+  If the job wasn't started with "r" I/O mode (see <a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>).
+  If output stream object is already closed.
+
+VifmJob:terminate()                            <a name="vifm-l_VifmJob%3Aterminate%28%29" href="#vifm-l_VifmJob%3Aterminate%28%29" class="t">vifm-l_VifmJob:terminate()</a>
+Terminates a process without giving it a chance to respond.  Does nothing if
+the job has already stopped.
+
+VifmJob:errors()                               <a name="vifm-l_VifmJob%3Aerrors%28%29" href="#vifm-l_VifmJob%3Aerrors%28%29" class="t">vifm-l_VifmJob:errors()</a>
+Retrieves data collected from error stream of the job.  It's accumulated
+automatically in background and contains all data collected so far, the call
+doesn't wait for arrival of data.  Empty if <span class="e">mergestreams</span> was set to <span class="e">true</span>.
+
+<span class="h">Return:</span>
+  Returns a string.
+
+<span class="h">Raises an error:</span>
+  On failing to wait for errors of a finished job (timeout).
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_VifmTab" href="#vifm-l_VifmTab" class="t">vifm-l_VifmTab</a>
+
+Instances of this type are returned by <a href="vifm-lua.txt#vifm-l_vifm.tabs.get%28%29" class="l">vifm-l_vifm.tabs.get()</a>.
+
+The corresponding tab exists independently of this type and once the tab is
+closed accessing bound instance raises an error.
+
+VifmTab:getlayout()                            <a name="vifm-l_VifmTab%3Agetlayout%28%29" href="#vifm-l_VifmTab%3Agetlayout%28%29" class="t">vifm-l_VifmTab:getlayout()</a>
+Retrieves layout of a global tab or shared TUI state for a pane tab.
+
+Fields of the result:
+ - "only" (boolean)
+   Whether there is only one visible window.
+ - "split" (string)
+   <span class="e">nil</span> when in only one window is visible, "v" or "h" otherwise.
+
+<span class="h">Return:</span>
+  Returns description of current layout as a table.
+
+VifmTab:getname()                              <a name="vifm-l_VifmTab%3Agetname%28%29" href="#vifm-l_VifmTab%3Agetname%28%29" class="t">vifm-l_VifmTab:getname()</a>
+Retrieves name of the tab if it was set.
+
+<span class="h">Return:</span>
+  Returns name of the tab as a string, which is empty if unset.
+
+VifmTab:getview([{query}])                     <a name="vifm-l_VifmTab%3Agetview%28%29" href="#vifm-l_VifmTab%3Agetview%28%29" class="t">vifm-l_VifmTab:getview()</a>
+
+Possible fields of <span class="s">{query}</span>:
+ - "pane" (integer) (default: index of active pane)
+   Which view to get from a global tab.  1 is left/top pane, 2 is right/bottom
+   one.  Ignored for a pane tab.
+
+<span class="h">Return:</span>
+  Returns an instance of <a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-l_VifmView" href="#vifm-l_VifmView" class="t">vifm-l_VifmView</a>
+
+Instances of this type are returned by:
+ * <a href="vifm-lua.txt#vifm-l_vifm.currview%28%29" class="l">vifm-l_vifm.currview()</a>
+ * <a href="vifm-lua.txt#vifm-l_vifm.otherview%28%29" class="l">vifm-l_vifm.otherview()</a>
+ * <a href="vifm-lua.txt#vifm-l_VifmTab%3Agetview%28%29" class="l">vifm-l_VifmTab:getview()</a>
+
+The corresponding view exists independently of this type and once the view is
+gone (e.g., its tab is closed) accessing bound instance raises an error.
+
+VifmView.locopts (table)                       <a name="vifm-l_VifmView.viewopts" href="#vifm-l_VifmView.viewopts" class="t">vifm-l_VifmView.viewopts</a>
+Equivalent of <a href="vifm-lua.txt#vifm-l_vifm.opts.global" class="l">vifm-l_vifm.opts.global</a> for location-specific values of
+view-specific options.  These are "local" values of view-specific options,
+which are reset to "global" ones on file list change.
+
+Assigning local options is <span class="s">{unsafe}</span>.
+
+VifmView.viewopts (table)                      <a name="vifm-l_VifmView.locopts" href="#vifm-l_VifmView.locopts" class="t">vifm-l_VifmView.locopts</a>
+Equivalent of <a href="vifm-lua.txt#vifm-l_vifm.opts.global" class="l">vifm-l_vifm.opts.global</a> for view-specific options, see there
+for details.  These are "global" values of view-specific options.
+
+Assigning view options is <span class="s">{unsafe}</span>.
+
+VifmView.cursor (table)                        <a name="vifm-l_VifmView.cursor" href="#vifm-l_VifmView.cursor" class="t">vifm-l_VifmView.cursor</a>
+Table related to cursor position in a view.
+
+Fields:
+ - "pos" (integer)
+   Index of an entry under the cursor.  Moves cursor on assigning an integer.
+ - "entry" (function)
+   Retrieves <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a> under the cursor.  This is a shortcut to
+   <span class="e">VifmView:entry(VifmView.cursor.pos)</span>.
+
+Assigning fields is <span class="s">{unsafe}</span>.
+
+<span class="h">Raises an error:</span>
+  On assigning non-integer to "pos".
+
+VifmView.currententry (integer)                <a name="vifm-l_VifmView.currententry" href="#vifm-l_VifmView.currententry" class="t">vifm-l_VifmView.currententry</a>
+Index of the current entry.
+
+This is <span class="s">{deprecated}</span>.  See <a href="vifm-lua.txt#vifm-l_VifmView.cursor" class="l">vifm-l_VifmView.cursor</a>.pos instead.
+
+VifmView.cwd (string)                          <a name="vifm-l_VifmView.cwd" href="#vifm-l_VifmView.cwd" class="t">vifm-l_VifmView.cwd</a>
+Location of the current view.
+
+VifmView.entrycount (integer)                  <a name="vifm-l_VifmView.entrycount" href="#vifm-l_VifmView.entrycount" class="t">vifm-l_VifmView.entrycount</a>
+Number of entries in the view.
+
+VifmView.custom (table)                        <a name="vifm-l_VifmView.custom" href="#vifm-l_VifmView.custom" class="t">vifm-l_VifmView.custom</a>
+Table with information about custom file list.  The value is <span class="e">nil</span> if custom
+view isn't active.
+
+Fields:
+ - "title" (string)
+   Title of a custom view which usually describes how it was created.
+ - "type" (string)
+   Values returned by <a href="vifm-app.txt#vifm-getpanetype%28%29" class="l">vifm-getpanetype()</a> except for "regular".
+
+VifmView:cd({path})                            <a name="vifm-l_VifmView%3Acd%28%29" href="#vifm-l_VifmView%3Acd%28%29" class="t">vifm-l_VifmView:cd()</a>
+Changes location of the view.  <span class="s">{path}</span> isn't expanded in any way.
+
+This function is <span class="s">{unsafe}</span>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Path to visit.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success.
+
+VifmView:entry({index})                        <a name="vifm-l_VifmView%3Aentry%28%29" href="#vifm-l_VifmView%3Aentry%28%29" class="t">vifm-l_VifmView:entry()</a>
+Retrieves an entry by index.
+
+<span class="h">Parameters:</span>
+  <span class="s">{index}</span>  Value in the range from <span class="e">1</span> to <span class="e">VifmEntry.entrycount</span> inclusive.
+
+<span class="h">Return:</span>
+  <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a> on success and <span class="e">nil</span> on wrong index.
+
+VifmView:entries()                             <a name="vifm-l_VifmView%3Aentries%28%29" href="#vifm-l_VifmView%3Aentries%28%29" class="t">vifm-l_VifmView:entries()</a>
+Creates an iterator over all entries of the view.  The behaviour is undefined
+if the list of entries changes while the iteration is in progress.  The entries
+are returned from first to last.
+
+<span class="h">Return:</span>
+  An iterator function that returns the next <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a> on each call.
+
+VifmView:focus()                               <a name="vifm-l_VifmView%3Afocus%28%29" href="#vifm-l_VifmView%3Afocus%28%29" class="t">vifm-l_VifmView:focus()</a>
+Makes this view the current one, switching tabs and/or windows if necessary.
+
+This function is <span class="s">{unsafe}</span>.
+
+<span class="h">Return:</span>
+  <span class="e">true</span> on success (should always succeed at the moment).
+
+VifmView:gotopath({path})                      <a name="vifm-l_VifmView%3Agotopath%28%29" href="#vifm-l_VifmView%3Agotopath%28%29" class="t">vifm-l_VifmView:gotopath()</a>
+Changes directory, resets filters and/or moves the cursor to find a particular
+file.
+
+<span class="h">Parameters:</span>
+  <span class="s">{path}</span>  Target path.
+
+<span class="h">Return:</span>
+  <span class="e">false</span> if <span class="s">{path}</span> is root or doesn't exist.
+  <span class="e">true</span> on success.
+
+VifmView:loadcustom({info})                    <a name="vifm-l_VifmView%3Aloadcustom%28%29" href="#vifm-l_VifmView%3Aloadcustom%28%29" class="t">vifm-l_VifmView:loadcustom()</a>
+Replaces view contents with a custom list of paths.  Loads the list even if it
+ends up being empty.
+
+Possible fields of <span class="s">{info}</span>:
+ - "title" (string)
+   Title of the view.
+ - "paths" (array of strings)
+   List of paths.  Can be empty.  Items that don't correspond to an existing
+   file, cannot be converted to a string or duplicates are ignored.
+ - "type" (string) (default: "custom")
+   What kind of custom view to create:
+    - "custom"
+      A normal sorted view.  Same as <a href="vifm-app.txt#vifm-%25u" class="l">vifm-%u</a>.
+    - "very-custom"
+      A view that preserves original order.  Same as <a href="vifm-app.txt#vifm-%25U" class="l">vifm-%U</a>.
+
+<span class="h">Parameters:</span>
+  <span class="s">{info}</span>  Table with information about the custom view.
+
+<span class="h">Raises an error:</span>
+  If <span class="s">{info}</span>.type has incorrect value.
+
+VifmView:selected()                            <a name="vifm-l_VifmView%3Aselected%28%29" href="#vifm-l_VifmView%3Aselected%28%29" class="t">vifm-l_VifmView:selected()</a>
+Creates an iterator over selected entries of the view.  The behaviour is
+undefined if the list of entries changes while the iteration is in progress.
+The order in which the entries are returned is implementation-specific and is
+not guaranteed to remain the same between releases.
+
+<span class="h">Return:</span>
+  An iterator function that returns the next <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a> on each call.
+
+VifmView:select({entries})                     <a name="vifm-l_VifmView%3Aselect%28%29" href="#vifm-l_VifmView%3Aselect%28%29" class="t">vifm-l_VifmView:select()</a>
+Selects entries.  Does nothing in visual non-amend mode.  See
+<a href="vifm-lua.txt#vifm-l_VifmView%3Aunselect%28%29" class="l">vifm-l_VifmView:unselect()</a> to unselect entries.
+
+This function is <span class="s">{unsafe}</span>.
+
+Possible fields of <span class="s">{entries}</span>:
+ - "indexes" (array of integers)
+   Indexes of entries to select.  Invalid and nonexistent indexes are
+   silently ignored.
+
+<span class="h">Return:</span>
+  Number of new selected entries.
+
+VifmView:unselect({entries})                   <a name="vifm-l_VifmView%3Aunselect%28%29" href="#vifm-l_VifmView%3Aunselect%28%29" class="t">vifm-l_VifmView:unselect()</a>
+Unselects entries.  Does nothing in visual non-amend mode.  See
+<a href="vifm-lua.txt#vifm-l_VifmView%3Aselect%28%29" class="l">vifm-l_VifmView:select()</a> to select entries.
+
+This function is <span class="s">{unsafe}</span>.
+
+Possible fields of <span class="s">{entries}</span>:
+ - "indexes" (array of integers)
+   Indexes of entries to unselect.  Invalid and nonexistent indexes are
+   silently ignored.
+
+<span class="h">Return:</span>
+  Number of new unselected entries.
+
+<span class="h">--------------------------------------------------------------------------------</span>
+<a name="vifm-lua-index" href="#vifm-lua-index" class="t">vifm-lua-index</a>
+
+vifm (table)                               <a href="vifm-lua.txt#vifm-l_vifm" class="l">vifm-l_vifm</a>
+vifm.addcolumntype({column})               <a href="vifm-lua.txt#vifm-l_vifm.addcolumntype%28%29" class="l">vifm-l_vifm.addcolumntype()</a>
+vifm.addhandler({handler})                 <a href="vifm-lua.txt#vifm-l_vifm.addhandler%28%29" class="l">vifm-l_vifm.addhandler()</a>
+vifm.currview()                            <a href="vifm-lua.txt#vifm-l_vifm.currview%28%29" class="l">vifm-l_vifm.currview()</a>
+vifm.errordialog({title}, <span class="s">{msg}</span>)           <a href="vifm-lua.txt#vifm-l_vifm.errordialog%28%29" class="l">vifm-l_vifm.errordialog()</a>
+vifm.escape({what})                        <a href="vifm-lua.txt#vifm-l_vifm.escape%28%29" class="l">vifm-l_vifm.escape()</a>
+vifm.executable({what})                    <a href="vifm-lua.txt#vifm-l_vifm.executable%28%29" class="l">vifm-l_vifm.executable()</a>
+vifm.exists({path})                        <a href="vifm-lua.txt#vifm-l_vifm.exists%28%29" class="l">vifm-l_vifm.exists()</a>
+vifm.expand({str})                         <a href="vifm-lua.txt#vifm-l_vifm.expand%28%29" class="l">vifm-l_vifm.expand()</a>
+vifm.fnamemodify({path}, <span class="s">{mods}</span>[, <span class="s">{base}</span>]) <a href="vifm-lua.txt#vifm-l_vifm.fnamemodify%28%29" class="l">vifm-l_vifm.fnamemodify()</a>
+vifm.input({info})                         <a href="vifm-lua.txt#vifm-l_vifm.input%28%29" class="l">vifm-l_vifm.input()</a>
+vifm.makepath({path})                      <a href="vifm-lua.txt#vifm-l_vifm.makepath%28%29" class="l">vifm-l_vifm.makepath()</a>
+vifm.otherview()                           <a href="vifm-lua.txt#vifm-l_vifm.otherview%28%29" class="l">vifm-l_vifm.otherview()</a>
+vifm.run({info})                           <a href="vifm-lua.txt#vifm-l_vifm.run%28%29" class="l">vifm-l_vifm.run()</a>
+vifm.startjob({job})                       <a href="vifm-lua.txt#vifm-l_vifm.startjob%28%29" class="l">vifm-l_vifm.startjob()</a>
+vifm.stdout()                              <a href="vifm-lua.txt#vifm-l_vifm.stdout%28%29" class="l">vifm-l_vifm.stdout()</a>
+
+vifm.abbrevs (table)                       <a href="vifm-lua.txt#vifm-l_vifm.abbrevs" class="l">vifm-l_vifm.abbrevs</a>
+vifm.abbrevs.add({abbrev})                 <a href="vifm-lua.txt#vifm-l_vifm.abbrevs.add%28%29" class="l">vifm-l_vifm.abbrevs.add()</a>
+
+vifm.cmds (table)                          <a href="vifm-lua.txt#vifm-l_vifm.cmds" class="l">vifm-l_vifm.cmds</a>
+vifm.cmds.add({cmd})                       <a href="vifm-lua.txt#vifm-l_vifm.cmds.add%28%29" class="l">vifm-l_vifm.cmds.add()</a>
+vifm.cmds.command({cmd})                   <a href="vifm-lua.txt#vifm-l_vifm.cmds.command%28%29" class="l">vifm-l_vifm.cmds.command()</a>
+vifm.cmds.delcommand({name})               <a href="vifm-lua.txt#vifm-l_vifm.cmds.delcommand%28%29" class="l">vifm-l_vifm.cmds.delcommand()</a>
+
+vifm.events (table)                        <a href="vifm-lua.txt#vifm-l_vifm.events" class="l">vifm-l_vifm.events</a>
+vifm.events.listen({event})                <a href="vifm-lua.txt#vifm-l_vifm.events.listen%28%29" class="l">vifm-l_vifm.events.listen()</a>
+
+vifm.fs (table)                            <a href="vifm-lua.txt#vifm-l_vifm.fs" class="l">vifm-l_vifm.fs</a>
+vifm.fs.cp({from}, <span class="s">{to}</span>, <span class="s">{onconflict}</span>)     <a href="vifm-lua.txt#vifm-l_vifm.fs.cp%28%29" class="l">vifm-l_vifm.fs.cp()</a>
+vifm.fs.ln({path}, <span class="s">{target}</span>)               <a href="vifm-lua.txt#vifm-l_vifm.fs.ln%28%29" class="l">vifm-l_vifm.fs.ln()</a>
+vifm.fs.mkdir({path}, <span class="s">{onmissingparent}</span>)   <a href="vifm-lua.txt#vifm-l_vifm.fs.mkdir%28%29" class="l">vifm-l_vifm.fs.mkdir()</a>
+vifm.fs.mkfile({path})                     <a href="vifm-lua.txt#vifm-l_vifm.fs.mkfile%28%29" class="l">vifm-l_vifm.fs.mkfile()</a>
+vifm.fs.mv({from}, <span class="s">{to}</span>, <span class="s">{onconflict}</span>)     <a href="vifm-lua.txt#vifm-l_vifm.fs.mv%28%29" class="l">vifm-l_vifm.fs.mv()</a>
+vifm.fs.rm({path})                         <a href="vifm-lua.txt#vifm-l_vifm.fs.rm%28%29" class="l">vifm-l_vifm.fs.rm()</a>
+vifm.fs.rmdir({path})                      <a href="vifm-lua.txt#vifm-l_vifm.fs.rmdir%28%29" class="l">vifm-l_vifm.fs.rmdir()</a>
+
+vifm.keys (table)                          <a href="vifm-lua.txt#vifm-l_vifm.keys" class="l">vifm-l_vifm.keys</a>
+vifm.keys.add({key})                       <a href="vifm-lua.txt#vifm-l_vifm.keys.add%28%29" class="l">vifm-l_vifm.keys.add()</a>
+
+vifm.menus (table)                         <a href="vifm-lua.txt#vifm-l_vifm.menus" class="l">vifm-l_vifm.menus</a>
+vifm.menus.loadcustom({menu})              <a href="vifm-lua.txt#vifm-l_vifm.menus.loadcustom%28%29" class="l">vifm-l_vifm.menus.loadcustom()</a>
+
+vifm.opts (table)                          <a href="vifm-lua.txt#vifm-l_vifm.opts" class="l">vifm-l_vifm.opts</a>
+vifm.opts.global (table)                   <a href="vifm-lua.txt#vifm-l_vifm.opts.global" class="l">vifm-l_vifm.opts.global</a>
+
+vifm.plugin (table)                        <a href="vifm-lua.txt#vifm-l_vifm.plugin" class="l">vifm-l_vifm.plugin</a>
+vifm.plugin.name (string)                  <a href="vifm-lua.txt#vifm-l_vifm.plugin.name" class="l">vifm-l_vifm.plugin.name</a>
+vifm.plugin.path (string)                  <a href="vifm-lua.txt#vifm-l_vifm.plugin.path" class="l">vifm-l_vifm.plugin.path</a>
+vifm.plugin.require({modname})             <a href="vifm-lua.txt#vifm-l_vifm.plugin.require%28%29" class="l">vifm-l_vifm.plugin.require()</a>
+
+vifm.plugins (table)                       <a href="vifm-lua.txt#vifm-l_vifm.plugins" class="l">vifm-l_vifm.plugins</a>
+vifm.plugins.all (table)                   <a href="vifm-lua.txt#vifm-l_vifm.plugins.all" class="l">vifm-l_vifm.plugins.all</a>
+
+vifm.sb (table)                            <a href="vifm-lua.txt#vifm-l_vifm.sb" class="l">vifm-l_vifm.sb</a>
+vifm.sb.error({msg})                       <a href="vifm-lua.txt#vifm-l_vifm.sb.error%28%29" class="l">vifm-l_vifm.sb.error()</a>
+vifm.sb.info({msg})                        <a href="vifm-lua.txt#vifm-l_vifm.sb.info%28%29" class="l">vifm-l_vifm.sb.info()</a>
+vifm.sb.quick({msg})                       <a href="vifm-lua.txt#vifm-l_vifm.sb.quick%28%29" class="l">vifm-l_vifm.sb.quick()</a>
+
+vifm.sessions (table)                      <a href="vifm-lua.txt#vifm-l_vifm.sessions" class="l">vifm-l_vifm.sessions</a>
+vifm.sessions.current()                    <a href="vifm-lua.txt#vifm-l_vifm.sessions.current" class="l">vifm-l_vifm.sessions.current</a>
+
+vifm.tabs (table)                          <a href="vifm-lua.txt#vifm-l_vifm.tabs" class="l">vifm-l_vifm.tabs</a>
+vifm.tabs.get([{query}])                   <a href="vifm-lua.txt#vifm-l_vifm.tabs.get%28%29" class="l">vifm-l_vifm.tabs.get()</a>
+vifm.tabs.getcount([{query}])              <a href="vifm-lua.txt#vifm-l_vifm.tabs.getcount%28%29" class="l">vifm-l_vifm.tabs.getcount()</a>
+vifm.tabs.getcurrent([{query}])            <a href="vifm-lua.txt#vifm-l_vifm.tabs.getcurrent%28%29" class="l">vifm-l_vifm.tabs.getcurrent()</a>
+
+vifm.version (table)                       <a href="vifm-lua.txt#vifm-l_vifm.version" class="l">vifm-l_vifm.version</a>
+vifm.version.api.atleast({major}, <span class="s">{minor}</span>, <span class="s">{patch}</span>)
+                                           <a href="vifm-lua.txt#vifm-l_vifm.version.api.atleast%28%29" class="l">vifm-l_vifm.version.api.atleast()</a>
+vifm.version.api.has({feature})            <a href="vifm-lua.txt#vifm-l_vifm.version.api.has%28%29" class="l">vifm-l_vifm.version.api.has()</a>
+vifm.version.api.major (integer)           <a href="vifm-lua.txt#vifm-l_vifm.version.api.major" class="l">vifm-l_vifm.version.api.major</a>
+vifm.version.api.minor (integer)           <a href="vifm-lua.txt#vifm-l_vifm.version.api.minor" class="l">vifm-l_vifm.version.api.minor</a>
+vifm.version.api.patch (integer)           <a href="vifm-lua.txt#vifm-l_vifm.version.api.patch" class="l">vifm-l_vifm.version.api.patch</a>
+vifm.version.app.str (string)              <a href="vifm-lua.txt#vifm-l_vifm.version.app.str" class="l">vifm-l_vifm.version.app.str</a>
+
+VifmEntry (type)                           <a href="vifm-lua.txt#vifm-l_VifmEntry" class="l">vifm-l_VifmEntry</a>
+VifmEntry.atime (integer)                  <a href="vifm-lua.txt#vifm-l_VifmEntry.atime" class="l">vifm-l_VifmEntry.atime</a>
+VifmEntry.classify (table)                 <a href="vifm-lua.txt#vifm-l_VifmEntry.classify" class="l">vifm-l_VifmEntry.classify</a>
+VifmEntry.ctime (integer)                  <a href="vifm-lua.txt#vifm-l_VifmEntry.ctime" class="l">vifm-l_VifmEntry.ctime</a>
+VifmEntry.folded (boolean)                 <a href="vifm-lua.txt#vifm-l_VifmEntry.folded" class="l">vifm-l_VifmEntry.folded</a>
+VifmEntry.isdir (boolean)                  <a href="vifm-lua.txt#vifm-l_VifmEntry.isdir" class="l">vifm-l_VifmEntry.isdir</a>
+VifmEntry.location (string)                <a href="vifm-lua.txt#vifm-l_VifmEntry.location" class="l">vifm-l_VifmEntry.location</a>
+VifmEntry.match (boolean)                  <a href="vifm-lua.txt#vifm-l_VifmEntry.match" class="l">vifm-l_VifmEntry.match</a>
+VifmEntry.matchend (integer)               <a href="vifm-lua.txt#vifm-l_VifmEntry.matchend" class="l">vifm-l_VifmEntry.matchend</a>
+VifmEntry.matchstart (integer)             <a href="vifm-lua.txt#vifm-l_VifmEntry.matchstart" class="l">vifm-l_VifmEntry.matchstart</a>
+VifmEntry.mtime (integer)                  <a href="vifm-lua.txt#vifm-l_VifmEntry.mtime" class="l">vifm-l_VifmEntry.mtime</a>
+VifmEntry.name (string)                    <a href="vifm-lua.txt#vifm-l_VifmEntry.name" class="l">vifm-l_VifmEntry.name</a>
+VifmEntry.selected (boolean)               <a href="vifm-lua.txt#vifm-l_VifmEntry.selected" class="l">vifm-l_VifmEntry.selected</a>
+VifmEntry.size (integer)                   <a href="vifm-lua.txt#vifm-l_VifmEntry.size" class="l">vifm-l_VifmEntry.size</a>
+VifmEntry.type (string)                    <a href="vifm-lua.txt#vifm-l_VifmEntry.type" class="l">vifm-l_VifmEntry.type</a>
+VifmEntry:gettarget()                      <a href="vifm-lua.txt#vifm-l_VifmEntry.gettarget%28%29" class="l">vifm-l_VifmEntry.gettarget()</a>
+VifmEntry:mimetype()                       <a href="vifm-lua.txt#vifm-l_VifmEntry.mimetype%28%29" class="l">vifm-l_VifmEntry.mimetype()</a>
+
+VifmJob (type)                             <a href="vifm-lua.txt#vifm-l_VifmJob" class="l">vifm-l_VifmJob</a>
+VifmJob:errors()                           <a href="vifm-lua.txt#vifm-l_VifmJob%3Aerrors%28%29" class="l">vifm-l_VifmJob:errors()</a>
+VifmJob:exitcode()                         <a href="vifm-lua.txt#vifm-l_VifmJob%3Aexitcode%28%29" class="l">vifm-l_VifmJob:exitcode()</a>
+VifmJob:pid()                              <a href="vifm-lua.txt#vifm-l_VifmJob%3Apid%28%29" class="l">vifm-l_VifmJob:pid()</a>
+VifmJob:stdin()                            <a href="vifm-lua.txt#vifm-l_VifmJob%3Astdin%28%29" class="l">vifm-l_VifmJob:stdin()</a>
+VifmJob:stdout()                           <a href="vifm-lua.txt#vifm-l_VifmJob%3Astdout%28%29" class="l">vifm-l_VifmJob:stdout()</a>
+VifmJob:terminate()                        <a href="vifm-lua.txt#vifm-l_VifmJob%3Aterminate%28%29" class="l">vifm-l_VifmJob:terminate()</a>
+VifmJob:wait()                             <a href="vifm-lua.txt#vifm-l_VifmJob%3Await%28%29" class="l">vifm-l_VifmJob:wait()</a>
+
+VifmTab (type)                             <a href="vifm-lua.txt#vifm-l_VifmTab" class="l">vifm-l_VifmTab</a>
+VifmTab:getlayout()                        <a href="vifm-lua.txt#vifm-l_VifmTab%3Agetlayout%28%29" class="l">vifm-l_VifmTab:getlayout()</a>
+VifmTab:getname()                          <a href="vifm-lua.txt#vifm-l_VifmTab%3Agetname%28%29" class="l">vifm-l_VifmTab:getname()</a>
+VifmTab:getview([{query}])                 <a href="vifm-lua.txt#vifm-l_VifmTab%3Agetview%28%29" class="l">vifm-l_VifmTab:getview()</a>
+
+VifmView (type)                            <a href="vifm-lua.txt#vifm-l_VifmView" class="l">vifm-l_VifmView</a>
+VifmView.currententry (integer)            <a href="vifm-lua.txt#vifm-l_VifmView.currententry" class="l">vifm-l_VifmView.currententry</a>
+VifmView.cursor (table)                    <a href="vifm-lua.txt#vifm-l_VifmView.cursor" class="l">vifm-l_VifmView.cursor</a>
+VifmView.custom (table)                    <a href="vifm-lua.txt#vifm-l_VifmView.custom" class="l">vifm-l_VifmView.custom</a>
+VifmView.cwd (string)                      <a href="vifm-lua.txt#vifm-l_VifmView.cwd" class="l">vifm-l_VifmView.cwd</a>
+VifmView.entrycount (integer)              <a href="vifm-lua.txt#vifm-l_VifmView.entrycount" class="l">vifm-l_VifmView.entrycount</a>
+VifmView.locopts (table)                   <a href="vifm-lua.txt#vifm-l_VifmView.viewopts" class="l">vifm-l_VifmView.viewopts</a>
+VifmView.viewopts (table)                  <a href="vifm-lua.txt#vifm-l_VifmView.locopts" class="l">vifm-l_VifmView.locopts</a>
+VifmView:cd({path})                        <a href="vifm-lua.txt#vifm-l_VifmView%3Acd%28%29" class="l">vifm-l_VifmView:cd()</a>
+VifmView:entries()                         <a href="vifm-lua.txt#vifm-l_VifmView%3Aentries%28%29" class="l">vifm-l_VifmView:entries()</a>
+VifmView:entry({index})                    <a href="vifm-lua.txt#vifm-l_VifmView%3Aentry%28%29" class="l">vifm-l_VifmView:entry()</a>
+VifmView:focus()                           <a href="vifm-lua.txt#vifm-l_VifmView%3Afocus%28%29" class="l">vifm-l_VifmView:focus()</a>
+VifmView:gotopath({path})                  <a href="vifm-lua.txt#vifm-l_VifmView%3Agotopath%28%29" class="l">vifm-l_VifmView:gotopath()</a>
+VifmView:loadcustom({info})                <a href="vifm-lua.txt#vifm-l_VifmView%3Aloadcustom%28%29" class="l">vifm-l_VifmView:loadcustom()</a>
+VifmView:select({entries})                 <a href="vifm-lua.txt#vifm-l_VifmView%3Aselect%28%29" class="l">vifm-l_VifmView:select()</a>
+VifmView:selected()                        <a href="vifm-lua.txt#vifm-l_VifmView%3Aselected%28%29" class="l">vifm-l_VifmView:selected()</a>
+VifmView:unselect({entries})               <a href="vifm-lua.txt#vifm-l_VifmView%3Aunselect%28%29" class="l">vifm-l_VifmView:unselect()</a>
+
+<span class="h">--------------------------------------------------------------------------------</span>
+ vim:tw=78:fo=tcq2:isk=!-~,^*,^\|,^\":ts=8:sw=4:ft=help:norl:
+        </pre>      </div>
+    </td>
+  </tr>
+</table>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,2 @@
+# Research captures preserve their original whitespace for source fidelity.
+research/total-commander-vifm/** -whitespace

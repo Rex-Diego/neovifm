@@ -1,0 +1,2269 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-us">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Less is More: A rich functionality behind Spartan interface of Orthodox File Managers</title>
+<link rel="stylesheet" type="text/css" href="../CSS/main.css">
+</head>
+
+<body>
+
+<basefont face="Times" size="3">
+<table border="0" width="100%" id="table1" cellspacing="1" cellpadding="4"  >
+<tr>
+<td rowspan="2" width="40%">
+
+<p align="center"><img border="0" src="/Images/splogo.gif" width="45"  ><font face="Bernard MT Condensed" color="#FF0000" size="7">
+<font color="#FF0000"><a href="/index.shtml">Softpanorama</a></font></font></p>
+
+<center>
+
+<font size="2" face="Arial"><b>May the source be with you, but remember the <a href="/SE/kiss.shtml">KISS principle</a> ;-) </b></font></center>
+</td>
+<td align="center">
+
+<b><a href="/index.shtml"><font size="2">Home</font></a></b></td>
+<td align="center">
+
+<b><a href="/switchboard.shtml"><font size="2">Switchboard</font></a></b></td>
+<td align="center">
+
+<b><a href="/Admin/index.shtml"><font size="2">Unix Administration</font></a></b></td>
+<td align="center">
+
+<b><a href="/Commercial_linuxes/RHEL/index.shtml"><font size="2">Red Hat</font></a></b></td>
+<td align="center">
+
+<b><a href="/Net/index.shtml"><font size="2">TCP/IP Networks</font></a></b></td>
+<td align="center">
+
+<b><a href="/Skeptics/Political_skeptic/Neoliberalism/index.shtml"><font size="2">Neoliberalism</font></a></b></td>
+<td align="center">
+
+<b><a href="/Social/Toxic_managers/index.shtml"><font size="2">Toxic Managers</font></a></b></td>
+</tr>
+<tr>
+<td colspan="7" align="center">
+
+<b><font size="2">(slightly skeptical) Educational society promoting &quot;<a href="/Back_to_basics/index.shtml">Back to basics</a>&quot; movement against IT overcomplexity 
+and&nbsp; <a href="Commercial_linuxes/RHEL/index.shtml">bastardization of classic Unix</a></font></b></td>
+</tr>
+</table>
+<hr width="100%" noshade size="5" color="#FF0000">
+<center>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Top_banner2021 -->
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-4031247137266443"
+     data-ad-slot="3389635737"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script></center>
+
+<h1>Less is More: A rich functionality behind Spartan interface of Orthodox File Managers</h1>
+<h2>Introduction to Orthodox File Managers (OFM)</h2>
+<h3>Dr Nikolai Bezroukov</h3>
+<p align="center"><i>Version 1.6, November, 2012</i></p>
+<hr>
+<p align="left">Copyright 2012, Dr. Nikolai Bezroukov. This is a copyrighted unpublished work. All rights reserved. </p>
+
+<p align="left">Note: Version 1.5 of this paper was published in Softpanorama Bulletin Vol.24, No.3 
+(2012)</p>
+<hr>
+
+<table border="0" width="178" height="620" align="right" cellspacing="4" bgcolor="#FFFFFF">
+   <tr>
+      <td>
+
+      <table border="1" width="174" height="616" align="center" bgcolor="#FF0000">
+         <tr>
+            <td>
+<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Upper skyscaper -->
+<ins class="adsbygoogle"
+     style="display:inline-block;width:160px;height:600px"
+     data-ad-client="ca-pub-4031247137266443"
+     data-ad-slot="0371843916"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+            </td>
+         </tr>
+      </table></td>
+   </tr>
+</table>
+<ul>
+	<li><b><a href="#Introduction">Introduction</a></b></li>
+	<li><b><a href="#The_history_of_the_term">The history of the term</a></b></li>
+	<li><b><a href="#Notion_of_Orthodox_interface">Notion of Orthodox interface</a></b></li>
+	<li><b><a href="#Members_of_the_OFM_family_and_their_properties">Members of the OFM family and their properties</a></b></li>
+	<li><b><a href="#Comparison Table">Comparison Table</a></b></li>
+	<li><b><a href="#Understanding_OFMs_as_sysadmin_IDE">Understanding OFMs as sysadmin IDE</a></b></li>
+	<li><b><a href="#Ten_commandments">Ten OFM Commandments</a></b></li>
+	<li><b><a href="#Recommendations_for_Users">Recommendations for Users</a></b></li>
+	<li>
+	<p><b><a href="#Some_recommendations_for_Orthodox_file_managers_designers">Some recommendations for Orthodox file managers 
+	designers</a></b></p>
+	</li>
+	<li>
+	<p><b><a href="#Conclusions">Conclusions</a></b></p>
+	</li>
+</ul>
+<hr noshade color="#FF0000" width="33%" size="7">
+<h3>Abstract</h3>
+<blockquote>
+	<p>The <i>Orthodox File Managers</i> (OFMs) that are also known as &quot;Commanders&quot; are remote descendants of&nbsp; Norton 
+	Commander (NC) written by John Socha and first released in 1986 for MS DOS. Despite Spartan interface (or, more correctly, 
+	due to it) Orthodox file managers provide an extremely rich functionality, unsurpassed by any other type of file managers. 
+	Including a unique way of shell and file manager integration via <b><i>user menu</i></b> with a set of macrovariables 
+	as well as <b><i>shell terminal window</i></b>, making them natural sysadmin IDE. Due to unique blend of power, flexibility 
+	and portability they became the tool of choice for system administrators, especially in xUSSR region, Eastern Europe, 
+	Germany and Scandinavian countries. Those regions were place of birth of the most impressive OFM implementations such 
+	as <a href="../OFM/Paradigm/Ch05/far.shtml">Far</a>, <a href="../OFM/Paradigm/Ch05/total_commander.shtml">Total Commander</a>,
+	<a href="../OFM/Paradigm/Ch04/light_weight_ofms.shtml">deco</a>,
+	<a href="../OFM/Paradigm/Ch03/volkov_commander.shtml">Volkov Commander</a>,
+	<a href="../OFM/Paradigm/Ch03/dos_navigator.shtml">Dos Navigator</a>,
+	<a rel="nofollow" href="https://en.wikipedia.org/wiki/Altap_Salamander">Altap Salamander</a> and many others. </p>
+	<p>There are three fundamental properties of Orthodox file managers: </p>
+	<ol>
+		<li><b>Conservative (as in &quot;far from being fancy&quot;),&nbsp; very stable (25 years without 
+        major changes) 
+		interface</b> with two symmetrical windows (called panels, with trademark white on blue letters, by default) that hides 
+		behind Spartan interface very rich functionality.<font color="#FF0000"><i><b> It really teaches us that &quot;less is 
+		more&quot; </b></i></font></li>
+		<li><b>One &quot;terminal style&quot; window that initially is minimized to a single line at the bottom of panels</b>, but can be 
+		expanded to full screen, half-screen or any number of lines. The user can work in this window like with regular 
+		console screen. </li>
+		<li><b>Additional way of integration with the underling OS shell via so called User menu and extension menu using the 
+		same set of macro variables that are available for command line</b>, which is also used in the built-in editor, providing 
+		an opportunity to pipe results of the shell script execution to the place after the cursor or pipe a selected block 
+		as input of some script. </li>
+	</ol>
+	<p>At the same time they represent just one instance of a larger category that can be called Orthodox interface. This 
+	category includes editors such as <b>vi</b> and <b>THE </b>(<a href="orthodox_editors.shtml">orthodox editors</a>), windows multiplexers 
+	(<a href="../Utilities/screen.shtml">GNU screen</a>), windows managers (such as
+	<a target="_blank" href="https://en.wikipedia.org/wiki/Ratpoison">ratpoison</a>) and probably some other that I just don&#39;t yet discovered. 
+	I am still working on refining this notion but as a set of raw ideas it includes:</p>
+	<ol>
+		<li><b>Distinct command set layer</b> with commands that can be entered from the command line and reflected in GUI 
+		interface. In this sense <tt>vi</tt> is a reference implementation and OFM inspired by vi have some interesting, 
+		distinct from traditional line of OFM ideas implemented. See <a href="../OFM/Paradigm/Ofm_06.shtml#Ranger">ranger</a> 
+		and <a  target="_blank" href="http://vifm.sourceforge.net/docs.html">vifm</a>. </li>
+		<li><b>Tiled, nonoverlapping windows with minimum decorations</b></li>
+		<li><b>Stress on availability of all commands via keyboard,</b> not only via mouse clicks, 
+        although mouse can be 
+		productively used and is used in such interface. </li>
+		<li><b>Ability to redirect output of commands executed in one window to other windows and processes. </b></li>
+		<li><b>Usage of GUI elements to generate commands on command line</b> (macrovariables and such commands as <tt>Ctrl-Enter</tt>,
+		<tt>Ctrl-[</tt> and <tt>Ctrl-]</tt> in OFM. )</li>
+		<li><b>Accent of extensibility and programmability (with shell and/or scripting languages) instead of eye candy.
+		</b><br>
+		<br>
+&nbsp;</li>
+	</ol>
+</blockquote>
+<h2><a name="Introduction">Introduction</a></h2>
+<!---google box ------->
+<table border="0" width="310" align="left" cellspacing="7" cellpadding="4">
+<tr><td width="340" bgcolor="#FFFF00" valign="center" align="center">
+<center>
+<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Top Large Rectangle -->
+<ins class="adsbygoogle"
+     style="display:inline-block;width:336px;height:280px"
+     data-ad-client="ca-pub-4031247137266443"
+     data-ad-slot="3274064497"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+</center>
+</td></tr>
+</table>
+<!---end of google box ------->
+<p>The <i>Orthodox File Managers</i> (OFMs) also known as &quot;Commanders&quot; are remote descendants of&nbsp; 
+Norton Commander (NC) written by John Socha. The latter was first released in 1986 for MS DOS but 
+later replicated in multiple free, shareware and open source clones, which, essentially, created the 
+&quot;brand&quot;.&nbsp; </p>
+
+<p>Orthodox file managers provide a unique way 
+of shell and file manager integration making them a natural sysadmin IDE. Due to power, flexibility and portability they became 
+the tool of choice for many system administrators both on Unix and Windows, especially in xUSSR region, Eastern Europe, Germany and Scandinavian countries. 
+Those regions were place of birth of the most impressive OFM implementations such as
+<a href="../OFM/Paradigm/Ch05/far.shtml">Far</a>, <a href="../OFM/Paradigm/Ch05/total_commander.shtml">Total Commander</a>,
+<a href="../OFM/Paradigm/Ch04/light_weight_ofms.shtml">deco</a>, <a href="../OFM/Paradigm/Ch03/volkov_commander.shtml">Volkov 
+Commander</a>, <a href="../OFM/Paradigm/Ch03/dos_navigator.shtml">Dos Navigator</a>,&nbsp;&nbsp;
+<a target="_blank" href="https://en.wikipedia.org/wiki/Altap_Salamander">Altap Salamander</a> and many others. </p>
+<p>The word &quot;Orthodox&quot; comes from Greek <i>orthos</i> (&quot;right&quot;, &quot;true&quot;, &quot;straight&quot;) +
+<i sizset="false" sizcache04993722170410529="74 127 846">doxa</i> (&quot;opinion&quot; or &quot;belief&quot;, related to <i>dokein</i>, &quot;to 
+think&quot;). And OFMs are really in my humble opinion&nbsp; <em>&quot;true way of thinking&quot; 
+</em>about complex file management operations. 
+As a former editor of <a href="../Bulletin/index.shtml">Softpanorama bulletin</a>, a ezine which was published on floppies 
+from 1989 till 2006, I was amazed by tremendous enhancement of my productivity they provided. </p>
+
+<p>It goes without saying that 
+publishing of it would be impossible, if I did not learn how to use Norton Commander 2.0 in early 1989 (at the end of the 
+year I switched to NC 3.0 and in 1992 to Volkov Commander).&nbsp; Provided by user menu simple extensibility proved for 
+me to be an indispensable tool. Later FAR added the concert of plug-ins which make extensibility of this type of managers 
+even more impressive and then implemented LUA extension -- adding a scripting language 
+programmability which is very natural for this&nbsp; type of applications, as significant percentage 
+of end users are system administrators, who by definition, would know programming at least on 
+scripting languages level (there is an MC fork that also implement LUA extensibility).&nbsp; Even without writing your own plug-in you can configure a set 
+of custom scripts that provides more critical for you 
+functions and&nbsp; enhances your productivity. Some custom plug-in are also very useful.&nbsp; For example, for me such an indispensable thing proved to be WinSCP 
+plug-in. </p>
+<p>While many sysadmin/webmaster tasks can be accomplished in many different ways, I think high level of mastery of OFM 
+provides one of the best approaches, as it stimulated &quot;macro thinking&quot;: thinking in bigger chunks 
+similar to the process of writing a script in Unix shell. but it's more then that it is also similar 
+to playing on such instrument as piano, when you learn some standard tunes or &quot;musical phases&quot; and 
+then can repeat then almost subconsciously. Some users who use those file managers for a decade or 
+more have pretty rich repertoire, and sometimes can amaze friends and accidental observer performing 
+then on the keyboard with amazing for untrained observer speed and precision. </p>
+
+<p>In other words OFM functionality tends to organizes your thinking (and kinesthetic memory) along 
+the notion of complex file operation which serve as a chunks or statements of some abstract language 
+designed to simplify typical sysadmin tasks, especially connected with operations of one or several 
+files. As such it really represents <em>&quot;true way of thinking&quot;. </em>&nbsp;That&#39;s why I called by 
+eBook about those file managers <a href="../OFM/Paradigm/index.shtml">The Orthodox 
+File Manager(OFM) Paradigm</a>.&nbsp;&nbsp; </p>
+<p>OFMs provide a unique integration of three components critical for sysadmin IDE -- file manager, file viewer and file 
+editor. Advanced OFMs has extensibility via two major mechanisms:</p>
+<ul>
+	<li><b><a href="../OFM/MC/user_menu.shtml">user menu</a></b> with a set of script typically 
+    written in shell (but shell can serve as just envelope for passing &quot;internal&quot; variables into 
+    scripts written in other languages) </li>
+	<li><b>Plugins</b>. For more advanced OFM (FAR, MC) they can be written in a scripting language 
+    (typically LUA)</li>
+</ul>
+<p>The most promising from the point of view of extensibility are OFMs written in Python or other scripting language, but 
+there are very few such OFMs. See&nbsp; <a href="../OFM/Paradigm/Ofm_06.shtml">Scripting Language based OFMs</a></p>
+<h2><a name="The_history_of_the_term">The history of the term</a></h2>
+<p>I introduced the term &quot;orthodox file managers&quot; in 1996 (see <a href="../OFM/Bulletin/OFM_bulletin_1998.shtml">OFM Bulletin 
+1998</a> ) because this type of file managers has an interplay of three features:</p>
+<ul>
+	<li><b>They are remnants of long gone world of text terminals. </b>Like Amish&#39;s dress they look like belonging to a 
+	different epoch. </li>
+	<li><b>They belong to the rare category of&nbsp; &quot;<font color="#FF0000"><i>command line enabled</i></font>&quot; GUI tools 
+	(Which also include vi, Xedit, THE editor, Gnu screen and several other programs) and as such implicitly promote the 
+	use of shell.</b> Knowledge of shell (like OFMs themselves) went out of fashion with the demise of MS DOS, much like 
+	Orthodox Christianity went out of fashion with the demise of Byzantium ;-). Now they found new home in Unix, were shell 
+	programming traditions still run strong. With the ability to overlay panels and shell terminal window they can be considered 
+	as an interesting and innovative extension of shell -- a kind of graphic shell, if you wish. To a certain extent we 
+	can talk about &quot;Orthodox GUI interface&quot; as a third, distinct type of GUI interface, different from either Apple-style 
+	GUI interface or Windows-style GUI interface (which actually pretty much converged). </li>
+	<li>
+	<p><b>They have found the second home and became tremendously popular (dominant in DOS days) in the USSR and Eastern 
+	European countries </b>with the population at least formally belonging to Eastern Orthodox Church with its unique polyphonic 
+	musical tradition (<a target="_blank" href="https://www.youtube.com/watch?v=_3TjfUFXJZQ&feature=related">Basso profondo from Russia</a>,&nbsp;
+	<a target="_blank" href="https://www.youtube.com/watch?v=wNQ5auIC1bw">Do not reject me in the time of old age</a>,
+	<a target="_blank" href="https://www.youtube.com/watch?v=qBOMVLd7wYg&feature=related">Orthodox music and Basso Profundo Beautiful Russia 
+	in Winter,</a>&nbsp; <a target="_blank" href="https://www.youtube.com/watch?v=P0Vyy83iCXM">Let my prayer come true</a>,&nbsp;&nbsp;&nbsp;
+	<a target="_blank" href="https://www.youtube.com/watch?v=XzK5YEVMHn4">Gabriel Appeared</a>,
+	<a target="_blank" href="https://www.youtube.com/watch?v=UdAIvmsbylU">Lord, now lettest thou thy servant depart in peace</a>,
+	<a target="_blank" href="https://www.youtube.com/watch?v=Hbl4u7CIMd0">Glandsome Light</a>,&nbsp;
+	<a target="_blank" href="https://www.youtube.com/watch?v=qBOMVLd7wYg&feature=related">Great Litany</a>).&nbsp; This is some at least 
+	superficial similarity in how they with just human voice create magnificent masterpieces to the way keyboard is also 
+	pushed to the extreme in OFMs (although mouse can and should be used) </p>
+	</li>
+	<li>
+	<p><b>They emphasize computer minimalism philosophy. </b>In a way orthodox file managers represent a different way of 
+	thinking (paradigm) about file operations, a remnant of DOS culture that emphasized the value of keyboard, simple text 
+	interface and <b><a href="../SE/kiss.shtml">simplicity</a></b> in general. They also have an implicit appeal as simple, 
+	minimal tools as opposite to baroque, complex tool typical for modern Windows and Linux environments. With its adherence 
+	to command line and character-based&nbsp; interface they represent a trend that is often called
+	<a target="_blank" href="https://en.wikipedia.org/wiki/Computing_minimalism">computing minimalism.</a> Modern<b> &quot;</b><i>click-drag-click</i><b>&quot;</b> 
+	GUI interface designers view such approach to interface as antiquated and worthless, but ability to mix and match keyboard 
+	with mouse operations carries a rich and valuable cultural tradition from glorious, but long forgotten DOS days of personal 
+	computers. As old PC users remember the original versions of IBM PCs did not have mouse, it was introduced only with 
+	IBM PS/2 series in 1987. Actually key assignments for OFMs are difficult to understand without knowing about 83 keys
+	<a target="_blank" href="https://en.wikipedia.org/wiki/IBM_PC_keyboard">XT keyboard</a> with 10 F-keys to the left in two rows F1-F2,
+	<tt>F3-F4 </tt>(View/Edit in OFM), <tt>F5-F6</tt>(Copy/Move in OFM), <tt>F7-F8</tt>(Make directory/Delete in OFM), and
+	<tt>F9-F10</tt>), keyboards which disappeared around 1994-1996 (recently they were revived in a 
+    new form of <a href="../Hardware/Peripherals/Keyboards/logitech_g510s_gaming_keyboard.shtml">
+    gaming keyboards</a> which represent direct interest to OFM users).&nbsp; So from 1987 DOS users tried to combine the best features 
+	of both interfaces.&nbsp; <font color="#FF0000"><b><i>Symmetrical two panels with hidden command window </i></b><i>
+	<b>interface also speaks volumes about the value of simplicity</b></i></font> and because such software can be replicated 
+	independently and you do not have a vendor lock. As such, simple flexible interfaces like used ion OFMs can survive 
+	for many decades, producing enormous benefits for the long-term users. Ability to use the same interface for 20 years 
+	or more produces level of&nbsp; motor skills when operations became almost subconscious and user can think about file 
+	management problems is a larger &quot;chunks&quot; of OFM operations&nbsp; like (<i>make_directory-select files-move</i> chunk, 
+	or<i> compare_directories-move_newer</i> chunk). This way of thinking gradually evolves into the second nature of the 
+	users and a way of thinking about all file operations (paradigm).&nbsp;&nbsp; </p>
+	<p><b>Note:</b> After demise of XP some keyboard manufactures tried to incorporate XT keyboard F-keys into AT keyboard 
+	layout but none was particular successful (the most long lasting and popular was probably
+	<a target="_blank" href="https://en.wikipedia.org/wiki/Gateway_AnyKey">Gateway AnyKey)</a>. Some
+	<a href="../Hardware/Peripherals/programmable_keyboards.shtml">programmable keyboards</a> contain XT-style two columns 
+	of programmable keys on the left side of keyboard (for example, Logitech G110 (now discontinued, 
+    look for G510s). Those keys&nbsp; can be programmed 
+	into &quot;classic&quot; OFM configuration (see <a href="../Hardware/Peripherals/programmable_keyboards.shtml">Programmable Keyboards</a>) 
+	making OFM usage more enjoyable and operations slightly faster. </p>
+	</li>
+</ul>
+<p>While not perfect, the term Orthodox File Managers is much more precise and definitive then alternatives. There are actually 
+three main alternatives:&nbsp; </p>
+<ul>
+	<li><b>&quot;Norton commander clones&quot;</b>. This one is clearly a bad idea as modern OFMs are far more then that. Also &quot;Norton 
+	Commander clone&quot; or &quot;Norton-style file manager&quot; terms has element of advertising in them. As Symantec abandoned the 
+	product in the most inappropriate fashion (without releasing code of old versions, or making it freeware) I strongly 
+	object to those type of terms.&nbsp; Moreover, historically starting from NC3.0 &quot;clones&quot; became much more advanced then 
+	the original and it was Symantec that clone ideas from other implementations, not the other way around. So, in a way, 
+	NC 4.0 and 5.0 were clones, not vise versa.&nbsp; The truth is that starting from Volkov Commander (1992) and DN, Symantec 
+	was in deep trouble as for original ideas. Volkov Commander essentially smashed the value of Symantec brand into tiny 
+	peaces.&nbsp; The initiative was on the other side: from the historical point of view many new features in NC 4 and 
+	especially NC 5 were implemented in other OFMs at least a year before, so it is fair to say that it was the attempt 
+	of Symantec to play catch up with independent developers (that failed in NC4 but was pretty successful in NC5) that 
+	can be called cloning :-). When Symantec betrayed the product and ideas behind OFMs, it was independent developers that 
+	keep it afloat.&nbsp;&nbsp; Just compare functionality on NC 5.5 with
+	<a href="../OFM/Standards/ofm_standard1999.shtml">Orthodox File Managers Standard 1999(OFM1999) - minimal OFM requirements
+	</a>&nbsp;and <a href="../OFM/Standards/ofm_standard2004.shtml">The Orthodox File Managers Standard 2004 (OFM2004) Advanced 
+	OFM requirements )</a>&nbsp; which reflect the progress of leading OFM implementations for the last 15 years. </li>
+	<li><b>Commanders.</b> This one is better (similar related word is Navigators), but unfortunately it widely used for 
+	unrelated programs. So it brings more confusion then clarity. The term &quot;Commander&quot; is widely used in games, NFS and 
+	Samba mounting helpers, security tools (Checkpoint commander), sound card controllers, image processing programs, etc).&nbsp; 
+	BTW the <b>Norton</b> <b>Commander</b> is also the name of a motorcycle made by British manufacturer <b>Norton</b> Motors 
+	and if you search Google for the word &quot;Commander&quot; that will be 90% of what you&#39;ll get. The other problem is that file 
+	managers completely unrelated to Norton Commander, especially those that resemble Windows File Explorer often call themselves 
+	Commanders.&nbsp; </li>
+	<li><b>2-pane or two panel managers</b> is a wrong term as it does not reflects the critical importance of the command 
+	line&nbsp; window in the interface, which in the default mode is minimized to a single line.&nbsp; This third, initially 
+	minimized window that behaves as it is hidden behind two panels is the principal, distinguishing feature of this type 
+	of managers. Also this term does not reflect a unique troika of command line integration features, extension menu, and 
+	user menu based integration. The latter is probably the most important and existence of so called &quot;user menu&quot; and a 
+	related a set of macro variables (the current file, path to the current panel, path to the passive panel, etc) allow 
+	to extent this type of managers in a unique fashion. It also hides close analogies of OFMs with such programs as XEDIT,
+	<a target="_blank" href="https://en.wikipedia.org/wiki/The_Hessling_Editor">The Hessling Editor</a>, vi (the category which I call
+	<a href="../Editors/index.shtml">Orthodox editors</a>) as well as <a href="../Utilities/screen.shtml">GNU screen</a> 
+	and minimalist windows managers for X11 like Ratpoison. So in a way this is a culture that emphasize the value of keyboard.&nbsp; 
+	All those programs has nothing to do with two panel concept but they all utilize command line interface, although is 
+	different ways and attract similar type of power users -- first of all system administrators. </li>
+</ul>
+
+<p>You can read more about pro-and-contra those alternative terms in
+<a target="_blank" href="https://en.wikipedia.org/wiki/Talk:File_manager#Dual_pane_manager_is_an_incorrect_term._Please_do_not_use_it">Wikipedia 
+discussion</a>, which among other thing contains some very emotional philippics against the term &quot;orthodox file manager&quot; 
+and judge the level of participants on the either side of the debate yourselves. The funniest argument, that probably deserve 
+to be published by Onion were along the lines:</p>
+<blockquote>
+
+   <p>&nbsp;<i>Waah, if those are orthodox then all others are unorthodox and that means 
+infidel. So they called my favorite file manager infidel ! Bastards.&nbsp; Damn the author and the term</i> ;-).&nbsp;</p>
+</blockquote>
+
+<p>With 
+one particularly nasty Wikipedia user was going as far as claiming that the term was inserted by me at all pages with them 
+that can be found on the WEB... </p>
+<p>Of course any term has drawback, but this one still the term reflects my convictions that interface provided by OFMs 
+reflects &quot;less in more&quot; approach and its Spartan interface somewhat reflect ideas
+<a target="_blank" href="https://en.wikipedia.org/wiki/Asceticism">asceticism</a> propagated (but not always followed) by Orthodox Priests. 
+If also reflects judging of this interface as a &quot;right, but now viewed as archaic&quot; pretty well and I am sticking to it :-).
+</p>
+<p>Orthodox file managers is also appropriate name in a sense that they stress the value of ability of&nbsp; working with 
+command line&nbsp; using the command set instead of click &amp; drag type of interface that is typical for modern GUI programs. 
+OFMs also managed to preserve &quot;look and&nbsp; feel&quot; of the original program which is now more then 25 years old (this is 
+amazing case of interface longevity, if you think about it). This unique, recognizable two symmetrical panel (often with 
+white letters on blue background) interface is a hallmark of the genre with its ability to shrink and manipulate visibility 
+of left and right panel windows as well as expand command window (preferably gradually but at least to half-screen and full-screen) 
+despite the fact that this interface is quite different from the established by Apple and Microsoft standard for those programs. 
+In this sense we can call Microsoft type of GUI interface with its excessive attention to GUI details &quot;a catholic interface&quot; 
+;-). </p>
+<h2><a name="Notion_of_Orthodox_interface">Notion of Orthodox interface</a></h2>
+ 
+
+<p>Orthodox interface is the interface that has both command line interface 
+elements and GUI interface elements glued together.&nbsp; As cynics would say 
+this is a half-baked GUI-interface and this statement definitely has some truth 
+as at least one of them&nbsp; emerge during attempts to convert previously pure 
+command line tool to GUI (text terminal GUI) mode: this was the case with vi 
+which was text terminal GUI extension of ex editor.&nbsp; Apple and Microsoft 
+GUI interface attempt to hide from us the internal command that you mouse 
+gestures are generating, while orthodox interface attempts to expose it. </p>
+
+<p wrap>In Orthodox interface there is always <i><b>a set of commands</b></i> 
+that exists <i><b>as a language</b></i> with text&nbsp; names for functions and 
+parameters and glued together by control structures. Special keys and key 
+combinations as well as mouse buttons and mouse gestures are just shortcuts to 
+this basic set of commands. So interface is split into two parts: </p>
+<ul>
+	<li>
+
+	<p wrap>Generation of internal commands via GUI</li>
+	<li>
+
+	<p wrap>Execution of generated internal command by internal language 
+	processor. </li>
+</ul>
+
+<p wrap>This existence of formal internal language is the most distinctive 
+feature of orthodox interface. </p>
+
+<p>And this idea was invented and reinvented by so many people that it looks 
+like this is a new different type of interface, distinct from Apple-Microsoft 
+interface. </p>
+
+<p>For example this is true for various OFM, for <a href="/Editors/orthodox_editors.shtml">
+orthodox editors </a>such as vi or XEDIT like of editors (Edit, Kedit, THE, 
+Slickedit), for GNU screen, smith in AIX and many other programs.&nbsp; Those 
+tools were from the beginning designed is a way that allow coexistence of 
+command line with GUI interface. So in a way Orthodox interface is all about 
+co-existence of two principal forms of computer interfaces in a single program 
+by using command line as the focal point.&nbsp; </p>
+
+<p>That means that we can look at orthodox interface as a compiler of GUI 
+&quot;gestures&quot; into regular command language with text representation. Those 
+generated statements of this command line language are executed to achieve the 
+desired effect. </p>
+
+<p>We can also introduce idea of channel: each channel forward generated or 
+manually written commands to specific processor. For example we can thing about 
+vi as having two command channels: one is <tt>&quot;: channel&quot; (internal commands 
+channel) </tt>which process commands directed to editor buffer and another is <tt>
+&quot;! channel&quot; (external commands channel) </tt>
+which direct commands to OS with the possibility of using all or part of editing 
+buffer as input as well as to modify all or part of the editing buffer using 
+output of executed in OS command of complex pipe.&nbsp; </p>
+
+<p>In OFMs this is implemented differently: there is a single &quot;OS command 
+channel&quot;, but there is not distinct &quot;internal command language&quot;, althouth some 
+OFMs recently moved in this direction.</p>
+
+<p>All-in-all I am convinced that the <font color="#FF0000"><b><i>notion of 
+Orthodox interface</i></b></font> 
+as an interface distinct from and based on different principles then Apple and 
+Windows GUI interfaces (which are actually became much closer with time). As 
+such this is a much wider phenomenon then either OFMs and orthodox editors such 
+as vi and THE (<a href="/Editors/orthodox_editors.shtml">orthodox editors</a>),&nbsp; 
+windows multiplexers (<a href="/Utilities/screen.shtml">GNU screen</a>), 
+windows managers (such as <a target="_blank" href="https://en.wikipedia.org/wiki/Ratpoison">
+ratpoison</a>). </p>
+
+<p>I am still working on refining this notion but as a set of&nbsp; ideas it 
+definitely includes three following notions:</p>
+<ol>
+	<li><b>Extensibility and programmability (with shell and/or scripting 
+	languages) are key to enhancing productivity of advanced users and as such 
+	they should have much higher priority for designers of the interface then 
+	chrome.&nbsp; </b>This &quot;<font color="#FF0000"><i><b>the ability to program 
+	as second literacy</b></i></font>&quot;&nbsp; paradigm (see&nbsp; 
+	<a href="Ershov/aesthetics_and_the_human_factor_in_programming_ershov1972.shtml">Ershov1972</a> ) inherent in orthodox interface is actually radically 
+	different design paradigm than the one used in classic Apple-Microsoft GUI 
+	with their emphasis on &quot;users&quot; and&nbsp; multicolor eye candy with gradient 
+	colors icons and fancy animations<b>. <br>
+&nbsp;</b></li>
+	<li><b>Orthodox GUI is a &quot;visual shell&quot;.&nbsp; Like classic Unix shells, </b>
+	Orthodox GUI should have least one &quot;command channel&quot;: ability to type 
+	statements in some formal language which, when executed, change the state of 
+	GUI. In other words they implement what can be called &quot;<font color="#FF0000"><i><b>command 
+	line controlled GUI</b></i></font>&quot;. It can be just &quot;external&quot; command 
+	channel where commands&nbsp; go directly to OS (like in OFMs), or internal 
+	command channel where commands are processed by internal interpreter (for 
+	example REXX or Lua) and reflected on the part of editing buffer that is 
+	displayed as in orthodox editors, or some combination of both. Commands that 
+	are entered into command channel are executed immediately like in shell and 
+	the result is immediately reflected in GUI interface. They can be glued into 
+	complex scripts by some ad-hoc or (preferably) standard scripting language 
+	like REXX or LUA.<br>
+&nbsp;</li>
+	<li><b>Elements of&nbsp; automatic program generation with the help of GUI. 
+	</b>&nbsp;Another way of looking on <strong style="font-weight: 700">
+	orthodox</strong> <strong style="font-weight: 700">interface</strong> is to 
+	assume that <strong style="font-weight: 700">GUI</strong> &quot;gestures&quot; in it 
+	first are compiled into some command line language and that those generated 
+	statement are executed by command processor and cause corresponding changes 
+	in GUI screen. That means that we can (and probably should) look at orthodox 
+	interface as a compiler of GUI &quot;gestures&quot; into regular command language with 
+	text representation. Those generated statements of this command line 
+	language are executed to achieve the desired effect.  
+ 
+
+<p>GUI can also be used in supplementary role to generate part of command line 
+construct that are written by the user on the command line by inserting certain 
+elements via macros or shortcuts like (<tt>Ctrl-Enter</tt>, <tt>Ctrl-[</tt> and
+<tt>Ctrl-]</tt> in OFMs) and any other creative way. Generally in OFMs you can 
+&quot;assemble&quot; pretty complex commands from elements of GUI (and freely move within 
+directory tree in a process without destroying it, the capability that was 
+always a desirable part of Unix command interface)</p>
+
+	<p>Recently those ideas related to <tt>vi</tt> 
+	and orthodox editors started cross-pollinated OFM that consider themselves 
+	not derivatives of Norton Commander, but derivatives by&nbsp; vi&nbsp; See
+	<a href="/OFM/Paradigm/Ofm_06.shtml#Ranger">ranger</a> and
+	<a  target="_blank" href="http://vifm.sourceforge.net/docs.html">vifm</a>. have some 
+	interesting, distinct from traditional &quot;Norton&quot; line of OFM ideas 
+	implemented.</p>
+ 
+</ol>
+
+<p>There are also some other common features but they just overlap and extend 
+the three more fundamental features listed above: </p>
+<ol>
+	<li><b>Tiled, nonoverlapping windows with minimum decorations. </b>Generally 
+	both Orthodox editors and Orthodox file manager feather rather Spartan 
+	interface.<b><br>
+&nbsp;</b></li>
+	<li><b>Stress on availability of all commands via keyboard,</b> not only via 
+	mouse clicks, althouth mouse can be productively used and is widely used in 
+	such interface. In this sense claim that such interfaces are &quot;mouse-less&quot; is 
+	completely untrue. Simply mouse plays the role of important but supporting 
+	instrument, not as the primary instrument as &quot;drag and drop&quot; type of 
+	interface.&nbsp; <br>
+&nbsp;</li>
+	<li><b>Stress on availability of macrogenerator. </b>This is connected with 
+	viewing shortcuts as the means to generate some internal commands.<br>
+&nbsp;</li>
+	<li><b>Stress on the ability to utilize pipes and external program as a 
+	source of gui elements. This is especially visible in vi with its ! and !! 
+	commands. Ability to redirect output of commands executed in one window to 
+	other windows and processes. That includes the ability of forwarding result 
+	of particular command execution into panel in OFMs </b>(panelize command in 
+	OFMs, especially external panelize command in Midnight Commander) and 
+	capability of ! command to use part of editing buffer as input and pipe the 
+	result into selected part of editing buffer in vi. For example, the command:<pre>:1,$!indent</pre>
+	will beautify your program using standard Unix beautifier (<tt>indent</tt>). 
+	This is a classic example of using piping in vi. <br>&nbsp;</li>
+</ol>
+
+ 
+
+<h2><a name="Members_of_the_OFM_family_and_their_properties">Members of the OFM family and their properties</a></h2>
+<p>Members of this family of file managers that are represented by such popular file managers as
+<a href="../OFM/Paradigm/Ch05/far.shtml">FAR</a>, <a href="../OFM/Paradigm/Ch05/file_commander.shtml">FC</a>,
+<a href="../OFM/Paradigm/Ch05/total_commander.shtml">Total Commander</a> and <a href="../OFM/Paradigm/Ch05/winscp.shtml">
+WinSCP</a> on Windows as well as <a href="../OFM/Paradigm/Ch04/mc.shtml">MC</a> (Midnight Commander) in Unix. Less popular 
+names include probably a dozens of implementations (<a target="_blank" href="https://en.wikipedia.org/wiki/Demos_Commander">Demos Commander</a>,&nbsp;
+<a  target="_blank" href="http://www.krusader.org/">Krusader </a>&nbsp;, <a target="_blank" href="https://en.wikipedia.org/wiki/EmelFM2">EmelFM2</a>, GNU 
+Commander, <a target="_blank" href="https://en.wikipedia.org/wiki/GNOME_Commander">GNOME Commander</a> in Linux,
+<a  target="_blank" href="http://www.freecommander.com/index.htm">FreeCommander</a>, <a  target="_blank" href="http://www.altap.cz/">Altap</a><a target="_blank" href="http://www.altap.cz/"> 
+Salamander</a>,&nbsp; <a  target="_blank" href="http://ndn.muxe.com/index.php">Necromancer&#39;s DOS Navigator</a> on Windows,&nbsp; see
+<a target="_blank" href="https://en.wikipedia.org/wiki/Category:Orthodox_file_managers">CategoryOrthodox file managers</a> in Wikipedia). 
+All of them use simple yet very powerful paradigm of three windows: two symmetrical panels and command window (shell terminal 
+window) hidden behind them with only the last line of this window (command line) visible. There are three fundamental properties 
+of Orthodox file managers: </p>
+<ol type="I">
+	<li>
+	<p><b>Conservative (as in &quot;far from being fancy&quot;),&nbsp; very stable (25 years without major changes), very flexible 
+	interface with two symmetrical windows (called panels, with default trademark white on blue letters). It teaches us 
+	that less is more.</b> By default panels contain listings of files in two (not necessary different -- they can provide 
+	two different views of the same directory, for example, sorted by time and by name) directories. One panel is &quot;active&quot; 
+	(it has cursor in it), the other is &quot;passive&quot;. Tab changes active panel to passive and makes other panel active. All 
+	manipulations are performed from active panel with possible target of passive panel directory (in case of copy operations). 
+	In advanced OFM along with vertical split panels can be displayed with horizontally which is useful for Unix as permits 
+	displaying both attributes of the files and its ownership.&nbsp; Key variables that describe status of those two panels 
+	(often called<b> <a href="../OFM/MC/macrovariables.shtml">macrovariables</a></b>), should be exported to the environment 
+	and available as a keyboard shortcuts (for example <tt>Ctrl-Enter</tt>, <tt>Ctrl-[ </tt>and <tt>Ctrl-] </tt>in FAR) 
+	for inserting into command line. In a sense OFM is for users who learned this interface, found it highly usable and 
+	don&#39;t care about with &quot;innovation&quot; like drag and drop and eye candy unless they really increase productivity. Remember 
+	that an important part of <a href="../SE/kiss.shtml">KISS </a>principle is famous &quot;<font color="#FF0000"><i><b>If it 
+	aren&#39;t broke, don&#39;t fix it</b></i></font>&quot;...&nbsp; Every time you hear the screams of millions of users crying because 
+	of another &quot;innovation&quot; from MS or Apple like happened in change of interface from Office 2003 to Office 2007, remember 
+	that simple reliable tools like OFM give people what they want and what they already learned and get used to, not an 
+	&quot;Even-Newer-Paradigm&quot; each three to five years. The classic &quot;orthodox&quot; lesson that OFM teach us that &quot;If you&#39;ve got 
+	time on your hands, and are looking for something to do, please spend it on improving functionality and flexibility 
+	of the application, not the visual candy. &quot;&nbsp; The UI does not need anything &quot;new&quot;, nor do the users want anything 
+	new or unfamiliar. It&#39;s more than enough hassle to keep up with &quot;innovations&quot; in the OS space... please don&#39;t make us 
+	learn new tricks for the file managers, which are good enough... <span lang="en">As we saw in some popular GUI programs 
+	the lion share of &quot;innovations&quot; in new releases is confined to endless variations of GUI interface. Not so much adding 
+	functionality, as adding confusion. And the pace is such that sometimes users just get used to new interface and, voila 
+	it got updated. </span><span lang="en">The impression is that aging brass imitates &quot;creativity&quot; by meeting some stupid 
+	formal parameters in yet another spreadsheet staffed in the endless maze of bureaucratic perversions. Imitates without 
+	a soul. And after brass creates &quot;grand plan for innovation&quot; a lower level boss pushes plan for interface &quot;innovations&quot; 
+	to worker bees. Who knowing the situation all too well and understand that&nbsp; &quot;resistance is futile&quot; say, &quot;OK, boss. 
+	As you wish !&quot;&nbsp; Let&#39;s shuffle the menu from vertical to horizontal and change location and shape of the buttons. 
+	Done deal! Everybody is now happy. And in order to meet the deadline, let&#39;s do not fix existing bugs. Because real quality 
+	control is gone as the key criteria of their work became meeting the release date too. So both management, software 
+	development and quality control are now just imitations of &quot;real thing&quot;. The release date hangs over their heads like 
+	Damocles sword. And only after the release, the real attempts to fix bugs begin.&nbsp; Until a new &quot;innovation cycle&quot; 
+	starts.... </p>
+	<p>You got the idea of such an &quot;innovation process&quot;. And described perversion and waste of talent and resources for 
+	meaningless changes of eye candy under the name of innovation&nbsp; happens with GUI based applications way too often, 
+	so often that the description above does not looks so much as a caricature. </span><span lang="en">I think in this respect 
+	US software developers finally reached the level on which industrial projects were completed in the USSR just before 
+	its dissolution! Which suggests not only widespread rot at the top, but something deeper and more menacing... </p>
+	<p>With OFM the situation is different. Interface is primitive and its structure was fixed 26 years ago. Users learned 
+	it long ago and expect it to stay the same; they do not take &quot;innovations&quot; very friendly to say the least. Moreover, 
+	there is one stupid guy named Bezroukov who put an effort to document it and published widely ignored but still available 
+	standard. And now if somebody deviates from it too much,&nbsp; he/she might be shamed by some too curious user who read 
+	OFM1999 or old hand who used FAR or Norton Commander 3.0, who expected that&nbsp; that this feature should be done not 
+	this way, but that way ;-). Which creates implicit pressure to keep the interface compatible with good old Norton Commander 
+	and channel your creative energy into something more valuable then deciding which key combination should be designated 
+	for &quot;copy&quot; and which for &quot;move&quot; :-). Or how many panels your file manager should have. Or how shell terminal window 
+	should behave. </span><br>
+&nbsp;</p>
+	</li>
+	<li><b>Integration with shell via&nbsp; &quot;shell terminal style&quot; window, which initially is minimized to a single line 
+	at the bottom</b> <b>of panels but can be expanded to full screen, half-screen or any number of lines like in GNU screen 
+	with the ability to use special set of macrovariables (current file, path to the active panel, path to the passive panel, 
+	etc).</b> Classic Norton Commander provided two preselected sizes of &quot;shell terminal&quot; window: half screen and full screen; 
+	FAR introduced the ability to expand command line windows by any number of lines necessary.&nbsp; At least the ability 
+	hide panel and work with full screen command windows should be present. Unfortunately this feature is very poorly understood 
+	and as such is very poorly implemented (paradoxically it is implemented especially bad in Unix OFMs). At the same time 
+	this is what makes OFM close to visual shell -- as you can use environment variables and shortcuts related to panels 
+	in command line. This is a really unique feature of OFM.&nbsp; Unfortunately in Midnight Commander, the most popular 
+	Unix OFM, the implementation was completely screwed until version 4.8&nbsp;&nbsp; ( and it is have bugs in version 4.8.6 
+	as well as complete absence of important &quot;half-screen&quot; shell terminal windows visibility (only one line or full screen 
+	capabilities are present)). So the leading Unix OFM fared worse the Windows-based FAR in command window support ;-). 
+	The capability to extend the third windows above single line is completely absent from Total Commander -- probably the 
+	best GUI-based OFM for Windows. I think this is a serious flaw. So I would like to stress it again, that the key, principal 
+	feature of orthodox file managers is usually very badly implemented with the exception of the original Norton Commander 
+	and FAR.&nbsp;
+	<p>An additional twist of this capability is the ability to paste macrovariables (current file, path to left and right 
+	panel, list of selected files, etc) not only via putting the names of macrovariables in your input string, but also 
+	by using keyboard shortcuts such as <tt>Ctrl-F</tt> (current file), <tt>Ctrl-[ </tt>(path to left panel), <tt>Ctrl-]
+	</tt>(path to right panel). This feature introduced in Volkov Commander simplifies many operations in comparison with 
+	both die hard command line Unix users on one hand and <i>CDD (click-drag-drop) </i>addicted&nbsp; type of Windows users 
+	on the other.&nbsp; I always admired the persistence with which Windows users can repeat the same operation using strictly 
+	mouse &quot;<i>drag and drop</i>&quot; four dozen times, for example moving 50 files to 10 different directories one by one, when 
+	in OFM it takes just slightly more then a dozen of keystrokes :-).&nbsp; As well as Unix command line users who type 
+	command <tt>ls</tt> probably several hundred times a day each day (the ability to suppress <tt>ls</tt> command in bash 
+	history exists not without a reason) and still feel great and don&#39;t even suspect that there is a better way ;-)</p>
+	<p>This &quot;visual shell&quot; memo is one of the most powerful ideas within OFM paradigm, but unfortunately &quot;the religion became 
+	corrupted&quot; as it often happens. Only FAR and Midnight commander (starting from version 4.8) implement this idea correctly, 
+	but with different strong points of the implementation: </p>
+	<ul>
+		<li><b>Midnight Commander 4.8 implements commands window better than FAR in a sense it is a real &quot;first class citizen&quot; 
+		shell terminal window in Linux. </b>For example,&nbsp; you can source your own profile with custom prompt and it 
+		will be reflected in the shell terminal window. History is available with arrow keys, <tt>Ctrl-R</tt> works like 
+		it should. Generally you can work with it as with regular shell terminal. It would be great if Midnight Commander 
+		implemented the possibility of shrinking of the panels to&nbsp; &quot;half-screen&quot; mode but may be I am asking too much.&nbsp; 
+		Its already has a huge codebase and developer resources are really scarce... </li>
+		<li><b>FAR shell windows has different properties then Windows command line (which is extremely primitive anyway), 
+		but it implements an important possibility of shrinking panels to half size </b>of more providing visual clues of 
+		executed commands on the file system along with output of those commends in the bottom part of the screen.&nbsp; 
+		Still, for example, loss of scrolling history which is implemented in regular Windows shell window is a serious 
+		drawback. </li>
+	</ul>
+	<p>I would like to stress it again that such a popular Windows OFM implementation as Total Commander is completely defective 
+	in this respect: the third command line allow only a single command to be executed and output is not visible other that 
+	(if this is command affects file in the panel) with the feedback via changes in listed in panels files. <br>
+&nbsp;</p>
+	</li>
+	<li><b>Extensibility due to integration of small scripts via so called User menu and extension menu using the same set 
+	of macro variables that are available for command line. In addition the same user menu and macro variables can be made 
+	available in the built-in editor. </b>This way &quot;user menu&quot; provide a user with he capability to write his own simple 
+	extensions some of which can be quite useful. Here is an example taken from Midnight Commander User menu (which has 
+	a unique feature that it is dynamic and only those items of the menu that are applicable to the current file type and 
+	presence/absence of selected files are shown to the user):&nbsp;
+	<pre>= t r
++ ! t 
+y       Gzip or unzip current file
+        unset DECOMP
+	case %f in
+	    *.gz) DECOMP=-d;;
+	    *.[zZ]) DECOMP=-d;;
+	esac
+        gzip $DECOMP -v %f
+
++ t t
+Y       Gzip or gunzip tagged files
+        for i in %t
+        do
+          unset DECOMP
+	  case &quot;$i&quot; in
+	    *.gz) DECOMP=-d;;
+	    *.[zZ]) DECOMP=-d;;
+	  esac
+          gzip $DECOMP -v &quot;$i&quot;
+        done
+
+
++ f \.tar.gz$ | f \.tgz$ | f \.tpz$ | f \.tar.Z$ | f \.tar.z$ | f \.tar.bz2$ | f \.tar.F$ &amp; t r &amp; ! t t
+z       Extract compressed tar file to subdirectory
+	unset D
+	set gzip -cd
+	case %f in
+	  *.tar.gz) D=&quot;`basename %f .tar.gz`&quot;;;
+	  *.tgz)    D=&quot;`basename %f .tgz`&quot;;;
+	  *.tpz)    D=&quot;`basename %f .tpz`&quot;;;
+	  *.tar.Z)  D=&quot;`basename %f .tar.Z`&quot;;;
+	  *.tar.z)  D=&quot;`basename %f .tar.z`&quot;;;
+	  *.tar.bz2) D=&quot;`basename %f .tar.bz2`&quot;; set bunzip2 -c ;;
+	  *.tar.F) D=&quot;`basename %f .tar.F`&quot;; set freeze -dc;
+	esac
+	mkdir &quot;$D&quot;; cd &quot;$D&quot; &amp;&amp; (&quot;$1&quot; &quot;$2&quot; ../%f | tar xvf -)</pre>
+	</li>
+</ol>
+<p>For Linux/Unix users the simplest way to understand Orthodox file manager interface is to view it as a specialized implementation 
+of GNU <a href="../Utilities/screen.shtml">screen</a>&nbsp; that contains three predefined windows: two symmetrical panels 
+side by site at the top and a regular command line window (by default minimized to a single line) at the bottom&nbsp; The 
+unique feature is that operation in one window (command line window) cause changes in other two windows (panels). This feature 
+actually can&nbsp; be implemented in screen by running two programs in panels that read two files in, say <tt>/tmp </tt>
+directory with location of current (active -- always shows the current directory) and passive (say previous directory) and 
+then update content of their window.</p>
+<p>Paradoxically leading Windows implementation (FAR) has richer interface with shell then leading Unix version -- Midnight 
+Commander&nbsp; (partially because of design flaws in Midnight commander where shell interface is implemented as a hack). 
+There are also many GUI version of orthodox file managers that implement mainly file handling capabilities but not &quot;visual 
+shell&quot; capabilities. The most prominent example is Total commander which in 2007 became fifteen years old implementation.&nbsp;
+</p>
+<p>There are numerous advantages of modern&nbsp; <a target="_blank" href="http://www.softpanorama.org/OFM/Ofm_00.shtml">
+Orthodox File Managers</a>, which refines the functionality of&nbsp; the original Norton Commander for DOS and incorporated 
+into the same interface more then 20 years of development by many talented programmers including John Socha, Vsevolod Volkov, 
+Eugene Roshal (of RAR fame) and Christian Ghisler (Total Commander).<font size="1" face="Arial"> </font><b>&nbsp;</b>Three 
+main advantages are:</p>
+<ul>
+	<li><b>Close integration with shell.</b> That is reflected the ability to perform all operations using just&nbsp; keyboard 
+	as well as in such features as extensions menu and user menu both of which allow usage of parameterless macros representing 
+	various elements displayed on the panels, bridging the gap between command line and GUI worlds in a very flexible and 
+	unique way. Hierarchical context dependent (MC) user menu is also a unique and pretty powerful scheme of invocation 
+	of scripts and programs, more powerful then GUI icons as invocation can incorporate context elements from both panels, 
+	such as active directory, passive directory, current file, selected files, etc. </li>
+	<li><b>Portability</b>.&nbsp; OFM are probably the most portable type of&nbsp; file managers in existence as it is one 
+	of the few that can work OK without mouse or similar pointing device. Implementations exist for any major OS including 
+	Windows CE and most smartphones; they proved to be pretty usable on Blackberry which is a popular type of corporate 
+	smartphones) See, for example, <a  target="_blank" href="http://www.ghisler.com/ce.htm">Total Commander CE/Pocket 2.51</a>. As interface 
+	is pretty Spartan implementers can concentrate on providing advance functionality instead of eyes candy.&nbsp; </li>
+	<li><b>Availability of public standards. </b>&nbsp;Two <a href="../OFM/Standards/index.shtml">Public standard</a>s&nbsp; 
+	are available (<a href="../OFM/Standards/ofm_standard1999.shtml">OFM1999</a> and
+	<a href="../OFM/Standards/ofm_standard2004.shtml">OFM2004</a>), one in in development stage(<a href="../OFM/Standards/_ofm_standard2012.shtml">OFM2012</a>). 
+	Existence of standards ensure that OFMs are and will continue to remain one of the few types of managers
+	<font color="#FF0000"><i><b>where skills you get twenty years ago are still mostly usable</b></i></font> on any more 
+	modern implementation. This is unique situation as interface usually changes pretty quickly, often in less then a decade.&nbsp; 
+	Compare for example this with the evolution of Windows managers were key features of interlace are somewhat different 
+	between Windows 4.1, NT 4.0, Windows 2000, XP, Windows 7 and Window 8 Metro interface. Or Office 2003 and Office 2007 
+	(to be fair Office 2003 interface existed for a decade or so).&nbsp; And Microsoft is a company which historically proved 
+	to be very good in preserving compatibility. </li>
+</ul>
+<center>
+<table border="1" width="90%" bgcolor="#FFFFCC" id="table28">
+	<tr>
+		<td>
+		<p align="center"><b>Three main advantages of OFM are (1) close integration with the shell, (2) portability and 
+		(3) the availability of <a href="../OFM/Paradigm/Ofm_08.shtml">public standard</a></b></p>
+		</td>
+	</tr>
+</table>
+</center>
+<p>All OFMs have a Spartan interface with the main window which is divided into three sub-windows. Two of them are called 
+&quot;panels&quot; that are identical in structure (but can have different sizes and/or be hidden), and are usually positioned side 
+by side at the top of the screen (in Unix positioning one on top of the other is more common as there are additional attributes 
+to display with files). The third&nbsp; screen-wide window contains an instance of the shell and usually is minimized to 
+one line but can be expanded either gradually, like by line (like in FAR) and/or is large increments (half screen and full 
+screen&nbsp; as in classic Norton Commander implementation). You should view this command line as a almost minimized (to 
+a single line) command window. Or, if you wish, a separate telnet session to <i>localhost</i>. In case panels are hidden 
+(with hotkey <font color="#0000FF">Ctrl-O </font>) command window should provide full functionality of the OS shell window 
+including history of commands, command completion and other niceties. </p>
+<p>In essence OFMs can be viewed as a special type of&nbsp; windows manager (similar to GNU screen) with functions of two 
+upper windows (panels) largely fixed. But the important feature of OFMs is that panels are implicitly&nbsp; connected&nbsp; 
+to the operations performed in command window in several ways:</p>
+<ul>
+	<li>
+	<h5>One of the panels always contain the current directory and automatically reflects changes in it. </h5>
+	</li>
+	<li>It is possible to copy certain elements of the left or right panel to the command like using special key combination 
+	and special macro variables. Typical examples are the current path, path to the left panel, path to the right panel, 
+	the list of names of selected files. </li>
+	<li>There are also set of operation for exchange of information between panels (always from active to passive)</li>
+	<li>Panel also can contain editor window of viewer for a particular file.&nbsp; </li>
+	<li>Panels are shrinkable and can expose hidden behind them terminal window, while normally only the last line of this 
+	window (command line) is visible. The latter permits viewing the results of execution the shell command entered on the 
+	command line (e.g. via Ctrl-O shortcut in Norton Commander); </li>
+	<li>The ability of user to extend functionality of the manager via so called User menu or Start menu and extensions 
+	menu. The ability to create their own file associations and scripts that are invoked for certain file types ( it was 
+	Norton Commander who introduced the concept of file associations that is now used in all file managers). </li>
+</ul>
+<p>Surprisingly, this Spartan interface proved to be long lasting feature of OFMs.&nbsp; There were attempts to create the 
+OFM manager with four panels. There were attempts to use tree view as the right panel (similar to Windows Explorer) and 
+most OFM has the ability to replace left panel with tree view. But I personally and many advanced users whom I know never 
+learned to use this productively and prefer classic symmetrical panel view with two directories.&nbsp; Strangely enough 
+this two symmetrical panel with two directories remain the most productive for a very wide spectrum of real life file operations 
+that are used by sysadmins and advanced users.&nbsp; When I need tree view for quick navigation I usually use separate view 
+available vie Alt-F10 (find folder).&nbsp;&nbsp; Probably there are some structures in brain that provide higher productivity 
+with the symmetrical two panels&nbsp; interface vs. various often more sophisticated asymmetrical variants.&nbsp; Moreover 
+after you achieve proficiency with it, it&#39;s rather difficult to switch to any other: all of them look inferior even if in 
+reality they are more expressive&nbsp; for some operations (like the Windows File Explorer asymmetric interface with tree 
+on the left side or XTree interface, which provides very good capabilities of coping/moving files from left panel to the 
+arbitrary place in the directory tree). There is some kind of&nbsp; implicit &quot;lock in&quot;: after several years of usage you 
+start thinking about file movements and directories restructurings in terms of OFM operations. That also provide you with 
+some hidden &quot;language&quot; using which you can perform pretty sophisticated directories transformations, the skill that often 
+amazed those who never using OFM manager and observe operations of an advanced user. </p>
+<p>Another, already mentioned, advantage of OFM is that this is the only type of file manager that is
+<a href="../OFM/Standards/index.shtml">standardized</a> and the skills are transferable from command like to GUI and back 
+as well as from one platform to another (for example Windows to Unix&nbsp; -- this is an excellent way to dampen shock of 
+the Unix command line for Windows users who want also use or even migrate to Unix). </p>
+<center>
+<table border="1" width="90%" id="table27" bgcolor="#FFFFCC">
+	<tr>
+		<td><font face="Arial" size="2"><b>Another advantage of OFM is that this is the only type of file manager that is 
+		standardized and the skills are transferable from command like to GUI and back as well as from one platform to another 
+		(for example Windows to Unix&nbsp; -- this is an excellent way to dampen shock of the Unix command line for Windows 
+		users who want also use or even migrate to Unix) </b></font></td>
+	</tr>
+</table>
+</center>
+<p>OFMs are not for dummies. You will be more productive if you know the shell of the OS you are using. In this case you 
+can use OFM as a navigational helper and a simple generator of complex command as you can easily insert into command line 
+such elements of two panels as the current file, the current directory, directory of inactive panel and&nbsp; so on.&nbsp;&nbsp; 
+That&#39;s why they are extremely popular among administrators, especially in Eastern Europe and xUSSR area.&nbsp; </p>
+<p>The author argues that this simple classic interface offers the most efficient way to perform complex file operations, 
+and both users and software developers <i><b>deserve some help in the form of the standard and some kind of commentary about 
+&quot;the state of the art&quot; of this type of file managers. </b></i>That&#39;s why I spend considerable time writing my online book
+<a href="../OFM/Paradigm/index.shtml">The Orthodox File Manager (OFM) Paradigm</a> that introduced two level of standards 
+(<a href="../OFM/Paradigm/Ofm_08.shtml">OFM1999 - minimal OFM requirements</a>&nbsp; and
+<a href="../OFM/Paradigm/Ofm_09.shtml">Dr Nikolai Bezroukov. The Orthodox File Manager (OFM) Paradigm. Ch. 9 The OFM2004</a>&nbsp; 
+provide both commentary and overview of major implementations. This is a volunteer effort and some parts are outdated.&nbsp; 
+Still this is the only e-book on the subject and as such it can help system administrators more consciously choose the implementation 
+they need and polish the methods of work with OFM. </p>
+<p>In this eBook I tried to distill several possible reasons for this surprisingly high productivity of OFM users, the productivity 
+that despite of the age of the interface (more then 25 years) and its Spartan character remains unmatched. Please read at 
+least Ch.1 of the <a href="../OFM/Paradigm/index.shtml">OFM book</a>, the chapter that introduces the concept.&nbsp; </p>
+<p>But even if you do not want to read it, selects and enjoy any OFM you like! I am using this class of filemanagers since 
+1987 (NC 2.0) and still learn new things each year, things that help to increase my productivity. Despite interface simplicity 
+latest OFMs are very powerful and flexible programs, that have rather steep learning curve and you will be better off learning 
+incrementally,&nbsp; starting with simple file operations and gradually moving toward full power that bring customarization 
+and availability of user many, extensions menu and several other features of OFM. </p>
+<p>I also have found OFMs to be indispensable productivity tool for webmasters and despite my interest and professional 
+exposure to other Windows and Unix filemanagers I am still convinced that in the hands of professional, productivity-wise, 
+OFMs&nbsp; have a huge edge. BTW I never managed to fully switched to GUI based OFMs, and still use mc in Unix and FAR in 
+Windows environments although recently I spent considerable time using Total Commander.&nbsp;&nbsp; That&#39;s because command 
+line OFMs should be viewed not only as filemanagers but as a new ingenious graphical interface to shell, interface that 
+makes standard Unix-style typing command on the terminal irrevocably backward. Professional Unix administrator fully versed 
+in OFM usually outperform Unix administrator limited to &quot;pure&quot; commend line by a factor of two in not more.&nbsp; It&#39;s actually 
+a pity to see how this poor folk spends valuable time typing innumerous <tt>ls</tt> commands ;-) </p>
+<p>And that brings us to an important point. While invented as a file manager in reality (and especially in Unix environment) 
+OFM should be viewed as new generation of shell interface (visual shell) and as such they should be closely integrated with 
+shell. Unfortunately this point was missed by most Unix developers and capabilities of typical Unix implementation in this 
+respect are rather primitive. In a way you should think about Unix OFM implementation as a fork of
+<a href="../Utilities/screen.shtml">screen</a> with specially predefined top windows split vertically (I know screen cannot 
+split windows vertically but let&#39;s assume that this is just an implementation limitation).&nbsp; This ides of
+<font color="#FF0000"><b>&quot;OFM as a visual shell for Unix&quot;</b></font> is the main point that I advocate in my 
+eBook especially 
+in chapter 4 devoted to Unix OFMs. That&#39;s why despite their origin in Windows OFMs proved to be extremely natural to Linux/Unix 
+environment. IMHO a Linux/Unix sysadmin with good OFM skills can be probably twice more productive then any super-skilled 
+UNIX guru that use just plain vanilla command line ;-) Actually good knowledge of OFMs is a trademark of best Unix administrators 
+from Eastern Europe.</p>
+<p>But while Europe (especially xUSSR region, Eastern Europe and Germany) became the new home of Captain Norton, the initial 
+versions of NC were written by a talented American programmer John Socha. Like with any brilliant idea it did not take long 
+to implement and develop it to a mature condition: all the major work concentrates in just two years 1985-1987. At this 
+time John Socha <font color="#000000" size="3">was the first director of research and development for now defunct small 
+software company: Peter Norton Computing. Peter Norton who wrote the initial version of
+<a href="../Windows/Norton_utilities/history.shtml">Norton Utilities</a>, but AFAIK was not involved in writing Norton Commander 
+was one of the pioneer entrepreneurs in PC software development; now he is known mainly due to his role as a photo model 
+on the boxes of Norton Utilities and other Symantec products belonging to a &quot;Norton line&quot; ;-).&nbsp; </font></p>
+<p>The first version of Norton Commander was released in 1986 and it instantly became the dominant file manager for DOS.<font color="#000000" size="3"> 
+In 1987-1991 m</font>ore then a million copies were sold. <font color="#000000" size="3">&nbsp;In Eastern Europe Norton 
+commander became a synonym of DOS interface and many users did not even understand that this is an add-on program.&nbsp;
+</font></p>
+<p><font color="#000000" size="3">In 1990 Peter Norton sold his company to Symantec to pursue his interests outside programming. 
+John Socha left the company after the merger and created his own company, which was later acquired by Asymetrix. He continued 
+cooperation with the Norton division of Symantec and wrote for them several good computer books including classic </font>
+introductory assembler textbook <a href="../Bookshelf/Computers/assembler.shtml#John Socha">Peter Norton&#39;s Assembly Language Book 
+for the IBM PC</a> .</p>
+<p><font color="#000000" size="3">Symantec first displayed some lukewarm support for this cash cow, but with the introduction 
+of Windows killed it (as well as some other brilliant DOS product it acquired -- XtreeGold). Later they understood the mistake 
+they made and in 1997 there was a reincarnation attempt: Norton Commander for Windows 1.0 was reintroduced in the Symantec 
+product line. But talent was already gone and it&nbsp; was &quot;too little, too late&quot; and after version 2.0 it died again (still 
+as of January 2003 you can buy Norton Commander for Windows 2.0 in Europe, especially in Eastern Europe).&nbsp; Not that 
+I advice you to do that :-)</font></p>
+<p>I would repeat it again that OFM can increase the productivity of sysadmins several times, especially for performing 
+complex operation on Unix-style hierarchical file systems.&nbsp; For some&nbsp; unknown reasons no other file manager can 
+compete with OFM in performing complex copying or moving of files on the directory tree. I several time managed to win a 
+bottle of wine competing against Unix administrators who used only command line, and believe me as typists they were much 
+better them me. The only other tools that I know, that have a similar semi-religious status with its adherents (but in a 
+different area) are Xedit and vi editor (see my&nbsp; <font size="2"><b><a href="../Editors/index.shtml">Orthodox Editors</a>
+</b></font>for details).<font size="2"><b> </b></font>&nbsp;That&#39;s why I consider OFMs to be <i><b>a must </b></i>(along 
+with orthodox editors) <i><b>for any advanced user, sysadmin or webmaster </b></i>(both Windows and Unix).&nbsp; As I wrote 
+in my book:</p>
+<blockquote>
+	<p><font size="2" face="Arial">One of the most distinctive advantages of OFMs is that the productivity of the power 
+	users is really amazing, especially in the command-line environment. To the uninitiated it often looks like a magic 
+	-- the speed with which an advanced user can perform complex file operations.&nbsp; It looks much like playing piano. 
+	Advanced user probably have &quot;motor maps&quot; for typical operations that are executed on subconscious level much like a 
+	good piano player can instantly recognized specific accords in music notation.</font></p>
+</blockquote>
+<p>OFMs can be found on all major and minor operating systems including&nbsp; all flavors of UNIX, OS/2,&nbsp; all existing 
+versions of DOS, Windows 3.1, 9x,&nbsp; NT and even <a target="_blank" href="http://www.palmcommander.com/">PalmOS</a> and 
+Personal PC. Actually OFMs probably represent the most portable family of filemanagers in existence (<a href="#Xtree">Xtree</a> 
+is also a very good filemanager available on several platforms, but not that many; Windows Explorer is an average filemanager 
+that was also widely ported to almost any OS in existence because of the influence of Microsoft Windows).</p>
+<center>
+<table border="0" width="80%" id="table9" bgcolor="#FFFF00">
+	<tr>
+		<td>
+		<p align="left"><b>The first and the main advantage of OFMs is simplicity and stability. Attempts to radically enhance 
+		this simple, Spartan interface largely failed.&nbsp; Also after the first three years of using OFM most file operations 
+		can be performed so fast that usefulness of further improvements&nbsp; might be marginal ;-)</b></p>
+		</td>
+	</tr>
+</table>
+</center><br>
+There is now a large number of OFM users who have more then 20 years experience with this category of file managers, wand 
+who while achieving amazing productivity due to multi-year day-to-day experience, still are polishing and improving their 
+skills.&nbsp; Few other types of file mangers can boast such dedicated and &quot;hardcore&quot; user base. And that includes myself. 
+I use OFMs daily for the last 23 years. And my memorized keyboard shortcuts and tricks that I first learned using Norton 
+Commander 2.0 or 3.0 are still applicable to modern OFMs.&nbsp; And I am still finding some new features of tricks that 
+increase my productivity, some (or most ;-) of them I was aware at some time in the past 20 years but forgot ;-).
+<p>Actually forgetting useful functionality is a problem as one fundamental shortcoming of relying of keyboard shortcuts 
+is that there way too many of them.&nbsp; This is a problem that require paying special attention to help facilities. OFM 
+always have had a bottom line (or bottom menu as item are clickable by the mouse) that describes function of each of <tt>
+F1</tt>-<tt>F12</tt> keys and if <tt>Ctrl </tt>or <tt>Alt</tt> is pressed and hold this dynamic &quot;mini cheat sheet&quot; changes 
+accordingly. This feature needs to be implemented uniformly and extended to all dialogs. </p>
+<h2><a name="Understanding_OFMs_as_sysadmin_IDE">Understanding OFMs as sysadmin IDE</a></h2>
+<p>The right way to look on OFMs is not as on file managers, but as an IDE for sysadmin. That means the quality of shell 
+terminal window provided is of paramount importance for OFMs and the role of user menu is central. Unfortunately most current 
+implementation are very weak in this area and that might be the reason OFMs did not got the popularity among sysadmins they 
+deserve. Some like Total Commander treat shell terminal window functionality like red hair step child despite availability 
+and great productivity enhancing potential of <a href="../Windows/powershell.shtml">PowerShell</a> on Windows. In Unix OFMs 
+the low quality of shell terminal window implementation (that should be equal to <a href="../Utilities/screen.shtml">GNU 
+Screen</a> split window implementation) in my view greatly influenced the fact that particular OFM implementation have difficulties 
+to attract critical mass of sysadmins as is visible from scarcity of manpower and development resources in most implementations.</p>
+
+<table border="1" width="80%" id="table30" bgcolor="#FFFF00">
+   <tr>
+      <td><b><font size="2" face="Arial">Unfortunately most current implementation are very weak in this area and 
+			that might be the reason OFMs did not got the popularity among sysadmins they deserve. Some like Total Commander 
+			treat shell terminal window functionality like red hair step child despite availability and great productivity 
+			enhancing potential of <a href="../Windows/powershell.shtml">PowerShell</a>&nbsp; on Windows.&nbsp; On Unix 
+			quality of shell terminal window implementation (that should be equal to 
+      <a href="../Utilities/screen.shtml">GNU Screen</a> split window implementation) in my view greatly influence whether particular OFM implementation 
+			can attract critical mass of users, or not. </font></b></td>
+   </tr>
+</table>
+<p>Simplifying the reference implementation for OFM terminal window implementation should serve GNU screen. Anything less 
+than make them much less attractive for Unix sysadmins. That also means that internal viewer and built-in editor are very 
+important, &quot;first class citizens&quot; parts of OFMs and implementation of them should get attention they deserve. The quality 
+of their integration with panel-based file management subsystem by-and-large-determine the quality of this IDE. In this 
+respect pioneered by Midnight Commander <a href="../OFM/MC/Mcedit/mc_editor_macros_and_user_menu.shtml">editor user menu</a> 
+is an important step forward and should be implemented in other OFMs, especially Unix/Linux OFMs. I would say that without 
+this feature as well as dynamic user menu (also pioneered by Midnight Commander) OFM looks like second rate tools. Unfortunately 
+Midnight Commander is not that perfect in shell terminal window implementation although there is a progress from version 
+4.6 to version 4.8 and implementation in version 4.8 while far from perfect looks more sysadmin friendly. </p>
+<p>They can also serve the role of IDE for webmasters of the sites that use plain-vanilla HTML (as opposed to database driven 
+sites). With ftp and SSH virtual filesystems available for such site an OFM is a quintessential Webmaster tool. It definitely 
+plays this role for Softpanorama. This unique role that OFMs can play as a webmaster IDE fuels my interest in the field 
+after more then two decades of usage.&nbsp; </p>
+<p>Along with integration of file managers, internal viewer and editor OFM also integrate functionality of a dozen command 
+line utilities including but not limited to:</p>
+<ol>
+	<li><tt>touch</tt> via files attribute dialog</li>
+	<li><tt>tar</tt> -- via Archive VFS</li>
+	<li><tt>gzip</tt> -- same</li>
+	<li><tt>bzip </tt>-- same&nbsp; <tt></li>
+	<li>zip/unzip </tt>- same</li>
+	<li><tt>ln</tt> -- via F5/F6 operations ability to create symbolic and hard links</li>
+	<li><tt>chown</tt> -- via change attributes dialog</li>
+	<li><tt>chmod</tt> -- via change attributes dialog</li>
+	<li><tt>find</tt> -- via FindFile dialog</li>
+	<li><tt>grep</tt> -- via FindFile dialog</li>
+	<li><tt>more</tt> -- via internal viewer</li>
+	<li><tt>cd</tt> -- via NCD panel </li>
+	<li><tt>history</tt> -- duplicating management of command history with the additional recoding of history of all dialog 
+	boxes. </li>
+</ol>
+<p>&nbsp;</p>
+<h2><a name="Comparison Table">Comparison Table (from Ch.2 of the OFM book)</a></h2>
+<table border="1" width="100%" bgcolor="#D6D6D6" height="337">
+  <tr>
+    <td width="11%" align="center" height="22" bgcolor="#D6D6D6"><b>
+	<font size="2" face="Arial">OFM name<br>
+    (and link to a book chapter)</font></b></td>
+    <td width="9%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b>
+    <a href="Ofm_03.shtml#Nc_line"><font size="2">NC</font></a><font size="2"><br>
+	Norton Commander</font></b></font></td>
+    <td width="9%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b>
+	<a href="Ch03/file_commander.shtml"><font size="2">FC</font></a><font size="2"><br>
+	File Commander</font></b></font></td>
+    <td width="7%" align="center" height="22" bgcolor="#D6D6D6"><b><a href="Ofm_03.shtml#DN">
+	<font size="2" face="Arial">DN</font></a><font size="2"></font><font size="2" face="Arial"><br>
+	Dos Navigator</font></b></td>
+    <td width="11%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b><font size="2"><a href="Ch05/far.shtml">FAR</a><br>
+	Far Manager</font></b></font></td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b>
+    <a href="Ofm_04.shtml#MC"><font size="2">MC</font></a><font size="2"><br>
+	Midnight Commander</font></b></font></td>
+    <td width="10%" align="center" height="22" bgcolor="#FF0000">
+    &nbsp;</td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b>
+    <a href="Ofm_05.shtml#Norton Commander for Windows"><font size="2">NCW</font></a><font size="2"><br>
+	Norton Commander for Windows</font></b></font></td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6">
+    <b>
+    <a href="Ofm_05.shtml#Total_commander"><font size="2" face="Arial">Total Commander</font></a></b></td>
+    <td width="9%" align="center" height="22" bgcolor="#D6D6D6">
+	<b><a  target="_blank" href="http://winscp.net/eng/index.php">WinSCP</a></b></td>
+    <td width="9%" align="center" height="22" bgcolor="#D6D6D6">
+	<b>
+	<font size="2" face="Arial">
+	<a href="Ch04/gui_based_unix_ofms.shtml#Krusader">Krusader</a></font></b></td>
+    <td width="9%" align="center" height="22" bgcolor="#D6D6D6">
+	<b><a href="Ch04/gui_based_unix_ofms.shtml#EmelFM2">EmelFM2</a></b></td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6">
+	<a rel="nofollow" href="http://freecommander.com/"><b>FreeCommander</b> </a></td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6">
+	<font face="Arial"><b>
+	<font size="2"><a href="Ofm_07.shtml#muCommander">mu<br>
+	Commander</a></font></b></font></td>
+    <td width="10%" align="center" height="22" bgcolor="#D6D6D6"><b>
+	<font size="2" face="Arial">
+	<a rel="nofollow" href="http://www.altap.cz/salamander/features/compare/">Altar Salamander</a></font></b></td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="23" bgcolor="#D6D6D6"><b>OFM Type </b></td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">Classic</td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">Classic</td>
+    <td width="7%" align="center" height="23" bgcolor="#FFFFFF">Classic</td>
+    <td width="11%" align="center" height="23" bgcolor="#FFFFFF">Classic</td>
+    <td width="10%" align="center" height="23" bgcolor="#FFFFFF">Classic</td>
+    <td width="10%" align="center" height="23" bgcolor="#FF0000">&nbsp;</td>
+    <td width="10%" align="center" height="23">&nbsp; GUI</td>
+    <td width="10%" align="center" height="23">GUI</td>
+    <td width="9%" align="center" height="23">GUI</td>
+    <td width="9%" align="center" height="23">GUI</td>
+    <td width="9%" align="center" height="23">GUI</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >GUI</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >GUI</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >GUI</td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="23" bgcolor="#D6D6D6"><b>Status of development<br>
+    <font size="1">(active if the the version is less then six month old,
+    stalled if a year, frozen if more the a year)</font></b></td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">Aban-<br>
+	doned</td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">
+    <a rel="nofollow" href="http://silk.apana.org.au/fcwftp.html">Stalled</a></td>
+    <td width="7%" align="center" height="23" bgcolor="#FFFFFF">
+    <a rel="nofollow" href="http://ndn.muxe.com/">Stalled</a></td>
+    <td width="11%" align="center" height="23" bgcolor="#FFFFFF">
+	<a rel="nofollow" href="http://farmanager.com/download.php?l=en">&nbsp;Active</a></td>
+    <td width="10%" align="center" height="23" bgcolor="#FFFFFF">
+    <a rel="nofollow" href="http://www.midnight-commander.org/">Active</a></td>
+    <td width="10%" align="center" height="23" bgcolor="#FF0000">
+    &nbsp;</td>
+    <td width="10%" align="center" height="23">Abandoned</td>
+    <td width="10%" align="center" height="23">
+    <a target="_blank" href="http://www.ghisler.com/">Active</a></td>
+    <td width="9%" align="center" height="23">
+    <a  target="_blank" href="http://winscp.net/eng/docs/history#5.1.5">Active</a></td>
+    <td width="9%" align="center" height="23">
+    <a  target="_blank" href="http://www.krusader.org/handbook/features.html">Stalled</a></td>
+    <td width="9%" align="center" height="23">
+    <a  target="_blank" href="http://emelfm2.net/">Stalled</a></td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >
+    <a rel="nofollow" href="http://www.forum.freecommander.com/">Stalled, but forum is active</a></td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >
+    <a rel="nofollow" href="http://www.mucommander.com/">Active</a></td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >
+    <a rel="nofollow" href="http://www.altap.cz/salamander/features/compare/">Stalled</a></td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="46" bgcolor="#D6D6D6"><b>Last stable version</b></td>
+    <td width="9%" align="center" height="46" bgcolor="#FFFFFF">5.0</td>
+    <td width="9%" align="center" height="46" bgcolor="#FFFFFF">2.4<br>
+    <b><font size="1">(as of March 2011)</font></b></td>
+    <td width="7%" align="center" height="46" bgcolor="#FFFFFF">
+    <b>
+    <a target="_blank" href="http://freshmeat.net/projects/ndn/">
+	<font size="2">ndn</font></a><font size="2">v<br>
+	2.31.5309 (Mar 23, 2010)</font></b></td>
+    <td width="11%" align="center" height="46" bgcolor="#FFFFFF"><b>
+	<font size="2">1.75 build 2634 and 2.0 build 1897<br>
+	</font><font size="1">(Feb 03, 2011)</font></b><p><font size="1"><b>Far 3.0 
+	built 2884</b></font></td>
+    <td width="10%" align="center" height="46" bgcolor="#FFFFFF">4.8.1<br>
+    <b><font size="1">(Sept 2012)</font></b></td>
+    <td width="10%" align="center" height="46" bgcolor="#FF0000">&nbsp;</td>
+    <td width="10%" align="center" height="46">2.01</td>
+    <td width="10%" align="center" height="46"><b><font face="Arial" size="2">
+	8.01</font></b><font size="1"><br>
+    <b>(Aug,
+    2012)</b></font></td>
+    <td width="9%" align="center" height="46"><b><font size="2">5.1.5<br>
+	(May,2013)</font></b></td>
+    <td width="9%" align="center" height="46"><b><font size="2">2.0.0/2.4.0-beta2</font></b><br>
+	<font size="1">
+    <b>(Mar,
+    2011)</b></font></td>
+    <td width="9%" align="center" height="46"><font face="Arial"><b>
+	<a  target="_blank" href="http://emelfm2.net/rel/emelfm2-0.8.1.tar.bz2"><font size="2">
+	2-0.8.1 </font></a><font size="2"><br>
+	(2012-04-20) </font></b></font></td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >2009.02b</td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >
+	<font size="2">0.9 (as of July, 2012)</font></td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >
+	2.54, Sept 2010</td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="66" bgcolor="#D6D6D6"><b>OS supported</b></td>
+    <td width="9%" align="center" height="66" bgcolor="#FFFFFF">DOS</td>
+    <td width="9%" align="center" height="66" bgcolor="#FFFFFF">&nbsp;OS/2, <br>
+    Win 9x,Linux, Solaris, FreeBSD</td>
+    <td width="7%" align="center" height="66" bgcolor="#FFFFFF">
+    <p align="center">&nbsp;Win,<br>
+	Linux (<a target="_blank" href="http://freshmeat.net/projects/ndn/">ndn</a>)</td>
+    <td width="11%" align="center" height="66" bgcolor="#FFFFFF">&nbsp;Win</td>
+    <td width="10%" align="center" height="66" bgcolor="#FFFFFF">Linux &amp; Unix<br>
+    &nbsp;</td>
+    <td width="10%" align="center" height="66" bgcolor="#FF0000">&nbsp;</td>
+    <td width="10%" align="center" height="66">Win 98, Win2000, Win XP</td>
+    <td width="10%" align="center" height="66">&nbsp;Win XP, Win 7, <br>
+	Win 8</td>
+    <td width="9%" align="center" height="66">Win XP, Win 7, <br>
+	Win 8</td>
+    <td width="9%" align="center" height="66"><font size="2">Linux, KDE</font></td>
+    <td width="9%" align="center" height="66">Linux, GTK+</td>
+    <td width="10%" align="center" height="66" bgcolor="#D6D6D6" >Win</td>
+    <td width="10%" align="center" height="66" bgcolor="#D6D6D6" >Multi-platform<br>
+    (Java)</td>
+    <td width="10%" align="center" height="66" bgcolor="#D6D6D6" >Windows XP and 
+	Win7</td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="69" bgcolor="#D6D6D6"><b>Size of compressed
+    distribution</b></td>
+    <td width="9%" align="center" height="69" bgcolor="#FFFFFF">1.4M</td>
+    <td width="9%" align="center" height="69" bgcolor="#FFFFFF">&nbsp; 0.3M</td>
+    <td width="7%" align="center" height="69" bgcolor="#FFFFFF">~1M</td>
+    <td width="11%" align="center" height="69" bgcolor="#FFFFFF">1M</td>
+    <td width="10%" align="center" height="69" bgcolor="#FFFFFF">1.56 M</td>
+    <td width="10%" align="center" height="69" bgcolor="#FF0000">&nbsp;</td>
+    <td width="10%" align="center" height="69">&nbsp;&nbsp; 2M</td>
+    <td width="10%" align="center" height="69">&nbsp; 3.5M</td>
+    <td width="9%" align="center" height="69">4.78</td>
+    <td width="9%" align="center" height="69">4M</td>
+    <td width="9%" align="center" height="69">1M (source)</td>
+    <td width="10%" align="center" height="69" bgcolor="#D6D6D6" >2.54M</td>
+    <td width="10%" align="center" height="69" bgcolor="#D6D6D6" >4M</td>
+    <td width="10%" align="center" height="69" bgcolor="#D6D6D6" >7MB</td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="46" bgcolor="#D6D6D6"><b>Software type and download
+    link (if different from the development</b></td>
+    <td width="9%" align="center" height="46" bgcolor="#FFFFFF">Commercial</td>
+    <td width="9%" align="center" height="46" bgcolor="#FFFFFF">
+	<a rel="nofollow" href="http://www.bmtmicro.com/BMTCatalog/win/fcwin.html">Shareware</a></td>
+    <td width="7%" align="center" height="46" bgcolor="#FFFFFF">Open source:<br>
+	2 major versions:<br>
+	<a target="_blank" href="http://freshmeat.net/projects/ndn/">ndn</a><font size="2">
+    &amp; <a target="_blank" href="http://www.dnosp.com/e_index.php">dnosp</a></font></td>
+    <td width="11%" align="center" height="46" bgcolor="#FFFFFF">
+    Far 1.75 is free<a target="_blank" href="http://www.rarsoft.com/">,</a><p>
+	Far 2.0 is open source</td>
+    <td width="10%" align="center" height="46" bgcolor="#FFFFFF">
+    GNU<br>
+    License</td>
+    <td width="10%" align="center" height="46" bgcolor="#FF0000">
+    &nbsp;</td>
+    <td width="10%" align="center" height="46">
+    <a target="_blank" href="http://www.pugh.co.uk/Products/symantec/Norton%20Commander%202.htm">
+    Commercial</a></td>
+    <td width="10%" align="center" height="46">
+    <a target="_blank" href="http://ghisler.com/order.htm">Shareware</a></td>
+    <td width="9%" align="center" height="46">
+    GNU License</td>
+    <td width="9%" align="center" height="46">
+    GNU License</td>
+    <td width="9%" align="center" height="46">
+    GNU License</td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >
+	<a rel="nofollow" href="http://www.freecommander.com/license_en.htm">Freeware</a></td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >GNU License</td>
+    <td width="10%" align="center" height="46" bgcolor="#D6D6D6" >
+	<a rel="nofollow" href="http://www.altap.cz/purchase/">Commercial </a></td>
+  </tr>
+  <tr>
+    <td width="11%" align="center" height="23" bgcolor="#D6D6D6"><b>Price</b></td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">$90 ?</td>
+    <td width="9%" align="center" height="23" bgcolor="#FFFFFF">$35</td>
+    <td width="7%" align="center" height="23" bgcolor="#FFFFFF">$0</td>
+    <td width="11%" align="center" height="23" bgcolor="#FFFFFF">$25</td>
+    <td width="10%" align="center" height="23" bgcolor="#FFFFFF">$0</td>
+    <td width="10%" align="center" height="23" bgcolor="#FF0000">&nbsp;</td>
+    <td width="10%" align="center" height="23">
+    <font face="Arial" size="2">£21/</font><b><font size="2" face="Arial">€ 35</font></b></td>
+    <td width="10%" align="center" height="23">$44/<b><font size="2" face="Arial">€ 
+	32</font></b></td>
+    <td width="9%" align="center" height="23">$0</td>
+    <td width="9%" align="center" height="23">$0</td>
+    <td width="9%" align="center" height="23">$0</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >$0</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >$0</td>
+    <td width="10%" align="center" height="23" bgcolor="#D6D6D6" >$29.95</td>
+  </tr>
+</table>
+
+<h2 align="center"><a name="Ten_commandments">Ten OFM Commandments</a> ;-)</h2>
+<table border="0" width="100%" id="table26">
+	<tr>
+		<td></td>
+		<td width="66%">&quot;I have found Jesus. He came to me in the form of muCommander.&quot;<p align="right"><i>--
+		<a  target="_blank" href="http://www.mucommander.com/">A happy user</a></i></p>
+		</td>
+		</td>
+	</tr>
+</table>
+
+
+
+<p>There is a large variety among OFM implementations. Moreover different OFMs 
+are good for different situations and tasks -- there is no and never will be the best 
+OFM for all situations and environments. But they all share&nbsp;same 
+distinctive interface framework and the following basic features:</p>
+<ol>
+	<li><b>Spartan interface with unique, &quot;non-fashionable&quot; but very functional 
+	structure: two symmetrical panels that display files in two 
+   directories and a minimized (but extendable to half and full screen)&nbsp; telnet-style terminal 
+	session with local host ( command line ) at the bottom of the screen. </b>&nbsp;<ul>
+		<li><i>One 
+   panel is current (active) and second is passive;</i> they are switchable with the
+		<tt>Tab</tt> key 
+   and identical in functionality. 
+   For all &quot;binary&quot; file operations (copy, move, symbolic link, etc) the target 
+   by default is the directory of the opposite (passive) panel.&nbsp; </li>
+		<li><i>Unique (incompatible with usual Windows assignments) 
+   keystrokes assigned to each function.</i> Traditional OFM key 
+   assignments are: F1 - help, F2- user menu, F3 file view, F4 - file edit, F5 - 
+   file copy, F6 - file move/tree move, F7 - make a directory,&nbsp; F8 - file 
+   delete, F9 - top menu, F10 - exit.&nbsp;Those key assignments 
+   are also depicted on the bottom line as buttons clickable by the mouse. And 
+		this line also serves as &quot;sheet sheet&quot; as content changes if you press 
+		Alt, Ctrl or Shift key.&nbsp; Although 
+   functional key assignments are traditionally preserved in OFM 
+   implementations, they are <em>not</em> a part of OFM paradigm. If remapping 
+   of the keys is implemented (for example in a way, similar to vim 
+   implementation), than any other combinations (including more Windows like) 
+   can be used. Again only semantics of the operations is fixed and should be 
+   implemented &quot;as is&quot;, although consistency of key assignments has 
+		value as&nbsp; &quot;old finger habits die hard&quot; ;-). </li>
+		<li><i>The ability 
+   to perform most functions without mouse </i>which is especially useful on the laptops 
+   and now palmtops as well as&nbsp; for troubleshooting; mouse serves as a 
+   useful supplementary, not primary input device in OFMs. </li>
+		<li><i>Unique help line at the bottom of the screen (below command line) 
+		that displays the functions of F-keys and values in which change if you 
+		press and hold Ctrl, Alt or Shift keys. </i>&nbsp;In the latter case it 
+		should depict function performed by corresponding shortcut, say for F5 
+		functions performed by Ctrl-F5, Alt-F5 and Shift-F5 shortcuts. The same 
+		approach should be implemented (but often is not) in dialogs as one 
+		fundamental problem with applications that emphasize usage of keyboard 
+		is &quot;too many shortcuts&quot; problem. This OFM feature significantly 
+		alleviate the pain and should be treated as fundamental feature of 
+		interface, not something superficial that can be implemented or not.&nbsp;
+		<br>&nbsp;</li>
+	</ul>
+	</li>
+	<li><b>Seamless integration with the shell making OFMs a synonym 
+	to &quot;Visual shell.&quot;</b>. There are two features that are obligatory 
+	for orthodox file managers<ul>
+		<li><i>Command line windows can be extended 
+	either gradually (expanding/shrinking line by line) or at least in two steps 
+	(half screen/full screen)&nbsp; providing&nbsp; native shell window like in 
+	telnet to the</i> <i>localhost</i>. Any command line OFM should provide perfect emulation of telnet 
+	terminal capabilities for supported sizes of command line window with the 
+	ability to view more data by expanding the window (with size increasing by 
+	line or in larger chunks, for example from one line 
+	to half-screen and then to full screen). In all cases where more 
+	then one line window is present the user should be able to view (and 
+	possibly scroll) the results of execution of commands entered on 
+	the command line like in regular telnet client (in this case telnet to <i>localhost</i>).&nbsp; This command window capability links OFMs with famous Unix program
+		<a href="../../Utilities/screen.shtml">GNU screen
+	</a>and derivative Spartan text-mode windows managers like
+		<a rel="nofollow" href="http://modeemi.cs.tut.fi/~tuomov/ion/">Ion</a> (with fully
+		<a rel="nofollow" href="http://modeemi.cs.tut.fi/~tuomov/ion/docs.html">documented</a> 
+	configuration and <a rel="nofollow" href="http://iki.fi/tuomov/repos/ion-scripts-2/">scripting</a> interface on top of the lightweight
+		<a rel="nofollow" href="http://www.lua.org/">Lua</a> extension language),
+		<a rel="nofollow" href="http://ratpoison.sourceforge.net/">Ratpoison</a>,&nbsp;
+		<a style="text-decoration: underline" href="http://freshmeat.net/projects/twin/">twin,</a>
+		<a rel="nofollow" href="http://evilwm.sourceforge.net/">evilwm</a>,&nbsp; and 
+	several other that I forgot to mention. </li>
+		<li><i>You can insert elements from the panel (such as the current file on 
+	active and passive panels, path to active panel, path to passive panel, 
+	selected files, etc) in the command line.</i><b> </b>This capability should 
+	be available both using keyboard shortcuts (Ctrl-F for current file. Ctrl-[ 
+	and Ctrl-] for path to left and right panels, etc) and using macros (for example &quot;%f&quot; for the current file, &quot;%F&quot; 
+	for the current file in the passive panel, &quot;%d&quot; for the current 
+	directory name, &quot;%D&quot; for the same on passive panel, &quot;%t&quot; 
+	for the currently tagged files and &quot;%T&quot; for the same on passive 
+	panel). The 
+	ability to&nbsp; assemble complex commands on the command line using 
+	elements visible on the panel is an interesting alternative to drag and drop.&nbsp; 
+	It allows richer 
+	functionality, as operation performed is not fixed unlike drag and drop. The 
+	same macros (or environmental variables) should be available for scripts in 
+	user menu (F2 menu) and in extensions menu.&nbsp; <br>&nbsp;</li>
+	</ul></li>
+	<li><b>The ability to extend file manager functionality with custom scripts 
+	providing users with script library (called user menu and traditionally 
+	available via F2).
+	</b>Both command line and GUI-based OFMs should have the ability to create a 
+	library of &quot;helpers&quot;: simple (or not so simple) shell scripts accessible using F2 
+	. You can invoke 
+	them by assigning each of them special hotkey. Scripts should permit macro variables 
+	that reflect the current status of both panels (path to active/passive panel, the current file 
+	on active/passive panel, selected files , if any, 
+	etc).&nbsp; This simple, ingenious, and very functional&nbsp; extensibility 
+	with custom shell scripts make OFM very attractive for system administrators. 
+	They are useful for advanced users as they greatly simplify working with 
+	archives, ISO and so on and so forth. Actually in late 80th, early 90th of the last 
+	century in the former USSR region many DOS users never suspected that any 
+	other DOS interface exists: OFM interface was the standard and the only DOS interface 
+	they knew.&nbsp; <br>&nbsp;</li>
+	<li><b>The availability of</b> <b>scripts associated with file extensions via 
+	special file extension menu and invoked by pressing </b><tt>Enter</tt><b> on 
+	the file with the particular extension on a panel. </b>&nbsp;This is another way to extend 
+	file manager functionality and file extension associations were pioneered by 
+	Norton Commander.&nbsp; Special customizable extension files&nbsp;that permit 
+   	<font color="#FF0000"><i><b>context-dependent invocation of scripts and programs</b></i></font> 
+	on a&nbsp; file click (execute), F3(view) and in F4(edit). Customizable file 
+	extension menu should provides automatic passing of various panel-based 
+	parameters to shell scripts via macro variables (or environment variables) 
+	that were discussed above (active file, path to left and right panels, list 
+	of selected files, etc) <br>&nbsp;</li>
+	<li><b>&quot;History for everything&quot; approach to user input in command 
+	line and dialogs. </b>&nbsp;Starting from Norton Commander all OFMs 
+   provided the history of commands. Modern OFMs add to this the history of 
+   directories visited, files edited, selections, etc. Some advanced OFMs like 
+   Midnight Commander add to this the idea of &quot;file/text completion for 
+   everything&quot;. <br>&nbsp;</li>
+	<li><b>Integration of application protocols into file manager framework via virtual file systems(VFS).
+	</b>Most popular are &nbsp;ftp client VFS and archive VFS. Commonly they are 
+	implemented as plug-in based on some defined plug-ins API. Less popular, but still 
+   very important are Search VFS and &quot;flat tree&quot; VFS. They are all based on the 
+   same concept of a virtual file system:
+	<ul>
+		<li><i>FTP virtual file system </i>&nbsp;-- historically important 
+		capability which provides that capability of 
+      working with ftp session like with the local filesystems. Perfect for 
+      complex ftp operations and as powerful as most standalone GUI FTP clients. 
+		Now with the availability of FTP virtual filesystems and ssh is less 
+		useful. </li>
+		<li><i>Archive VFS:</i> Extremely polished VFS-based&nbsp; interface with 
+      archives (gzip, zip, rar, arj) and, in case of Unix OFMs,&nbsp; 
+      installation packages (RPM).&nbsp;&nbsp; It was historically first VFS 
+		implemented in OFMs and dates back to NC3 extensions. </li>
+		<li><i>Search VFS: </i>This VFS is usually implemented via &quot;panelize 
+      command&quot; and permit viewing on a panel as in virtual directory all the 
+      files and directories that were found in a particular search operation.
+      	</li>
+		<li><i>XTree or &quot;Flat tree&quot; VFS.&nbsp; </i>Most modern OFMs provide the 
+      possibility of viewing all files in a branch of the tree in a &quot;flat&quot; 
+      representation (often bound to Ctrl-B). This&nbsp;representation is 
+      extremely important for working with files dispersed into several 
+      directories as is often the case in most application installations. <br>&nbsp;</li>
+	</ul></li>
+	<li><b>Tight integration of text files viewer and editor within OFM. </b>An integrated viewer 
+	for text files and an integrated editor provide some additional and valuable 
+	integrating capabilities<br>
+	<br>
+	Both editor and viewer should be able to work in full screen mode (default) 
+	and &quot;panelized&quot; and should have access to information on both panels 
+	(current file, path to the active/passive panel, etc) and ability to treat 
+	selections as objects to past into command line (for example for moving to 
+	directories). Both editor and viewer should permit pasting information to 
+	from the editor to panel (for example, change directory 
+   to selected, paste selected into command line, etc) and getting information 
+	from panel (names of selected files, etc) and selected parts of the command 
+	execution screen back into the editor.&nbsp;
+	<ul>
+		<li><b>Editor</b><ul>
+			<li>Editor should usually support 
+	syntax coloring and regular expressions search (like in MC and FAR). </li>
+			<li>There 
+	should also be a possibility of &quot;sequential edit&quot; or viewing of selected 
+	files. In this case closing the file switches editor or viewer on the next 
+	selected file. </li>
+			<li>The editor should have an information line at the 
+	top and key shortcuts buttons at the bottom (similar to the panel view help 
+	buttons); the position of cursor and the current letter under the cursor should be visible both in 
+	ASCII and hex at the editor information line. </li>
+			<li>Editor should be able to execute script on selected part of the 
+			buffer or all the buffer like vi ! command,&nbsp; providing ability 
+			to extend its functionality via editor menu similar to user menu.&nbsp;
+			</li>
+		</ul>
+		</li>
+		<li><b>Viewer</b><ul>
+			<li>The viewer should has ASCII and hex modes of viewing files. In 
+			panelized mode it should allow viewing selected files one by one: 
+			closing of one file opens the next selected file in implicit loop. 
+			Previous file is deselected (behavior similar to copy and move 
+			operations on selected files).&nbsp;&nbsp; </li>
+			<li>There 
+   should be a possibility of switching from the viewer to the editor and back. 
+   			</li>
+		</ul>
+		</li>
+	</ul>
+	</li>
+	<li><b>The ability to 
+	add search results to a&nbsp; browsable virtual panel (panelize command) and 
+	a special &quot;directory only&quot; search in a special &quot;find folder&quot; panel. </b>There should be abilities to find 
+   an arbitrary file(s) in the filesystem with capabilities equal of better then 
+   Unix&nbsp; find and grep utilities, but with more friendly interface. All 
+	panel operations that make sense (view, edit, copy, move, rename, delete) operations should be available from 
+	panelized search results: 
+	<ul>
+		<li><i>The possibility of&nbsp; viewing and editing found files using 
+		built-in or external viewer or editor any found file.</i> </li>
+		<li><i>Possibilities to create a panel out of search results</i> or copy 
+		them to temporary panel and work with it as with regular directory panel&nbsp; (panelize command). This is essentially another 
+		variant of&nbsp; search VFS. </li>
+		<li><i>Ability to search directories only using NCD derived quick search 
+		method on directory trees:&nbsp; </i>In OFMs 
+   there are two distinct tree panels:<ul>
+			<li><b><i>A regular tree panel.</i></b> Activated by Ctrl-T. In this case 
+      tree replaces the <i><b>passive panel</b></i> Tree panel should work in 
+      three modes:
+      		<ul>
+				<li><i>The default mode</i>: The cursor can be moved independently and 
+         does not affect the opposite panel. Pressing Enter opens the directory 
+         under the cursor in the opposite panel. Copy and Move operations from 
+         the opposite panel are targeted to the current directory on the tree. 
+         Quick view mode (<i>&quot;dive into the directory mode&quot;)</i> should be 
+         available via hotkey Ctrl-Q.&nbsp; <i>No such mode exists.&nbsp; 
+         Navigation is limited to cursor keys and Enter.&nbsp; Quick search is 
+         available but the is no capability to find the next directory with the 
+         same prefix. </i></li>
+				<li><i>Quick view mode</i> (<i>&quot;dive into the directory mode&quot;) S</i>witchable 
+         with Ctrl-Q. This mode is similar to the behavior of Windows Explorer 
+         movement of the cursor opens the directory under the cursor in the 
+         opposite window.&nbsp; Mostly used for quick traversing of the 
+         directory tree in a mode similar to quick view with directories opening 
+         as we move the cursor (quick diving into subdirectories). Quick search 
+         should be available. </li>
+				<li><i>Information mode</i> (Ctrl-L). Similar to quick view mode. But 
+         in this case the movement of the cursor on the tree panel opens not a 
+         listing of files in the directory but the information window should be 
+         shown that calculated statistics for the directory (number of the 
+         files, total size, number of subfolders, attributes, owners, etc).&nbsp;
+         		</li>
+			</ul></li>
+			<li><b><i>The directory search panel. </i></b>Activated by<b><i> </i>
+			</b>Alt-F10. Also present in the top Command menu. This panel should instantly 
+      provide a quick search window. It should be also accessible from copy/move 
+      dialogs&nbsp; (via F10) and it is often used not only for the &quot;directory 
+      completion&quot; and traversing of the tree, but also for the quick selection 
+      of the target directory for copy/move operations.<br>&nbsp;</li>
+		</ul></li>
+	</ul></li>
+	<li><b>Client-server connectivity. </b>There should be <b>some kind of client-server connectivity</b> between 
+   two instances of OFMs (preferably SSL based TCP/IP connection, or unencrypted 
+   TCP/IP connection like in MC, or connection via serial cable like in NC3-NC5, 
+   or parallel cable and USB cable like in Total Commander).&nbsp; This is a 
+	fundamental feature because it dictates client-server architecture of OFM 
+	with client part and server part separated by some kind of API. Generally one instance OFM 
+   should be able to perform as a server (represented by one panel) and second 
+	as a slave (represented be the other panel) with the ability to copy files 
+	and perform&nbsp; commands on the remote host.&nbsp; </li>
+	<li><b>Extensibility via plug-ins mechanism. </b>System of plug-ins that 
+	extends functionality of the OFM (FAR, Total Commander) and corresponding 
+	API.&nbsp; This is important for OFM architecture as it separates panel 
+	interface from the rest of OFM.&nbsp; FAR is now open source and its plug-in 
+	API can serve as an inspiration for future developers. </li>
+</ol>
+<p>Again those are Commandments and like in everyday life not everybody is 
+observing them ;-).<b> </b>The worst situation is with providing ability to 
+extend command line 
+at the bottom to command line window. Please note that This unique, innovative capability of 
+Norton Commander (the one that makes it a graphical shell) for some reason is 
+rarely implemented correctly if at all. Please remember that the original name 
+of Norton Commander was VDOS -- visual shell for DOS. </p>
+<center>
+<table border="1" width="90%" bgcolor="#D6D6D6" id="table1">
+	<tr>
+		<td><b><font size="2" face="Arial">Please remember that the original name of Norton Commander was VDOS -- visual shell for DOS.
+		</font></b>
+		</td>
+	</tr>
+</table>
+</center>
+
+<p>Even such leading OFMs like Total Commander and Midnight Commander&nbsp; 
+do not implement them correctly. For example, in Total Commander&nbsp; just 
+basic command line 
+functionality is available without ability to extend command line window to half 
+screen of full screen.</p>
+
+<p>In Midnight Commander only full screen command line 
+window available but its functionality is limited (no ability to extend command line window to half screen 
+or expand it line by line as in FAR) and behavior of command line window is different from 
+typical bash shell command line windows which makes it unattractive for power 
+users (compare with&nbsp; GNU screen &quot;split windows&quot; mode, which 
+should serve as 
+reference implementation of this feature).<b>&nbsp;</b> In other words MC 
+command window implementation represent example of a cheap hack.<b>&nbsp; </b>Paradoxically 
+Unix OFMs users (and first of all Unix sysadmins) who would benefit from this functionality most (as culture 
+of using command line is strongest in Unix) need to deal with the weakest in implementation of 
+this feature</p>
+
+<p dir="ltr">Notwithstanding differences and weaknesses of existing 
+implementations<b> </b>three key features stands out and are the key 
+postulates of faith of the &quot;OFM religion&quot;: </p>
+<ul>
+   <li><b>Three tiles interface with two upper tiles representing symmetrical panels that display two directories 
+	and lower &quot;wide&quot; tile command line windows with shell interface. </b>&nbsp;Among 
+	two upper panels one is called active and it displays the current directory (<tt>$PWD</tt> in Unix) and 
+	the other passive and 
+	displays the directory the user navigated to while it was 
+	active). Tab changes active panel to passive and vice versa. Each or both 
+	can be hidden exposing command line windows. Size of active and passive panels 
+	should not be fixed and there should be at least possibility to shrink them 
+	to 50% of the screen. <br>
+&nbsp;</li>
+   <li><b>The ability to invoke user scripts with context elements from both 
+	active and passive panels such as the current file, path to active panel, 
+	path to passive panel, etc.&nbsp; </b>The latter capability is provided via 
+	the set of macro variables 
+	representing elements of the active and passive panels. User panel contains 
+	small self-contained scripts that expend the functionality of OFM and in 
+	advanced OFM can be hierarchical and/or dynamic (only elements that make 
+	sense based on the current context are present in the menu). User menu is usually invoked 
+   via <tt>F2.</tt> The same set of macro variables can be used in command line. 
+	In addition they can re represented by shortcuts such as <tt>Ctrl-Enter</tt> 
+	(current file), <tt>Ctrl-[</tt> path to left panel, <tt>Ctrl-] </tt>-- path 
+	to right panel, etc. The same shortcuts can be used in internal editor, 
+	which should have capability to send selections back to command line. <br>
+&nbsp;</li>
+   <li><b>The ability to perform any operation with the keyboard and the ability 
+	to assemble complex commands on the command line from elements of the panel 
+	(as well as launch scripts that inherit values of elements of panels via 
+	macro variables).&nbsp;&nbsp; </b>
+   Mouse functionality is a nice addition and can be more efficient the keyboard 
+   for some operations, but still keyboard alternatives should be provided in 
+   each and every case.&nbsp; Ability to assemble complex commands on the 
+	command line using predefined elements of left and right panel actually is 
+	step forward in comparison with drag and drop and allow richer 
+	functionality, never possible with drag and drop. In can be called drag and 
+	drop on steroids. </li>
+</ul>
+<p>Complex file operations using mouse is not faster and as cases became more 
+complex are 
+less convenient then performing the same operations using keyboard-based interface 
+using the file manager that implements Orthodox interface paradigm. In a 
+way orthodox means &quot;having the <i>right</i> opinion/following the <i>right</i> 
+practice&quot;. And using full power of keyboard (while not rejecting mouse) looks 
+exactly like this. Provided by OFMs unique combination of GUI elements with the 
+preservation of the power of command line is superior to any &quot;mono&quot; interface: 
+either &quot;classic Unix command line&quot; interface or Windows-style GUI interface. &nbsp;There are several reasons for that. See
+<a href="../gui_vs_command_line.shtml">GUI vs Command line interface</a>. </p>
+
+
+
+
+<h2><a name="Recommendations_for_Users">Recommendations for Users</a></h2>
+<p>OFM are tools written by programmers for programmers, sysadmins and power users. The elite of PC users. We can distinguish 
+between two levels of OFM skills:</p>
+<ul>
+	<li><b>Power user level</b> when the user can perform basic operation without looking into help and realize most of 
+	the advantages of OFM. Such users typically use OFM strictly as file manager, not so much as sysadmin IDE, and usually 
+	do not need or make use of such features as user and extension menus and plugin API. Still power user&nbsp; actions 
+	on keyboard often remind for uninitiated the way top piano players perform, achieving tremendous speed for pretty complex 
+	and non-trivial file manipulations.&nbsp; This is the level most users can easily achieve with some effort and experience. 
+	With time methods of navigating filesystem used by user typically became more sophisticated automatically. For example 
+	usage of <tt>Alt-F10</tt> for selecting new directory. You need to discover it once and its benefits are so obvious 
+	that you will user it ever since. Same is true for usage of filtering (<tt>Ctrl-I</tt>) for browsing only &quot;relevant&quot; 
+	files and usage of temporary panel for working with &quot;projects&quot; and other similar features. </li>
+	<li><b>Master level</b> is a more difficult to achieve level at which user is able to thinks about file operations in 
+	&quot;OFM-way&quot; and can generalize them into user menu items and plug-ins. They customize their OFM setup with keyboard macros, 
+	custom entries in the user menu and extension menu as well as tuned to their tasks set of plug-ins which further increases 
+	productivity.&nbsp; Some can write their own plugins.&nbsp; But the key criteria of&nbsp; &quot;master level&quot; is the ability 
+	to create your own user menu entries and modify extensions menu to your needs. A user without knowledge of shell (or 
+	other suitable scripting language) and without his own original menu entries and custom extension definitions can&#39;t 
+	be considered to be on master level, no matter how well he can perform on the keyboard.&nbsp;&nbsp; </li>
+</ul>
+<p>Although basic skills can be acquired in less then a week and gradually can be enhanced to &quot;power user&quot; level, this is 
+not true for master level skills. First of all getting to this level require knowledge of shell (or other scripting language).&nbsp; 
+Also you need to spend some time studying default &quot;user menu&quot; supplied with mc (for a given user many entries are redundant 
+and he/she can start with deleting them) and, if possible, experience&nbsp; of your colleagues in this area. But return 
+of investment is tremendous -- you really will be working in more productive environment, environment productivity of which 
+can&#39;t be matched with any number of &quot;off-the-shelf&quot; tools.&nbsp; </p>
+<p>Fundamental problem with any interface oriented on extensive keyboard usage is that the set of commands is large. That 
+means that some important commands and methods are easily forgotten without practice (this situation is typical for any 
+tool with extensive command set, such as <a href="../Editors/vim.shtml">vim</a>). Based on my more then 20 years experience 
+with OFM (I started using them in 1989) I would recommend the following&nbsp; methods of enhancing your skills:</p>
+<ul>
+	<li><b>High level of OFM skills (like piano playing skills, or arms mastery) require constant practice.</b> Also, the 
+	basic level is perfectly fine and most users can be very productive on this level.&nbsp; After all, we rarely learn 
+	things we can do without :-). IMHO the real stimulus to go to the real depth of OFM interface capabilities exists only 
+	for &quot;netslaves&quot; who spend eight or more hours daily behind the screen ;-) Without practice skills are quickly lost and 
+	only gradually can be restored to previous level; it happened to me more then once.&nbsp;&nbsp;&nbsp; </li>
+	<li><b>Keep <font color="#FF0000"><i>a logbook</i></font>. </b>&nbsp;It helps, especially at the beginning to write 
+	a daily entries in the log and reread them. That speeds acquiring the necessary skills. White down tips and procedures 
+	for typical situations, then rewrite and improve them.&nbsp; Some most efficient methods of performing typical tasks 
+	are often discovered accidentally when you deviate from your typical path and are easily forgotten if you never wrote 
+	them down. Some of repetitive tasks that you have found ways of efficiently performing with OFM can be automated using 
+	macros and user menu.&nbsp;&nbsp; </li>
+	<li><b>Maintain <i><font color="#FF0000">your own cheetsheet</font></i>. </b>Put it on the top of your terminal (for 
+	example using one of those plastic cutting boards that you can buy in any store) or buy a mousepad that allow inserting 
+	paper in it. Start with something simple and readily available. Exclude items that are already etched in your memory. 
+	Provide in Cheetsheet references to pages of the log where you discovered and or discussed particular keyboard shortcut 
+	or tip. It is not uncommon to discover new methods of working with particular OFM even after ten years of intensive 
+	daily usage. </li>
+	<li><b>Create and maintain <font color="#FF0000"><i>your own set of keyboard macros and own user menu</i></font>.
+	</b>If your OFM does not support keyboard macro recorder use some external macro recorder like
+	<a href="../Utilities/expect.shtml">expect</a>, <a href="../Windows/Keyboard_and_mouse/AutoHotkey/index.shtml">AutoHotkey</a>, 
+	macro capabilities of terminal emulator like <a href="../Utilities/Teraterm/teraterm_macros.shtml">TeraTerm</a> or buy 
+	a <a href="../Hardware/Peripherals/programmable_keyboards.shtml">programmable keyboard</a>&nbsp; (less then $50 new, 
+	$30 used). This is simple and tremendously powerful method for extending OFM functionality. Some OFM (FAR and Total 
+	Commander are two notable examples) support plug-ins which is even a better tool, but unless you are a programmer you 
+	are limited to plug-in written by others which might be not exactly what you need. But just with keyboard macros and 
+	user menu parameterized mini-scripts regular sysadmin and/or power user can do a lot. Really a lot. Allocate time on 
+	documenting them and experimenting with new, potentially useful entries. </li>
+	<li><b>If your OFM has user forum participate in it (for example both Total Commander and Midnight Commander have active 
+	web forums).</b> Post questions and try to answer the questions of other users. </li>
+</ul>
+<p>Time spend on those activities will be repaid many times. Learning OFM is one of the best investment in time you can 
+make. <font color="#FF0000"><i><b>Good luck !</b></i></font></p>
+<h2><b><a name="Some_recommendations_for_Orthodox_file_managers_designers">Some recommendations for Orthodox file managers 
+designers</a> </b></h2>
+<p>There is an old saying that &quot;<i>Really innovative ideas are never stolen</i>.&quot;&nbsp; It is very true because &quot;innovative&quot; 
+means ideas or products that go against established practice/fashion. Just read
+<a target="_blank" href="https://en.wikipedia.org/wiki/Talk:Orthodox_file_manager">Talk: Orthodox file manager - Wikipedia, the free encyclopedia</a> 
+to get some insight into related mentality (Wikipedia actually removed the page &quot;Orthodox file managers&quot;). </p>
+<blockquote>
+	<p>Why are they called <a title="Orthodox" href="https://en.wikipedia.org/wiki/Orthodox">Orthodox</a>? --<a title="User:Error" href="https://en.wikipedia.org/wiki/User:Error">Error</a> 
+	23:55, 12 March 2006 (UTC)</p>
+	<dl>
+		<dd>Exactly. Because some &#39;tard&#39; here is totally dependent on the MU way of thinking, never progressed beyond, and 
+		is not trying to convert the world. Of course there is nothing orthodox about them. Try &#39;crippled&#39; - a much more 
+		appropriate term. I suspect the MU Commander people are behind it, shilling their own product. It&#39;s not ethical 
+		for Wiki. <small><span class="autosigned">—Preceding
+		<a title="Wikipedia:Signatures" href="https://en.wikipedia.org/wiki/Wikipedia:Signatures">unsigned</a> comment added 
+		by
+		<a class="new" title="User:86.213.91.157 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User:86.213.91.157&action=edit&redlink=1">
+		86.213.91.157</a> (<a class="new" title="User talk:86.213.91.157 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User_talk:86.213.91.157&action=edit&redlink=1">talk</a> 
+		•
+		<a title="Special:Contributions/86.213.91.157" href="https://en.wikipedia.org/wiki/Special:Contributions/86.213.91.157">
+		contribs</a>)</span></small></dd>
+	</dl>
+	<dl>
+		<dd>The existence of that page just goes to show what a joke Wikipedia is.--<a class="new" title="User:88.149.233.68 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User:88.149.233.68&action=edit&redlink=1">88.149.233.68</a> 
+		09:17, 21 May 2007 (UTC)</dd>
+	</dl>
+	<p>Who dreamed up this definition? A Google search for &quot;Orthodox file manager&quot; yelds a measly 305 results. Moreover, 
+	there is NO MENTION of this thing in the <i>Jargon file</i>. The term &quot;orthodox&quot; is NEVER mentioned in <i>GNU Midnight 
+	Commander</i> &#39;s home page. This entry is either a joke or somebody&#39;s personal &quot;invention&quot; and should be removed. --<a class="new" title="User:88.149.168.128 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User:88.149.168.128&action=edit&redlink=1">88.149.168.128</a> 
+	10:35, 28 November 2006 (UTC)</p>
+	<dl>
+		<dd>I agree. --<a class="new" title="User:24.21.72.22 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User:24.21.72.22&action=edit&redlink=1">24.21.72.22</a> 
+		16:16, 26 March 2007 (UTC)</dd>
+		<dd>Third the motion. So we should now seen this page removed, right? <small>—The preceding
+		<a class="mw-redirect" title="Wikipedia:Sign your posts on talk pages" href="https://en.wikipedia.org/wiki/Wikipedia:Sign_your_posts_on_talk_pages">
+		unsigned</a> comment was added by
+		<a title="Special:Contributions/86.213.91.157" href="https://en.wikipedia.org/wiki/Special:Contributions/86.213.91.157">
+		86.213.91.157</a> (<a class="new" title="User talk:86.213.91.157 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User_talk:86.213.91.157&action=edit&redlink=1">talk</a>) 
+		16:13, 5 May 2007 (UTC).</small>
+		<dl>
+			<dd>I think everyone knows your opinion. You&#39;re not getting very far by writing (unsigned) criticism all over 
+			this page. We had the AFD following the comments from 88.149.168.128. Since then, there seems to have been two 
+			complaints about the name of this article &amp; both came from anonymous IPs. I think that deletion of this article 
+			is unlikely, but we do have a process for that if it is something you believe so strongly in. A move might be 
+			more reasonable, since the article (while not well written) is hardly &quot;nonsense&quot; &amp; does describe something worth 
+			describing. I don&#39;t think anyone would argue that &quot;orthodox file manager&quot; isn&#39;t a neologism. However, it is 
+			a useful one. It has been adopted on the interwikis, by DMOZ, and by others. --<a title="User:Karnesky" href="https://en.wikipedia.org/wiki/User:Karnesky">Karnesky</a> 
+			23:17, 5 May 2007 (UTC) </dd>
+		</dl>
+		</dd>
+	</dl>
+	<p><b>Inappropriate </b>&nbsp;</p>
+	<p>Unless the term is a de facto standard - which it is not - then the use of &#39;orthodox&#39; to describe something as retarded 
+	as a Norton file manager is tantamount to shilling and advertising. I strongly object to this. This page was evidently 
+	started over two years ago from an IP in China. I call on Wiki to show more discretion and as others I call on Wiki 
+	to IMMEDIATELY remove this STUPID PAGE. If you don&#39;t - we shall. <small><span class="autosigned">—Preceding
+	<a title="Wikipedia:Signatures" href="https://en.wikipedia.org/wiki/Wikipedia:Signatures">unsigned</a> comment added 
+	by
+	<a class="new" title="User:86.213.91.157 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User:86.213.91.157&action=edit&redlink=1">
+	86.213.91.157</a> (<a class="new" title="User talk:86.213.91.157 (page does not exist)" href="https://en.wikipedia.org/w/index.php?title=User_talk:86.213.91.157&action=edit&redlink=1">talk</a> 
+	•
+	<a title="Special:Contributions/86.213.91.157" href="https://en.wikipedia.org/wiki/Special:Contributions/86.213.91.157">
+	contribs</a>)</span></small> </p>
+</blockquote>
+<p>Usually reception on innovative ideas is deeply hostile and there are great difficulties even to convince potential users 
+to try them or venture capitalists to finance the project. Inertia on one hand and (opposites meet ;-) fashion on the other 
+rule IT (I think IT is more subjected to fashion whims then woman clothing with a new fad each second year playing role 
+of the length of woman hemline and style of shoes; right now this is
+<a href="../Skeptics/IT_skeptic/it_obscurantism.shtml">cloud computing</a>&nbsp; ;-).&nbsp; As
+<a target="_blank" href="https://en.wikipedia.org/wiki/Charles_Simonyi">Charles Simonyi</a> who oversaw the development of Excel and MS Word 
+at Microsoft once noted:</p>
+<blockquote>
+	<p>“I have always worried that <font color="#FF0000"><i><b>when these claimed incredible new benefits come, we will 
+	lose all the old ones.</b></i></font> Then it becomes a kind of trade-off situation where you have to see if you are 
+	better off. I like clear wins. I would bet on improving what we have while maintaining all the benefits and eliminating 
+	the drawbacks, rather than introducing new games where there are new benefits and new drawbacks.” </p>
+</blockquote>
+<p>OFM contains a set of innovative ideas that were only recently analyzed and somewhat generalized despite 25 years history. 
+The level of adoption of this set of ideas (and first of all <font color="#FF0000"><i><b>the idea of graphical shell</b></i></font>) 
+is surprisingly low. It is very low even among Unix sysadmin, who theoretically should be early adopters of this technology 
+due to obvious OFM style visual shell interface advantages over plain vanilla command line interface.&nbsp; One reason for 
+this that proper implementation of shell terminal window capability in OFM is rare and this feature is mostly treated like 
+red hair step child in current OFM implementations. </p>
+<p>That&#39;s why I am still working on analyzing the set of key ideas behind OFMs and popularizing this set of ideas to wider 
+audience.&nbsp;&nbsp; I think that while each new implementation is an important step in popularizing the OFM concepts, 
+only those implementation which try fully integrate into the design the visual shell &quot;paradigm&quot; and the idea that OFMs is 
+actually a specialized IDE for system administrators and power users (that that entails deep integration of build-in editor 
+into OFM along the line of editor user menu pioneered by Midnight Commander) can scratch a deeper itch and have a lasting 
+value. </p>
+<p>Commercial success of OFMs was and is limited and there little chance that situation might&nbsp; change in the future, 
+although some market openings probably exist for smartphone which are now much more powerful then old IBM PC (and has better 
+screens). But in general this type of software does not feed developers well.&nbsp; Consider this as a special kind of academic 
+research. Actually all open source development <a href="oss_as_academic_research.shtml">can be viewed this way</a>. </p>
+<p>History suggests that OFM as research field has difficulties in attracting and retaining the most talented developers.
+<a href="../OFM/Paradigm/Ch03/norton_commander.shtml">John Socha</a> switched to other projects just four years after release 
+of <a href="../OFM/Paradigm/Ch03/norton_commander.shtml">Norton Commander</a> 1.0 (it was released in 1986 and in 2000, 
+one year after the release of NC 3.0 (1999) he left the company). If we add, say, additional two years before the first 
+release it would six years in total. 
+</p>
+
+<p>Vladislav Volkov worked on his Volkov Commander even less, but manage to create a true masterpiece 
+of assembler programming which even now looks incredible achievement (he started it being a student and did not even have 
+had his own PC at the time).&nbsp;</p>
+
+<p>Eugene Roshal was involved with his OFM (FAR) approximately&nbsp; five years or so. So 
+far only Christian Gisler succeeded maintaining and enhancing his shareware Total Commander for&nbsp; almost two decades...&nbsp;
+</p>
+<p>Still for young, ambitious developers that can be the field where they can prove their value as a programmers to the 
+surprised world and learn quite a lot in the process. The latter part is probably the most important no matter what will 
+be the final destiny of the product created and is one of the main attraction of open source in my opinion, making it somewhat 
+similar to academic research, In old day there was a saying that in order for a computer science student to become a &quot;real&quot; 
+programmer he need to write his own text editor.&nbsp; Now it can be reformulated that the student need to write file manager 
+with integrated viewer and editor. This way you really learn OS API, and learn to work with substantial codebase and experience 
+problems typical for such projects (including gradual decrease of enthusiasm ;-) on your own skin. </p>
+<p>Moreover, even small OFM projects are visible and have early adopters, who not only stimulate you to overcome difficulties, 
+but also provide some helpful advice, or at least encouragement.&nbsp; Look at two very interesting projects related to 
+creating vi-style OFMs ( <a href="../OFM/Paradigm/Ofm_06.shtml#Ranger">ranger</a> and
+<a  target="_blank" href="http://vifm.sourceforge.net/docs.html">vifm</a> ). Linking OFMs with vi concepts and vi culture proved to be a 
+treasure trove of new ideas. </p>
+<p>Just don&#39;t expect the project last forever and be ready to move to other things when you feel it became more of a burden 
+then a education tool and writing new code for it, and especially maintaining the old one, lost most of the fun. But why 
+not to try? There are visible gaps in functionality not filled by current implementations. For example as I already mentioned 
+Unix implementation are surprisingly, dismally weak in implementing the idea of &quot;visual shell&quot; even on FAR level. If you 
+manage to advance OFM in this direction you may attract enough following to continue the project when you&#39;ll leave it.
+</p>
+<p>Actually for open source project it can happen that project died and then after several years the codebase is resonated 
+with somebody own ideas and is picked up by a new talented developer who continued it for a while (that happened with
+<a href="../Editors/Lightweight_editors/fte.shtml">FTE editor</a>&nbsp; and <a href="../Utilities/Screen/history.shtml">
+GNU screen</a>). That&#39;s the beauty of open source which again make it close to academic research, for example research in 
+mathematics (one may argue that each program is a kind of specialized mathematical theory). </p>
+
+<p>But it is not always that fact that a talented developer picks up the code base. Sometimes the 
+situation is quite opposite. </p>
+
+<p>So you do not need to start 
+your project from scratch. You can pickup some promising but abandoned project and try to move it one step further. If you 
+doing so it is important to resist natural temptation to wile out all traces of the original author. Again this is more 
+like academic research so please treat them as you want further generation of OFM developers to treat your modest contribution 
+to the field. Among project that I think have value for developing further are</p>
+<ul>
+	<li>All Python-based OFM projects as well as Perl and Ruby-based projects, as scripting languages can provide a better 
+	implementation language for OFMs than alternatives.</li>
+	<li>&nbsp;<a  target="_blank" href="http://sourceforge.net/projects/bashc/">Bash Commander</a> by Sergey Vakulenko<h5>This is a project 
+	of
+	<a class="extiw" title="ru:&#1042;&#1072;&#1082;&#1091;&#1083;&#1077;&#1085;&#1082;&#1086;, &#1057;&#1077;&#1088;&#1075;&#1077;&#1081; &#1042;&#1080;&#1082;&#1090;&#1086;&#1088;&#1086;&#1074;&#1080;&#1095;" href="https://ru.wikipedia.org/wiki/&#1042;&#1072;&#1082;&#1091;&#1083;&#1077;&#1085;&#1082;&#1086;,_&#1057;&#1077;&#1088;&#1075;&#1077;&#1081;_&#1042;&#1080;&#1082;&#1090;&#1086;&#1088;&#1086;&#1074;&#1080;&#1095;">
+	Sergey Vakulenko</a>, the author of <a href="../OFM/Paradigm/Ch04/light_weight_ofms.shtml#deco">deco</a> -- one of the 
+	first OFM for Unix. Looks like abandonware. Still the direct integration with shell is the best, the most optimal way 
+	of implementing OFM, which in essence is nothing more that an attempt to create a graphical shell. The problem here 
+	is the most shells are moving target and as they develop the codebase needs to be resynchronize with each new version. 
+	Which in most cases dooms the project.&nbsp; So the only way such a project can be successful is when it is integrated 
+	with the development of shell itself. Some shells, such as ksh93 are pretty stable and development is almost stopped. 
+	For them such a project is more viable. Also for shells that undeservingly are sidelined, such as zsh, this may be a 
+	chance to get into mainstream, as zsh integrated with OFM leaves &quot;pure&quot; bash in the dust.&nbsp; </h5>
+	<blockquote>
+		<blockquote>
+			&#39;Bash Commander&#39; is a version of the GNU Bourne Again shell extended with two-panel file manager. Visit
+			<a target="_blank" href="https://groups.google.com/group/bashc">http://groups.google.com/group/bashc</a> for project news, FAQ, 
+			discussions etc.</blockquote>
+	</blockquote>
+	</li>
+	<li>Minimalist OFMs such as deco.</li>
+	<li>Implement OFM as clean client-server system.&nbsp; Here is some relevant information from
+	<a href="../OFM/Paradigm/Ofm_07.shtml#Introduction">Chapter 7</a> of my eBook:
+	<blockquote>
+		<p>Starting from version 3 Norton Commander has client-server capabilities (initially via serial null modem line). 
+		It was clear even in tiles of DOS that OFM actually consists of two parts:</p>
+		<ul>
+			<li>Client -- part that provides typical for OFM interface</li>
+			<li>Server -- which consists of different programs performing actual manipulations with the filesystem</li>
+		</ul>
+		<p>Now those capabilities are reimplemented using more modern technology. Client part can be implemented as a an 
+		extension of a browser and there is at least one such an implementation: firecommander&nbsp; in Google Projects</p>
+		<p>CGI interface looks pretty adequate for communication with various program that perform user actions. Moreover 
+		CGI-based interface between client and server parts of OFM make it almost infinitely portable: all you need to run 
+		it on a new platform is some basic web-server. Browser with JavaScript capabilities can be on other&nbsp; platform.&nbsp; 
+		And Web server implementations exist for any platform.&nbsp; </p>
+		<p>The second approach for the creating of truly portable OFM is to use Java for both parts. Java can be run inside 
+		the browser and that solve the client part of equation. And Java can run on any server and that solve that server 
+		part of equation. </p>
+		<p>In other words the principal idea here is to split OFM into two independent parts communicating well established 
+		and refined HTTP or HTTPS protocol. </p>
+		<p>This is also provides an interesting capability for X11 based remote solutions such as&nbsp;
+		<a href="../Xwindows/vnc.shtml">VNC</a>&nbsp; for administering servers over dial-up lines or other low bandwidth 
+		communication lines.&nbsp; Also in this case keyboard emulation can be perfect and does not depend on idiosyncrasies 
+		of terminfo database on a particular platform -- the issue that hunts Unix OFMs. </p>
+		<p>Another reason is the crisis of several implementation, like Midnight Commander, which grow codebase to the extent 
+		that it became a complex mess of different libraries that are typical only for Linux. Which created problems with 
+		portability and actually discourage usage such OFM as mc as portability outside a couple of platforms (Linux and 
+		Solaris) is problematic. </p>
+		<p>In this case, even usage of traditional implementation of OFM using Java, such as <a href="#muCommander">muCommander</a> 
+		along with <a href="../Xwindows/vnc.shtml">VNC</a> represents much more portable solution as long as JVM is already 
+		installed (which is true for all Unix flavors). </p>
+	</blockquote>
+	</li>
+</ul>
+<p>Of course it is difficult to sustain project of pure enthusiasm and time will come to leave it. Please provide documentation 
+for the next generation of developers, as they might come. Even if you abandon your project, you efforts are not in wait 
+as any such project is a great programming school, the school that you can&#39;t attend anywhere else for any money. And your 
+experience in developing OFM has a great value in itself as for the reason I explained above, and so be it. Move on.&nbsp;
+</p>
+<p>There are several ways to beat older OFM implementations in the same game, despite having much small resources:</p>
+<ul>
+	<li><a href="#Use_scripting_language_as_your_implementation_language">To use scripting language as your implementation 
+	language or at least integrate scripting language (for example, LUA) into design&nbsp; from the very beginning </a>
+	</li>
+	<li><a href="#Use_programmable_editor_as_a_base">Use programmable editor as a base of your implementation</a></li>
+	<li><a href="#Use_windows_manager_like_GNU_screen_or_Ratpoison_as_the_base_of_your_implementation">Use windows manager 
+	like GNU screen or Ratpoison as the base of your implementation</a></li>
+	<li><a href="#Consider_reusing_some_open_source_IDE_framework">Consider reusing some open source IDE framework</a></li>
+	<li><a href="#Other_possible_avenues">Other possible avenues</a></li>
+	<li><a href="#Adhere_to_standards"><b>Adhere to standards.</b> </a>&nbsp;</li>
+</ul>
+<h3><a name="Use_scripting_language_as_your_implementation_language">Use scripting language as your implementation language 
+or at least integrate scripting language (for example, LUA) into design&nbsp; from the very beginning </a></h3>
+<p>A very promising way of simplifying codebase and lessening the amount of lines which are needed to achieve given set 
+of OFM functions is to use a popular scripting language as implementation language and, simultaneously as a macro language. 
+Or at least try to integrate scripting language like LUA into design from the very beginning. </p>
+<p>To make your effort more productive it is of paramount importance to use the highest level of language that you know 
+well (or plan&nbsp; to learn; writing an OFM is perfect programmer training exercise) and that is available on the platform 
+of your choice. In case of scripting language you can get some decent functionality with a manageable for regular human 
+size of codebase (say less then 5K of lines instead of more common for light-weight OFMs sizes like 10K lines; please note 
+that <tt>mc</tt> is ~72K lines including comments if we count them via command <tt>cat `find ./src` | wc -l)</tt></p>
+<p>I think it makes great sense to restrict yourself to certain number of &quot;kilolines&quot; and try to do something useful within 
+those restrictions. Projects like mc have pretty high barrier of entry, although they are modular and the largest part probably 
+less then 45K lines with comments or ~25K without them.</p>
+<p>If you will feel interest and see perspectives for the project, you can later abandon those restrictions or, better, 
+start anew with a new level of understanding of the problem and the benefit of already acquired experience. Abandoning a 
+couple of thousand lines is not that painful. Abandoning 10K lines written partially on weekends and stolen from family 
+and friends is quite another story (despite the fact that a very good programmer can easily write 1K lines in a weekend). 
+Another benefit of small codebase is that you do not need to kill yourself in endless debugging sessions. </p>
+<p>In any case for those who are rotting in some large corporation and feel that they can leave their brains in the morning 
+at home and still perform well this is one way to lessen the frustration from working in a large corporation and enjoying 
+good salary, great benefits, access to the latest hardware and other pluses that large corporation provide.&nbsp; Talented 
+system administrators with programming abilities can definitely try this path as for them the level of frustration after 
+university is especially high and designing own or supporting an existing OFM project provide immediate value in their primary 
+work environment. See&nbsp; <a href="../Social/social_problems_in_system_administration.shtml">Social Problem in Enterprise 
+Unix Administration</a></p>
+<h3><a name="Use_programmable_editor_as_a_base">Use a programmable editor as a base of your implementation</a></h3>
+<p>Classic example of an application with a command line interface and a scripting language as a macrolanguage is XEDIT 
+and its derivatives KEDIT and THE. The latter is an open source implementation. While it uses REXX which is not very popular 
+those days, all key implementation ideas are applicable to any other scripting language.&nbsp;&nbsp; This way all options 
+in panel configuration (sorting by specific attributes, filtering files of specific types, etc can be delegated to this 
+macro language and all you need to implement is the filtering of file list via this user supplied macro. This alone saves 
+provably 30% of codebase. Even larger savings can be achieved by implementing panels as specialized editor windows with 
+read-only files in them. Editors and OFMs are actually two very similar projects and if you have editor of your liking with 
+open source codebase available this is probably the best way to learning it in professional level. Tight integration of 
+built-in editor and filemanager is a promising but never properly implemented idea that still wait for some breakthrough 
+implementation. </p>
+<p>As power users are generally very attached to their editors, you can try to implement some minimal implementation of 
+OFM within the framework available for existing programmable editor. As OFMs are genetically oriented toward sysadmins,&nbsp; 
+vi is a natural choice. Emacs is also a possibility but it way too complex to serve as a reference platform 
+although usage 
+of lisp or lisp-like language for extending OFM like Emacs worth investigating. </p>
+<p>VIM is an obvious candidate and there are already several file managers implemented for it.&nbsp; Similarly some implementations 
+already exist for Emacs (<a  target="_blank" href="http://emacswiki.org/emacs/Sunrise_Commander">Sunrise Commander</a>) which was implemented 
+on top of Emacs in elisp. Even if your OFM project fail, after programming those extensions and learning API you will became 
+a real specialist in this editor. And deep knowledge of editor is a tremendous asset in your professional career.&nbsp;
+</p>
+<p>You can also leave the codebase alone and just to use ideas of editors in OFMs, for example the idea of distinct command 
+set (: command in vi) and (piping from and into the editor which actually now is also present in some OFMs such as Midnight 
+Commander). That can be in interesting and promising angle. For example vi has set of ideas that really can enrich OFM concepts. 
+Look not only at attempts to create OFM inside vim in a macrolanguage, but also on attempts to emulate <tt>vim</tt> concepts 
+in OFM. There are two very interesting projects related to creating <tt>vi</tt>-style OFMs ( <a href="#Ranger">ranger</a> 
+and <a  target="_blank" href="http://vifm.sourceforge.net/docs.html">vifm</a> ). Linking OFMs with <tt>vi</tt> concepts and <tt>vi</tt> culture 
+proved to be a treasure trove of new ideas.&nbsp;&nbsp; </p>
+<h3><a name="Use_windows_manager_like_GNU_screen_or_Ratpoison_as_the_base_of_your_implementation">Use windows manager like 
+GNU screen or Ratpoison as the base of your implementation</a></h3>
+<p>OFM in reality represent something &quot;in-between&quot; tile windows manager (look at
+<a  target="_blank" href="http://www.nongnu.org/ratpoison/">Ratpoison</a> for inspiration) and multi-window terminal emulator like
+<a href="../Utilities/screen.shtml">GNU screen</a> on one hand and editors on another.&nbsp; The people who manage to find 
+right architectural solution along those lines stand better change to compete with established players, because they can 
+reuse pretty rich codebases. While convoluted ad-hoc solutions to those problems hamper&nbsp; &quot;old-style&quot; OFM implementations. 
+Again Achilles part here is the implementation of command line window and the flexibility of&nbsp; integration of internal 
+editor on the base of common macrolanguage and common library of primitives.&nbsp; Ad-hoc hacks in those areas inhibit further 
+growth. </p>
+<h3><a name="Consider_reusing_some_open_source_IDE_framework">Consider reusing some open source IDE framework</a></h3>
+<p>As we mentioned before, one way to look at OFMs as to view them as an IDE for system administrators, who have different 
+needs and preferences them programmers.&nbsp; </p>
+<p>But that does not exclude reusing some open-source framework created for, say, scripting language and written in scripting 
+language. You can definitely reuse a part of implementation of windows system and the editor. </p>
+<p>Who candidates that instantly come into mind are Parde or Eclipse. Please not that I hate Eclipse as it is a heavy weight 
+framework, but for experimentation with new OFM features this is a perfect tool.&nbsp; Using IDE also will help you as a 
+developer, as you will be more productive due to in depth knowledge of this IDE. </p>
+<p>In case your chosen IDE is Eslipse, the knowledge you obtain in process of reuse it has great market value: an additional 
+advantage of this approach is that cal simultaneously&nbsp; became an expert in Eclipse which has its own value on the marketplace. 
+In any case IDE architecture already resolves one way or another all major problems that OFM designer faces and if particular 
+IDE is still developed here again there can be a synergy between two project that can benefit both. Which is always good 
+for open source projects that are typically starved for money and workforce and survive mainly on the enthusiasm of a single 
+developer or a very small team of dedicated designers who really sacrifice their time to the project. Look at ht history 
+of Midnight Commander for more information.&nbsp; In this sense donations to the project are very important and users of 
+open source products would always remember that there is no free lunch. If they do not support the project it has significant 
+chances of dying and they will be hanging in the cold, if they depend on it. And forced to pay the price of switching to 
+another which can be really significant.&nbsp; In this sense shareware development (possibly with open code base -- the 
+danger of stealing codebase of significant complexity in reality is close to zero) is more sustainable then open source 
+development. Also FSF can (and should) act as a charity, not as a Stallman vanity promoting venture that stamps GNU label 
+on the projects as a seal of approval of project license with zero real support. It should allocate some money for important 
+projects like GNU Midnight Commander from member dues. Actually for orthodox file managers, orthodox monks should also provide 
+some help ;-)</p>
+<h3><a name="Other_possible_avenues">Other possible avenues</a></h3>
+<p>If existing file manager is flexible enough you can try to modify it to comply with the requirements of OFM1999 standard. 
+Victor Zverovich tried the same for Nautilus, see his <a  target="_blank" href="https://github.com/vitaut/captain-nemo">captain-nemo</a>.&nbsp;
+</p>
+<p>Of cause there are other opportunities about which I do not know. For example you can use screen and implement panels 
+as shell windows using screen vertical split patch.&nbsp; There probably other interesting architectural opportunities for 
+OFM about existence of which I do not even suspect.</p>
+<h3><b><a name="Adhere_to_standards">Adhere to standards</a></b></h3>
+<p>I know everybody thinks that he can do better and that&#39;s mostly true. But this is not the all truth. Real truth is deeper. 
+Remember that, as artists know all too well, &quot;form liberates&quot; and the less time you spend on designing your own interface 
+and set of keyboard shortcuts, the more time you have on developing quality implementation of features that you value most. 
+Under Spartan interface of OFM and within restriction put by <a href="../OFM/Standards/ofm_standard1999.shtml">OFM1999</a> 
+there are tremendous possibilities for innovation. First of all in the area of integration with shell and virtual panels 
+(in general panel can contain arbitrary set of files, not just content of some directory).&nbsp; Then in integration on 
+built-in editor with the rest of file manager (the difference between the editor and panel management code is not that big 
+-- panels can be considered as read only windows of the editor and implemented as such) </p>
+<h3>Focus on key features is the key</h3>
+<p>In view that involvement of most OFM developers is limited in both time and the total size of codebase (if this is a 
+single person project, but mist such projects are),&nbsp; the most optimal way of designing new OFM managers is to concentrate 
+on better implementation of one of two key ideas and limit &quot;bells and whistles&quot; to some future period when and if users 
+provide feedback and make it clear that it makes sense to develop the product further. </p>
+<p>A single developer simply can&#39;t compete with, say, Midnight Commander, or FAR, or Total Commander in the &quot;total coverage&quot; 
+of functions.&nbsp; But you can implement minimal OFM standard and try to beat other developers by attacking a different 
+set of problem or implementing one of the features that are &quot;misunderimplemented&quot; in current implementations. For Windows 
+OFM the key is usage (and integration with) PowerShell; for Unix implementing command like window should in in a style of 
+GNU screen, as a &quot;first class citizen&quot; not as a bastard child like in Midnight Commander. </p>
+<p>In this sense it is important to understand that 80% of your users will probably be limited to basic features described 
+in minimal OFM standard&nbsp; (<a href="../OFM/Standards/ofm_standard1999.shtml">Orthodox File Managers Standard 1999(OFM1999) 
+- minimal OFM requirements)</a>. They will be attracted by &quot;the feature&quot; that your OFM implements better then competitors, 
+not the general richness of features and &quot;total coverage&quot;...&nbsp;&nbsp;&nbsp; </p>
+<h3>Key unresolved problems with OFMs</h3>
+<p>For standalone application the question if you can built a better mousetrap probably revolves around three features that 
+IMHO are badly addressed in current generation of OFMs: </p>
+<ul>
+	<li><b>Compensating for excessive number of keyboard shortcuts the user needs to know/learn to use OFM productively.&nbsp;
+	</b>There might be some inventive approaches but, for example, in Unix a better implementation of &quot;helpline&quot; at the 
+	bottom of the screen (under the command line) and extending this concept to all dialog boxes can provide great benefits 
+	for users, including yourself as the primary user. I for example forget half of &quot;more esoteric&quot; functionality of FAR 
+	when I do not use it on daily basis for a week or so. I think other users have the same problem --<em> too rich set of keyboard 
+	key combinations is a self-defeating idea</em> :-(.
+	<p>In case of Unix/Linux with its severe restrictions of keyboard driver capabilities you can imitate DOS helpline functionality 
+	by &quot;rotating&quot; line with some shortcut with each &quot;slot&quot; representing one of the four position like in the revolver -- 
+	plain (no special keys pressed), Alt, Ctrl and Shift. </p>
+	<p>This problem with &quot;excessive richness&quot; of command set for keyboard oriented applications is a generic problem, for 
+	example vim suffers from it too. So putting efforts in solving it in some elegant way might have far greater return 
+	than just your OFM. </p>
+	<p>In a way quality of such built-in cheat sheet like OFM bottom &quot;helpline&quot; is much more important for applications 
+	that emphasize keyboard usage, then for GUI applications. And solving it in an elegant, inventive way will definitely 
+	attract users, especially users who have some investment in other OFM but hit the &quot;glass ceiling&quot; and just can&#39;t remember 
+	more shortcuts. For example, from my own experience I suspect that this is a fundamental problem for users of Midnight 
+	Commander which does not implement &quot;helpline&quot; properly and in menus does not implement anything sophisticated in this 
+	area&nbsp; at all.&nbsp; <br>
+&nbsp;</p>
+	</li>
+	<li><b>Integration with shell. </b>An Achilles spot of many popular OFM implementation is the compete, absolute lack 
+	of understanding of command window semantic. Classic example in this respect is Total Commander. It also negatively 
+	affects the of implementation of user menu (called start menu).&nbsp; Developers who can do better in this area provide 
+	for users much better functionality can rightly advertise this advantage and hope to attract power users who value this 
+	feature (most OFM users do use command line). There are multiple neat ways cleanly implement the concept of command 
+	line window and in case GNU screen approach is used functionality of GNU screen&nbsp; can be extended to OFMs. That 
+	really might make a difference for the users. Another possible avenue of increasing user attractiveness of OFM is providing 
+	its own macrolanguage such as LUA which automatically guarantee you full support of regular expressions in dialogs via 
+	PCRE library.&nbsp; This for example is important for the implementation of dynamic user menus and in implementation 
+	files search.&nbsp; <br>
+&nbsp;</li>
+	<li><b>Integration with internal editor and viewer.</b>&nbsp; The main danger in to make your codebase too big. One 
+	way to cut the size of the codebase is to exploit hidden synergy between internal editor and panel management code. 
+	False solution here is to drop internal editor altogether (Total Commander is an example of this approach). As editor 
+	code can be studies and borrowed from several first class open source implementations that creates an opportunity of 
+	reuse of this library (and possibly internal macro language, if the programmable editor serves as a reference model 
+	is ). If the editor is still actively developed there can be synergy and sharing with the developer of the editor as 
+	part of functionality of OFM related for file management is useful for editor two. This way instead of team of one, 
+	you can have a team of two.&nbsp; The library used in development of a good editor contain probably 60% what is needed 
+	for the development of OFM and polishing of this library can benefit both projects.&nbsp; So an interesting approach 
+	to OFM development would be to start with some editor implementation and try to extend it to OFM maximizing reuse of 
+	common elements and the macro language of the programmable editor. One interesting example of this approach is
+	<a  target="_blank" href="http://emacswiki.org/emacs/Sunrise_Commander">Sunrise Commander</a> which was implemented on top of Emacs in 
+	elisp.</li>
+</ul>
+<p>Your web site can as a powerful tool of popularizing the idea that you have chosen.&nbsp; In case you are doing open 
+source development; don&#39;t be shy to ask for donations, especially in a form of equipment. </p>
+<h3><a name="Conclusions">Conclusions</a></h3>
+<p><b>I think that for system administrators this is a question of &quot;<a  target="_blank" href="http://www.merriam-webster.com/dictionary/esprit%20de%20corps">esprit 
+de corps</a>&quot; to support development of one of OFMs.&nbsp; As sysadmin IDE this open source development helps everybody 
+and this page is my small contribution to the development of OFMs as sysadmin IDE of choice. </b>&nbsp;If you think how 
+dull typical enterprise environment is, you probably can find a couple of hours a month to contribute to the project. It 
+is not necessarily contribution via coding. Testing and creation of documentation are also very 
+valuable, albeit much underappreciated 
+activities. </p>
+<p>A challenge for human-computer interface is to support creativity and that&#39;s flexibility that OFM interface provides 
+and close integration with shell make them far more extensible and &quot;creativity friendly&quot; from other types of file managers.
+</p>
+<p>If you are a sysadmin who never tried one, please spend a couple of hours (or better days) and play with&nbsp;
+<a href="../OFM/Paradigm/Ch04/mc.shtml">Midnight Commander</a> or <a href="../OFM/Paradigm/Ch05/file_commander.shtml">FC</a> 
+for Linux/Unix and <a href="../OFM/Paradigm/Ch05/far.shtml">FAR</a> on Windows.&nbsp; All of them provide some implementation 
+of shell terminal windows which is of primary importance for sysadmins. FAR also provides rich set of plug-ins 
+and integration with LUA. Please note 
+that OFMs have a rather steep learning curve and don&#39;t be discouraged by initial difficulties. Your persistence will pay 
+you nicely...&nbsp; </p>
+<h2>Webliography</h2>
+<p><a href="../OFM/index.shtml">Orthodox File Managers</a></p>
+<p><a href="../OFM/Paradigm/index.shtml">The Orthodox File Manager(OFM) Paradigm </a></p>
+<p align="right"><i>Dr. Nikolai Bezroukov</i></p>
+<h2><hr></h2>
+<hr noshade color="#FF0000" size="5">
+
+<h2><a name="Etc">Etc</a></h2>
+
+<p><b>Society</b></p>
+<blockquote>
+
+<p><b><a href="/Skeptics/groupthink.shtml"><font size="2">Groupthink</font></a><font size="2"> :
+<a href="/Skeptics/Political_skeptic/Two_party_system_as_poliarchy/index.shtml">Two Party System 
+as Polyarchy</a> : 
+<a href="/Skeptics/Financial_skeptic/Casino_capitalism/Corruption_of_regulators/index.shtml">
+Corruption of Regulators</a> :
+<a href="/Social/Bureaucracy/index.shtml">Bureaucracies</a> :
+<a href="/Social/Toxic_managers/Micromanagers/understanding_micromanagers.shtml">Understanding Micromanagers 
+and Control Freaks</a> : <a href="/Social/Toxic_managers/index.shtml">Toxic Managers</a> :&nbsp;&nbsp;
+<a href="/Skeptics/Pseudoscience/harvard_mafia.shtml">Harvard Mafia</a> :
+<a href="/Social/Toxic_managers/Communication/diplomatic_communication.shtml">Diplomatic Communication</a> 
+: <a href="/Social/Toxic_managers/surviving_a_bad_performance_review.shtml">Surviving a Bad Performance 
+Review</a> : <a href="/Skeptics/Financial_skeptic/index.shtml">Insufficient Retirement Funds as 
+Immanent Problem of Neoliberal Regime</a> : <a href="/Skeptics/index.shtml">PseudoScience</a> :
+<a href="/Skeptics/Political_skeptic/index.shtml">Who Rules America</a> :
+<a href="/Skeptics/Political_skeptic/Neoliberalism/index.shtml">Neoliberalism
+</a>&nbsp;: <a href="/Skeptics/Political_skeptic/Elite_theory/iron_law_of_oligarchy.shtml">The Iron 
+Law of Oligarchy</a> : </font><a href="/Skeptics/Political_skeptic/libertarianism.shtml">
+<font size="2">Libertarian Philosophy</font></a></b></p>
+</blockquote>
+
+<p><b>Quotes</b></p>
+<blockquote>
+
+<p><b><font size="2" face="Arial"> 
+<a href="/Skeptics/Quotes/war_and_peace_quotes.shtml">War and Peace</a> </font>
+<font face="Arial"><font size="2">: <a href="/Skeptics/Quotes/financial_quotes.shtml">Skeptical 
+Finance</a> : <a href="/Skeptics/Quotes/famous_galbraith_quotes.shtml">John 
+Kenneth Galbraith</a> :<a href="/Skeptics/Quotes/talleyrand_quotes.shtml">Talleyrand</a> :
+<a href="/Skeptics/Quotes/oscar_wilde_quotes.shtml">Oscar Wilde</a> :
+<a href="/Skeptics/Quotes/bismarck_quotes.shtml">Otto Von Bismarck</a> :
+<a href="/Skeptics/Quotes/keynes_quotes.shtml">Keynes</a> :
+<a href="/Skeptics/Quotes/george_carlin.shtml">George Carlin</a> :
+<a href="/Skeptics/skeptical_quotes.shtml">Skeptics</a> :
+<a href="/Skeptics/Quotes/propaganda.shtml">Propaganda</a>&nbsp; : <a href="/SE/quotes.shtml">SE 
+quotes</a> : <a href="/Lang/quotes.shtml">Language Design and Programming Quotes</a> :
+<a href="/Bulletin/quotes.shtml">Random IT-related quotes</a> :&nbsp;
+<a href="/Skeptics/Quotes/somerset_maugham.shtml">Somerset Maugham</a> :
+<a href="/Skeptics/Quotes/marcus_aurelius.shtml">Marcus Aurelius</a> :
+<a href="/Skeptics/Quotes/kurt_vonnegut_quotes.shtml">Kurt Vonnegut</a> :
+<a href="/Skeptics/Quotes/eric_hoffer.shtml">Eric Hoffer</a> :
+<a href="/Skeptics/Quotes/churchill_quotes.shtml">Winston Churchill</a> :
+<a href="/Skeptics/Quotes/napoleon_quotes.shtml">Napoleon Bonaparte</a> :
+<a href="/Skeptics/Quotes/ambrose_bierce.shtml">Ambrose Bierce</a> :&nbsp;
+<a href="/Skeptics/Quotes/bernard_shaw.shtml">Bernard Shaw</a> : </font>
+<a href="/Skeptics/Quotes/mark_twain_quotes.shtml"><font size="2">Mark Twain Quotes</font></a></font></b></p>
+</blockquote>
+
+<p><b>Bulletin:</b></p>
+<blockquote>
+
+<p><b><font face="Arial"><a href="http://softpanorama.biz/Bulletin/Sp2013_v25/bulletin25_12.shtml">
+<font size="2">Vol 25, No.12 (December, 2013) Rational Fools vs. Efficient Crooks The efficient 
+markets hypothesis</font></a><font size="2"> :
+<a href="http://softpanorama.biz/Skeptics/Political_skeptic/Bulletin/political_skeptic2013.shtml">
+Political Skeptic Bulletin, 2013</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Unemployment/Bulletin/unempoyment2010.shtml">
+Unemployment Bulletin, 2010</a> :
+<a href="http://softpanorama.biz/Bulletin/Sp2011_v23/bulletin23_10.shtml">&nbsp;Vol 23, No.10 
+(October, 2011) An observation about corporate security departments</a> :
+<a href="http://softpanorama.biz/Skeptics/Political_skeptic/Fifth_column/Color_revolutions/Euromaydan/Bulletin/euromaydan14_06.shtml">
+Slightly Skeptical Euromaydan Chronicles, June 2014</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Casino_capitalism/12_Apostols_of_deregulation/Greenspan/Bulletin/greenspan_bulletin2008.shtml">
+Greenspan legacy bulletin, 2008</a> :
+<a href="/Bulletin/Sp2013_v25/bulletin25_10.shtml">Vol 25, No.10 (October, 2013) Cryptolocker Trojan 
+(Win32/Crilock.A)</a> :
+<a href="/Bulletin/Sp2013_v25/bulletin25_08.shtml">Vol 25, No.08 (August, 2013) Cloud providers 
+as intelligence collection hubs</a> : 
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2010.shtml">
+Financial Humor Bulletin, 2010</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Inequality/Bulletin/inequality2009.shtml">
+Inequality Bulletin, 2009</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2008.shtml">
+Financial Humor Bulletin, 2008</a> :
+<a href="http://softpanorama.biz/Copyright/Bulletin/copyleft_problems2004.shtml">Copyleft Problems 
+Bulletin, 2004</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2011.shtml">
+Financial Humor Bulletin, 2011</a> :
+<a href="http://softpanorama.biz/Skeptics/Financial_skeptic/Energy/Bulletin/energy_bulletin2010.shtml">
+Energy Bulletin, 2010</a> : <a href="http://softpanorama.biz/Malware/Bulletin/malware2010.shtml">
+Malware Protection Bulletin, 2010</a> : <a href="/Bulletin/Sp2014_v26/bulletin26_01.shtml">Vol 26, 
+No.1 (January, 2013) Object-Oriented Cult</a> :
+<a href="http://softpanorama.biz/Skeptics/Political_skeptic/Bulletin/political_skeptic2011.shtml">
+Political Skeptic Bulletin, 2011</a> :
+<a href="/Bulletin/Sp2011_v23/bulletin23_11.shtml">Vol 23, No.11 (November, 2011) Softpanorama classification 
+of sysadmin horror stories</a> : <a href="/Bulletin/Sp2013_v25/bulletin25_05.shtml">Vol 25, No.05 
+(May, 2013) Corporate bullshit as a communication method</a>&nbsp; : </font><a href="/Bulletin/Sp2013_v25/bulletin25_06.shtml">
+<font size="2">Vol 25, No.06 (June, 2013) A Note on the Relationship of Brooks Law and Conway Law</font></a></font></b></p>
+</blockquote>
+
+<p align="left"><b>History:</b></p>
+<blockquote>
+
+<p><b><font face="Arial"><a href="/History/index.shtml"><font size="2">Fifty glorious years (1950-2000): 
+the triumph of the US computer engineering</font></a><font size="2"> :
+<a href="/People/Knuth/index.shtml">Donald Knuth</a> : <a href="/People/Knuth/taocp.shtml">TAoCP 
+and its Influence of Computer Science</a> : <a href="/People/Stallman/index.shtml">Richard Stallman</a> 
+: <a href="/People/Torvalds/index.shtml">Linus Torvalds</a>&nbsp; :
+<a href="/People/Wall/index.shtml">Larry Wall </a>&nbsp;:
+<a href="/People/Ousterhout/index.shtml">John K. Ousterhout</a> : <a href="/History/ctss.shtml">
+CTSS</a> : <a href="/History/multix.shtml">Multix OS</a> <a href="/History/Unix/index.shtml">Unix 
+History</a> : <a href="/People/Shell_giants/introduction.shtml">Unix shell history</a> :
+<a href="/Editors/Vimorama/history.shtml">VI editor</a> :
+<a href="/Scripting/Piporama/history.shtml">History of pipes concept</a> :
+<a href="/Solaris/solaris_history.shtml">Solaris</a> : <a href="/History/dos_history.shtml">MS DOS</a> 
+:&nbsp; <a href="/History/lang_history.shtml">Programming Languages History</a> :
+<a href="/Lang/pl1.shtml">PL/1</a> : <a href="/Lang/simula67.shtml">Simula 67</a> :
+<a href="/Lang/Cilorama/history.shtml">C</a> :
+<a href="/People/Stallman/history_of_gcc_development.shtml">History of GCC development</a> :&nbsp;
+<a href="/People/Scripting_giants/scripting_languages_as_vhll.shtml">Scripting Languages</a> :
+<a href="/Scripting/Perlbook/Ch01/perl_history.shtml">Perl history&nbsp; </a>&nbsp;:
+<a href="/History/os_history.shtml">OS History</a> : <a href="/Mail/history.shtml">Mail</a> :
+<a href="/DNS/history.shtml">DNS</a> : <a href="/Net/Application_layer/SSH/ssh_history.shtml">SSH</a> 
+: <a href="/History/cpu_history.shtml">CPU Instruction Sets</a> :
+<a href="/Hardware/Sun/history_of_sparc.shtml">SPARC systems 1987-2006</a> :
+<a href="/OFM/Paradigm/Ch03/norton_commander.shtml">Norton Commander</a> :
+<a href="/Windows/Norton_utilities/history.shtml">Norton Utilities</a> :
+<a href="/Windows/Ghosting/ghost_history.shtml">Norton Ghost</a> :
+<a href="/Office/Frontpage/history.shtml">Frontpage history</a> :
+<a href="/Malware/Malware_defense_history/index.shtml">Malware Defense History</a> :
+<a href="/Utilities/Screen/history.shtml">GNU Screen</a> : </font>
+<a href="/OSS/oss_early_history.shtml"><font size="2">OSS early history</font></a></font></b></p>
+</blockquote>
+
+<p><b>Classic books:</b></p>
+<blockquote>
+
+<p><b><font face="Arial"><a href="/Bookshelf/Classic/peter_principle.shtml"><font size="2">The Peter 
+Principle</font></a><font size="2"> : <a href="/Bookshelf/Classic/parkinson_law.shtml">Parkinson 
+Law</a> : <a href="/Bookshelf/Classic/nineteen_eighty_four.shtml">1984</a> :
+<a href="/Bookshelf/Classic/tmmm.shtml">The Mythical Man-Month</a> :&nbsp;
+<a href="/Bookshelf/Classic/polya_htsi.shtml">How to Solve It by George Polya</a> :
+<a href="/Bookshelf/Classic/taocp.shtml">The Art of Computer Programming</a> :
+<a href="/Bookshelf/Classic/teops.shtml">The Elements of Programming Style</a> :
+<a href="/Bookshelf/Classic/unix_haters_handhook.shtml">The Unix Hater’s Handbook</a> :
+<a href="/Bookshelf/Classic/jargon_file.shtml">The Jargon file</a> :
+<a href="/Bookshelf/Classic/true_believer.shtml">The True Believer</a> :
+<a href="/Bookshelf/Classic/programming_pearls.shtml">Programming Pearls</a> :
+<a href="/Bookshelf/Classic/good_soldier_svejk.shtml">The Good Soldier Svejk</a> : </font>
+<a href="/Bookshelf/Classic/power_elite.shtml"><font size="2">The Power Elite</font></a></font></b></p>
+</blockquote>
+
+<p><b>Most popular humor pages:</b></p>
+<blockquote>
+
+<p><font face="Arial"><b><a href="/Bulletin/Humor/Slackerism/it_slacker_manifest.shtml">
+<font size="2">Manifest of the Softpanorama IT Slacker Society</font></a><font size="2"> :
+<a href="/Bulletin/Humor/Slackerism/ten_commandments_of_software_slackerism.shtml">Ten Commandments 
+of the IT Slackers Society</a> : <a href="/Bulletin/Humor/index.shtml">Computer Humor Collection</a> 
+: <a href="/Bulletin/Humor/bsd_logo_story.shtml">BSD Logo Story</a> :
+<a href="/Bulletin/Humor/cuckoo_egg.shtml">The Cuckoo&#39;s Egg </a>:
+<a href="/Bulletin/Humor/slang.shtml">IT Slang</a> : <a href="/Lang/Cpp_rama/humor.shtml">C++ Humor</a> 
+: <a href="/Bulletin/Humor/Archive/humor059.shtml">ARE YOU A BBS ADDICT?</a> :
+<a href="/Bulletin/Humor/Archive/humor092.shtml">The Perl Purity Test</a> :
+<a href="/Bulletin/Humor/Archive/humor065.shtml">Object oriented programmers of all nations</a> 
+: <a href="/Skeptics/Financial_skeptic/Humor/financial_humor.shtml">Financial Humor</a> :
+<a href="/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2008.shtml">Financial Humor Bulletin, 
+2008</a> : <a href="/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2010.shtml">Financial 
+Humor Bulletin, 2010</a> : <a href="/Editors/humor.shtml">The Most Comprehensive Collection of Editor-related 
+Humor</a> : <a href="/Lang/programming_languages_humor.shtml">Programming Language Humor</a> :
+<a href="/Skeptics/Financial_skeptic/Casino_capitalism/Systemic_instability_of_financial_sector/TBTF/Goldman_Sachs/humor.shtml">
+Goldman Sachs related humor</a> :
+<a href="/Skeptics/Financial_skeptic/Casino_capitalism/Twelve_apostles_of_deregulation/Greenspan/greenspan_humor.shtml">
+Greenspan humor</a> : <a href="/Lang/Cilorama/humor.shtml">C Humor</a> :
+<a href="/Scripting/humor.shtml">Scripting Humor</a> :
+<a href="/Bulletin/Humor/real_programmers_humor.shtml">Real Programmers Humor</a> :
+<a href="/WWW/humor.shtml">Web Humor</a> : <a href="/Copyright/humor.shtml">GPL-related Humor</a> 
+: <a href="/OFM/ofm_humor.shtml">OFM Humor</a> :
+<a href="/Skeptics/Political_skeptic/humor.shtml">Politically Incorrect Humor</a> :
+<a href="/Security/IDS/humor.shtml">IDS Humor</a> : <a href="/Bulletin/Humor/linux_sucks.shtml">
+&quot;Linux Sucks&quot; Humor </a>: <a href="/Links/Russian/Culture/Music/russian_musical_humor.shtml">Russian 
+Musical Humor</a> : <a href="/Bulletin/Humor/best_russian_programmer_humor.shtml">Best Russian Programmer 
+Humor</a> : <a href="/Bulletin/Humor/Archive/humor070.shtml">Microsoft plans to buy Catholic Church</a> 
+: <a href="/People/Stallman/rms_related_humor.shtml">Richard Stallman Related Humor</a> :
+<a href="/Admin/humor.shtml">Admin Humor</a> : <a href="/People/Wall/perl_related_humor.shtml">Perl-related 
+Humor</a> : <a href="/People/Torvalds/linus_torvalds_related_humor.shtml">Linus Torvalds Related 
+humor</a> : <a href="/Skeptics/humor.shtml">PseudoScience Related Humor</a> :
+<a href="/Net/net_humor.shtml">Networking Humor</a> :
+<a href="/Scripting/Shellorama/humor.shtml">Shell Humor</a> :
+<a href="/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2011.shtml">Financial Humor Bulletin, 
+2011</a> : <a href="/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2012.shtml">Financial 
+Humor Bulletin, 2012</a> :
+<a href="/Skeptics/Financial_skeptic/Humor/Bulletin/financial_humor2013.shtml">Financial Humor Bulletin, 
+2013</a> : <a href="/Lang/Javarama/humor.shtml">Java Humor</a> : <a href="/SE/humor.shtml">Software 
+Engineering Humor</a> : <a href="/Solaris/humor.shtml">Sun Solaris Related Humor</a> :
+<a href="/Education/humor.shtml">Education Humor</a> : <a href="/Admin/Tivoli/ibm_humor.shtml">IBM 
+Humor</a> : <a href="/Lang/Asmorama/humor.shtml">Assembler-related Humor</a> :
+<a href="/Editors/Vimorama/vim_humor.shtml">VIM Humor</a> : <a href="/Malware/humor.shtml">Computer 
+Viruses Humor</a> : <a href="/Bulletin/Humor/Archive/humor034.shtml">Bright tomorrow is rescheduled 
+to a day after tomorrow</a> : <a href="/Bulletin/Humor/classic_computer_humor.shtml">Classic Computer 
+Humor</a> </font></b></font></p>
+</blockquote>
+
+<p align="left"><b><a href="/Bulletin/Humor/last_but_not_least.shtml">The Last but not Least</a> </b> <em>Technology is dominated by 
+two types of people: those who understand what they do not manage and those who manage what they do not understand ~Archibald Putt. 
+Ph.D</em></p>
+
+<hr size="5" noshade color="#FF0000"><font face="Verdana" size="1">
+
+<p><i><b>Copyright © 1996-2021 by </b></i><b><i>Softpanorama Society</i></b>. <a target="_blank" href>www.softpanorama.org</a> 
+was initially created as a service to the (now defunct) UN Sustainable Development Networking Programme (<a target="_blank" href="http://www.un.org/Depts/dhl/sflib/">SDNP</a>) 
+without any remuneration. This document is an industrial compilation designed and <b>created exclusively 
+for educational use</b> and is distributed under the <a href="/license.shtml">Softpanorama Content License</a>. 
+Original materials copyright belong 
+to respective owners. <i><b>Quotes are made<font color="#FF0000"> for educational purposes only</font> 
+in compliance with the fair use doctrine. </b></i> 
+</p>
+
+<p><em><b>FAIR USE NOTICE</b> </em>This site contains 
+		copyrighted material the use of which has not always been specifically 
+		authorized by the copyright owner. We are making such material available 
+		to advance understanding of computer science, IT technology, economic, scientific, and social  
+		issues. We believe this constitutes a 'fair use' of any such 
+		copyrighted material as provided by section 107 of the US Copyright Law according to which 
+such material can be distributed without profit exclusively for research and educational purposes.</p>
+
+<p><b>This is a Spartan WHYFF (We Help You For Free) 
+site written by people for whom English is not a native language.</b> Grammar and spelling errors should 
+be expected. <b>The site contain some broken links as it develops like a living tree...</b></p>
+
+<table border="0" width="100%">
+<tr>
+<td>
+
+<p align="center"><font face="Verdana" size="1">
+<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
+<img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1">
+</font></td>
+<td><font face="Verdana" size="1">You can use PayPal to to buy a cup of coffee for authors 
+of this site </font></td>
+</tr>
+</table>
+
+<p><b>Disclaimer:</b> </p>
+
+<p><i>The statements, views and opinions presented on this web page are those of the author (or 
+referenced source) and are 
+not endorsed by, nor do they necessarily reflect, the opinions of the Softpanorama society.</i> <i>We do not warrant the correctness 
+of the information provided or its fitness for any purpose. </i>The site uses AdSense so you need to be aware of Google privacy policy. You you do not want to be 
+tracked by Google please disable Javascript for this site. <em>This site is perfectly usable without 
+Javascript.</em> 
+</font></p>
+<p><i>Last modified:
+<!--webbot bot="Timestamp" s-type="EDITED" s-format="%B %d, %Y" startspan -->March 12, 2019<!--webbot bot="Timestamp" i-checksum="17043" endspan --></i></p>
+
+
+</body>
+
+</html>

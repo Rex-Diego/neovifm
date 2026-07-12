@@ -95,7 +95,11 @@ suites += ioeta ionotif iop ior
 # ui
 suites += colmgr column_view viewcolumns_parser
 # everything else
-suites += bmarks escape fileops filetype filter lua menus misc undo utils
+suites += bmarks escape fileops filetype filter lua menus misc
+ifdef unix_env
+suites += neovifm_snapshot
+endif
+suites += undo utils
 
 # these are built, but not automatically executed
 apps := fuzz io_tester_app regs_shmem_app
@@ -103,8 +107,11 @@ apps := fuzz io_tester_app regs_shmem_app
 # obtain list of sources that are being tested
 vifm_src := ./ cfg/ compat/ engine/ int/ io/ io/private/ lua/ lua/lua/ menus/
 vifm_src += modes/ modes/dialogs/ ui/ utils/
+ifdef unix_env
+vifm_src += neovifm/
+endif
 vifm_src := $(wildcard $(addprefix ../src/, $(addsuffix *.c, $(vifm_src))))
-vifm_src := $(filter-out %/tags.c %/xxhash.c, $(vifm_src))
+vifm_src := $(filter-out %/tags.c %/xxhash.c %/neovifm/core_probe.c, $(vifm_src))
 
 # filter out generally non-testable or sources for another platform
 vifm_src := $(filter-out %/src/./vifm.c %/win_helper.c, $(vifm_src))
@@ -167,6 +174,7 @@ override CFLAGS := $(TESTS_CFLAGS) -MMD -MP -pipe \
 override LDFLAGS := $(TESTS_LDFLAGS)
 ifdef unix_env
     MF := $(abspath $(B)../src/Makefile)
+    core_probe_target := neovifm-core-probe
     ifneq ($(wildcard $(MF)),)
         override LDFLAGS += \
             $(shell grep -m1    'LIBS =' $(MF) | sed 's/^[^=]*=//') \
@@ -262,7 +270,7 @@ $(vifm_obj) ../src/./tags.c: appsources
 	@# this receipt is needed to make Make recognize that targets were updated
 
 appsources: $(vifm_src)
-	$(MAKE) $(make_args) vifm$(exe_suffix)
+	$(MAKE) $(make_args) vifm$(exe_suffix) $(core_probe_target)
 
 $(BUILD)test-support/%.o: test-support/%.c | $(BUILD)test-support
 	$(CC) -c -o $@ $(CFLAGS) $<

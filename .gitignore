@@ -24,11 +24,19 @@
 
 # *nix executables
 /src/vifm
+/src/neovifm-core-probe
+
+# macOS Finder metadata
+.DS_Store
 
 # compiler output
 *.o
 *.d
 *.gch
+
+# NeoVifm TypeScript client
+/clients/tui/node_modules/
+/clients/tui/dist/
 
 # code coverage
 *.gcda

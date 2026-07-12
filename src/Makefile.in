@@ -93,6 +93,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = vifm$(EXEEXT)
+noinst_PROGRAMS = neovifm-core-probe$(EXEEXT)
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps =  \
@@ -130,8 +131,14 @@ am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(vim_syntax_dir)" "$(DESTDIR)$(vimdoc_doc_dir)" \
 	"$(DESTDIR)$(zshcompldir)" "$(DESTDIR)$(pkgdatadir)" \
 	"$(DESTDIR)$(vim_doc_dir)" "$(DESTDIR)$(vimdoc_doc_dir)"
-PROGRAMS = $(bin_PROGRAMS)
+PROGRAMS = $(bin_PROGRAMS) $(noinst_PROGRAMS)
 am__dirstamp = $(am__leading_dot)dirstamp
+am_neovifm_core_probe_OBJECTS = neovifm/core_probe.$(OBJEXT) \
+	neovifm/pane_snapshot.$(OBJEXT) \
+	neovifm/snapshot_json.$(OBJEXT) utils/parson.$(OBJEXT) \
+	utils/utf8proc.$(OBJEXT)
+neovifm_core_probe_OBJECTS = $(am_neovifm_core_probe_OBJECTS)
+neovifm_core_probe_LDADD = $(LDADD)
 am_vifm_OBJECTS = cfg/config.$(OBJEXT) cfg/info.$(OBJEXT) \
 	compat/curses.$(OBJEXT) compat/dtype.$(OBJEXT) \
 	compat/getopt.$(OBJEXT) compat/getopt1.$(OBJEXT) \
@@ -369,6 +376,9 @@ am__depfiles_remade = ./$(DEPDIR)/args.Po ./$(DEPDIR)/background.Po \
 	modes/dialogs/$(DEPDIR)/change_dialog.Po \
 	modes/dialogs/$(DEPDIR)/msg_dialog.Po \
 	modes/dialogs/$(DEPDIR)/sort_dialog.Po \
+	neovifm/$(DEPDIR)/core_probe.Po \
+	neovifm/$(DEPDIR)/pane_snapshot.Po \
+	neovifm/$(DEPDIR)/snapshot_json.Po \
 	ui/$(DEPDIR)/cancellation.Po ui/$(DEPDIR)/color_manager.Po \
 	ui/$(DEPDIR)/color_scheme.Po ui/$(DEPDIR)/colored_line.Po \
 	ui/$(DEPDIR)/colors.Po ui/$(DEPDIR)/column_view.Po \
@@ -404,8 +414,9 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(vifm_SOURCES) $(nodist_vifm_SOURCES)
-DIST_SOURCES = $(vifm_SOURCES)
+SOURCES = $(neovifm_core_probe_SOURCES) $(vifm_SOURCES) \
+	$(nodist_vifm_SOURCES)
+DIST_SOURCES = $(neovifm_core_probe_SOURCES) $(vifm_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -793,6 +804,13 @@ nodist_vimdoc_doc__DATA = $(top_srcdir)/data/vim/doc/app/tags
 dist_pkgdata_DATA = ../data/vifmrc@DATA_SUFFIX@
 dist_pkgdata_SCRIPTS = ../data/vifm-media@DATA_SUFFIX@
 nodist_pkgdata_DATA = ../data/vifm-help.txt
+neovifm_core_probe_SOURCES = \
+	neovifm/core_probe.c \
+	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/snapshot_json.c neovifm/snapshot_json.h \
+	utils/parson.c utils/parson.h \
+	utils/utf8proc.c utils/utf8proc.h utils/utf8proc_data.inc
+
 dist_bin_SCRIPTS = vifm-pause vifm-screen-split vifm-convert-dircolors
 dist_man_MANS = ../data/man/vifm.1 \
 					 ../data/man/vifm-pause.1 \
@@ -1190,6 +1208,35 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-$(am__rm_f) $(bin_PROGRAMS)
+
+clean-noinstPROGRAMS:
+	-$(am__rm_f) $(noinst_PROGRAMS)
+neovifm/$(am__dirstamp):
+	@$(MKDIR_P) neovifm
+	@: >>neovifm/$(am__dirstamp)
+neovifm/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) neovifm/$(DEPDIR)
+	@: >>neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/core_probe.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/pane_snapshot.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/snapshot_json.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+utils/$(am__dirstamp):
+	@$(MKDIR_P) utils
+	@: >>utils/$(am__dirstamp)
+utils/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) utils/$(DEPDIR)
+	@: >>utils/$(DEPDIR)/$(am__dirstamp)
+utils/parson.$(OBJEXT): utils/$(am__dirstamp) \
+	utils/$(DEPDIR)/$(am__dirstamp)
+utils/utf8proc.$(OBJEXT): utils/$(am__dirstamp) \
+	utils/$(DEPDIR)/$(am__dirstamp)
+
+neovifm-core-probe$(EXEEXT): $(neovifm_core_probe_OBJECTS) $(neovifm_core_probe_DEPENDENCIES) $(EXTRA_neovifm_core_probe_DEPENDENCIES)
+	@rm -f neovifm-core-probe$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(neovifm_core_probe_OBJECTS) $(neovifm_core_probe_LDADD) $(LIBS)
 cfg/$(am__dirstamp):
 	@$(MKDIR_P) cfg
 	@: >>cfg/$(am__dirstamp)
@@ -1525,12 +1572,6 @@ ui/statusline.$(OBJEXT): ui/$(am__dirstamp) \
 	ui/$(DEPDIR)/$(am__dirstamp)
 ui/tabs.$(OBJEXT): ui/$(am__dirstamp) ui/$(DEPDIR)/$(am__dirstamp)
 ui/ui.$(OBJEXT): ui/$(am__dirstamp) ui/$(DEPDIR)/$(am__dirstamp)
-utils/$(am__dirstamp):
-	@$(MKDIR_P) utils
-	@: >>utils/$(am__dirstamp)
-utils/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) utils/$(DEPDIR)
-	@: >>utils/$(DEPDIR)/$(am__dirstamp)
 utils/cancellation.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
 utils/dynarray.$(OBJEXT): utils/$(am__dirstamp) \
@@ -1569,8 +1610,6 @@ utils/matchers.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
 utils/mem.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
-utils/parson.$(OBJEXT): utils/$(am__dirstamp) \
-	utils/$(DEPDIR)/$(am__dirstamp)
 utils/path.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
 utils/regexp.$(OBJEXT): utils/$(am__dirstamp) \
@@ -1586,8 +1625,6 @@ utils/string_array.$(OBJEXT): utils/$(am__dirstamp) \
 utils/trie.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
 utils/utf8.$(OBJEXT): utils/$(am__dirstamp) \
-	utils/$(DEPDIR)/$(am__dirstamp)
-utils/utf8proc.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
 utils/utils.$(OBJEXT): utils/$(am__dirstamp) \
 	utils/$(DEPDIR)/$(am__dirstamp)
@@ -1681,6 +1718,7 @@ mostlyclean-compile:
 	-rm -f menus/*.$(OBJEXT)
 	-rm -f modes/*.$(OBJEXT)
 	-rm -f modes/dialogs/*.$(OBJEXT)
+	-rm -f neovifm/*.$(OBJEXT)
 	-rm -f ui/*.$(OBJEXT)
 	-rm -f utils/*.$(OBJEXT)
 
@@ -1858,6 +1896,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@modes/dialogs/$(DEPDIR)/change_dialog.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@modes/dialogs/$(DEPDIR)/msg_dialog.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@modes/dialogs/$(DEPDIR)/sort_dialog.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/core_probe.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/pane_snapshot.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/snapshot_json.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@ui/$(DEPDIR)/cancellation.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@ui/$(DEPDIR)/color_manager.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@ui/$(DEPDIR)/color_scheme.Po@am__quote@ # am--include-marker
@@ -2744,6 +2785,8 @@ distclean-generic:
 	-$(am__rm_f) modes/$(am__dirstamp)
 	-$(am__rm_f) modes/dialogs/$(DEPDIR)/$(am__dirstamp)
 	-$(am__rm_f) modes/dialogs/$(am__dirstamp)
+	-$(am__rm_f) neovifm/$(DEPDIR)/$(am__dirstamp)
+	-$(am__rm_f) neovifm/$(am__dirstamp)
 	-$(am__rm_f) ui/$(DEPDIR)/$(am__dirstamp)
 	-$(am__rm_f) ui/$(am__dirstamp)
 	-$(am__rm_f) utils/$(DEPDIR)/$(am__dirstamp)
@@ -2754,7 +2797,8 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-local mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-local \
+	clean-noinstPROGRAMS mostlyclean-am
 
 distclean: distclean-am
 	-rm -f ./$(DEPDIR)/args.Po
@@ -2928,6 +2972,9 @@ distclean: distclean-am
 	-rm -f modes/dialogs/$(DEPDIR)/change_dialog.Po
 	-rm -f modes/dialogs/$(DEPDIR)/msg_dialog.Po
 	-rm -f modes/dialogs/$(DEPDIR)/sort_dialog.Po
+	-rm -f neovifm/$(DEPDIR)/core_probe.Po
+	-rm -f neovifm/$(DEPDIR)/pane_snapshot.Po
+	-rm -f neovifm/$(DEPDIR)/snapshot_json.Po
 	-rm -f ui/$(DEPDIR)/cancellation.Po
 	-rm -f ui/$(DEPDIR)/color_manager.Po
 	-rm -f ui/$(DEPDIR)/color_scheme.Po
@@ -3199,6 +3246,9 @@ maintainer-clean: maintainer-clean-am
 	-rm -f modes/dialogs/$(DEPDIR)/change_dialog.Po
 	-rm -f modes/dialogs/$(DEPDIR)/msg_dialog.Po
 	-rm -f modes/dialogs/$(DEPDIR)/sort_dialog.Po
+	-rm -f neovifm/$(DEPDIR)/core_probe.Po
+	-rm -f neovifm/$(DEPDIR)/pane_snapshot.Po
+	-rm -f neovifm/$(DEPDIR)/snapshot_json.Po
 	-rm -f ui/$(DEPDIR)/cancellation.Po
 	-rm -f ui/$(DEPDIR)/color_manager.Po
 	-rm -f ui/$(DEPDIR)/color_scheme.Po
@@ -3279,16 +3329,17 @@ uninstall-man: uninstall-man1
 
 .PHONY: CTAGS GTAGS TAGS all all-am am--depfiles check check-TESTS \
 	check-am clean clean-binPROGRAMS clean-generic clean-local \
-	cscopelist-am ctags ctags-am distclean distclean-compile \
-	distclean-generic distclean-local distclean-tags distdir dvi \
-	dvi-am html html-am info info-am install install-am \
-	install-binPROGRAMS install-data install-data-am \
-	install-dist_bashcomplDATA install-dist_binSCRIPTS \
-	install-dist_desktopappDATA install-dist_desktoppixDATA \
-	install-dist_docsDATA install-dist_fishcomplDATA \
-	install-dist_global_colors_DATA install-dist_hicolor128DATA \
-	install-dist_hicolorsvgDATA install-dist_pkgdataDATA \
-	install-dist_pkgdataSCRIPTS install-dist_sample_colors_DATA \
+	clean-noinstPROGRAMS cscopelist-am ctags ctags-am distclean \
+	distclean-compile distclean-generic distclean-local \
+	distclean-tags distdir dvi dvi-am html html-am info info-am \
+	install install-am install-binPROGRAMS install-data \
+	install-data-am install-dist_bashcomplDATA \
+	install-dist_binSCRIPTS install-dist_desktopappDATA \
+	install-dist_desktoppixDATA install-dist_docsDATA \
+	install-dist_fishcomplDATA install-dist_global_colors_DATA \
+	install-dist_hicolor128DATA install-dist_hicolorsvgDATA \
+	install-dist_pkgdataDATA install-dist_pkgdataSCRIPTS \
+	install-dist_sample_colors_DATA \
 	install-dist_vim_autoload_vifm_DATA install-dist_vim_doc_DATA \
 	install-dist_vim_ftdetect_DATA install-dist_vim_ftplugin_DATA \
 	install-dist_vim_plugin_DATA install-dist_vim_syntax_DATA \

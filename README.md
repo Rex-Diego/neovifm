@@ -1,163 +1,80 @@
-# Vifm – Vim-like file manager
+# NeoVifm
 
-<img align="left" src="data/graphics/vifm.svg"/>
+NeoVifm 是一款正在建设中的终端文件工作台，以 Vifm 的 Vim 语义、双栏工作流和成熟文件操作为基础，吸收 btop 的高信息密度 TUI、OpenCode 的会话与命令工作流、Yazi 的异步与预览体系，以及 lsd 的结构化目录表达。
 
-[![][AA]][A]  [![][FF]][F]  [![][UU]][U]  [![][SS]][S]
+本项目是独立社区 fork，与 Vifm、btop、OpenCode、Yazi、lsd 的维护团队没有隶属或官方合作关系。
 
-Vifm is a curses based Vim-like file manager extended with some useful
-ideas from mutt.  If you use Vim, Vifm gives you complete keyboard control
-over your files without having to learn a new set of commands.  It goes not
-just about Vim-like keybindings, but also about modes, options, registers,
-commands and other things you might already like in Vim.
+## 当前状态
 
-Just like Vim, Vifm tries to adhere to the Unix philosophy.  So instead of
-working solutions which are set in stone user is provided with a set of
-means for customization of Vifm to one's likings.  Though builtin
-functionality should be enough for most of use cases.
+NeoVifm 处于 Hybrid M0 原型阶段，尚未发布可安装版本，也不应通过系统包管理器安装 `vifm` 来替代本项目。
 
-_Version 0.15.  This file last updated on 9 February 2026._
+- 当前代码基线：Vifm 0.15 开发版。
+- 经典二进制、配置目录和 Lua API 仍使用 `vifm`，用于保持兼容。
+- 已加入实验性 `neovifm-core-probe`：无 ncurses、无用户配置、只读输出目录快照。
+- 已加入 `clients/tui`：TypeScript/Bun/OpenTUI/SolidJS 客户端，通过版本化 JSONL 协议消费 C core 快照。
+- 当前原型仅浏览和展示，不执行 copy/move/delete，不替换经典 Vifm 客户端。
+- 架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol v0](protocol/README.md)。
 
-## Resources and Contacts ##
+## 产品方向
 
-| Usage   | Link
-| :---:   | :--:
-| Website | <https://vifm.info/>
-| Wiki    | <https://wiki.vifm.info/>
-| Q & A   | <https://q2a.vifm.info/>
+- **Vifm**：Vim 模式、映射、命令、寄存器、双栏、文件操作、undo 和 Lua。
+- **btop**：紧凑、清晰、自适应的终端信息设计。
+- **OpenCode**：任务/会话生命周期、统一命令入口、事件流和权限边界。
+- **Yazi**：非阻塞任务、可取消预览、预加载、VFS 和终端图像适配。
+- **lsd**：图标、颜色、树和结构化文件字段。
 
-### Communication ###
+详细边界和阶段计划见 [NeoVifm 产品与架构基线](docs/NEOVIFM_ARCHITECTURE.md)。参与开发前请阅读 [项目协作约定](AGENTS.md) 和 [Vifm 的开发说明](HACKING.md)。
 
-| Reason                                           | Channel
-| :----:                                           | :-----:
-| Bugs & Feature Requests                          | [GitHub][bugs-gh], [SourceForge][bugs-sf] or via [email]
-| Preferred place for asking usage questions       | Posting on the [Q&A] site
-| Read-only and very low traffic news mailing list | [vifm-announce]
+## 原型运行
 
-### Other resources ###
+NeoVifm core 沿用 Vifm 的 Autotools 构建；新 TUI 使用 Bun 1.3 或更高版本。通用 C 依赖和平台说明见 [INSTALL](INSTALL)。macOS 还需要 `autoconf` 和 `automake`。
 
-| Usage                     | Where to find
-| :---:                     | :-----------:
-| Repositories              | [GitHub][repo-gh] and [SourceForge][repo-sf]
-| Vim Plugin                | [Repository][vim-plugin]
-| Colorschemes (maintained) | [Repository][colors] and [colorscheme-previews]
-| Configuration example     | [vifmrc][vifmrc] and a [piece of .bashrc][bashrc]
-| Devicons/favicons         | [[1]][devicons-1], [[2]][devicons-2]
-| vifmimg (image preview)   | [Repository][vifmimg] (using [Überzug] to display the images)
-| sixel image preview       | [Repository][sixel-preview] (for [Sixel]-capable terminals)
-| thu.sh (image preview)    | [Repository][thu.sh] (Sixel or Kitty)
-
-## Screenshots ##
-
-![Screenshot](data/graphics/screenshot.png)
-![Screenshot](data/graphics/screenshot2.png)
-
-More screenshots are [here][gallery].
-
-[gallery]: https://vifm.info/gallery
-
-## Getting Started ##
-
-A good idea for quick start might be skimming over [cheatsheet] for the main
-mode (that is Normal mode), reading some sections on basic usage on
-[the wiki][wiki-manual] and looking at sample configuration file (run
-`:edit $MYVIFMRC`).
-
-How well Vifm will serve you in part depends on how well you understand its
-Vim-like nature.  The following posts are highly recommended reads to help you
-improve with that:
- - [Seven habits of effective text editing][7-habits] by Bram Moolenar
- - [Your problem with Vim is that you don't grok vi][grok-vim] by Jim Dennis
-
-[7-habits]: https://www.moolenaar.net/habits.html
-[grok-vim]: https://stackoverflow.com/a/1220118/1535516
-
-## Installation ##
-
-Below are some suggestions on how Vifm can be installed in various
-environments using methods most native to them.
-
-| OS, distribution or package manager                  | Installation command
-| :----------------------------------                  | :-------------------
-| Alpine                                               | `apk add vifm`
-| Arch and derivatives (e.g., Manjaro)                 | `pacman -S vifm`
-| Debian and derivatives (e.g., Ubuntu)                | `apt install vifm`
-| Fedora and derivatives (e.g., Rocky, Qubes OS, RHEL) | `dnf install vifm` or `yum install vifm`
-| FreeBSD                                              | `pkg install vifm`
-| Gentoo                                               | `emerge vifm`
-| Guix                                                 | `guix package -i vifm`
-| Linuxbrew                                            | `brew install vifm`
-| NetBSD                                               | `pkg_add vifm` or `pkgin install vifm`
-| Nix                                                  | `nix-env -i vifm`
-| OpenBSD                                              | `pkg_add vifm`
-| OpenSUSE                                             | `zypper install vifm`
-| Slackware                                            | `sbopkg -i vifm`
-| macOS                                                | `brew install vifm` or `port install vifm`
-
-### AppImage ###
-
-In case of a Linux distribution which doesn't package Vifm or which offers an
-outdated version, an AppImage binary can be used to avoid compiling from
-sources.  This method of installation requires downloading an `.AppImage` file
-on a system younger than 10 years with a FUSE-capable kernel and marking that
-file as executable.
-
-As a convenience, here are commands that download AppImage binary for the latest
-release and save it as `~/.local/bin/vifm` (thanks to [@benelan], see
-[GitHub#975]).  **Note** that helpers like `vifm-pause` (used by `:!!`) aren't
-accessible in AppImage before v0.15.
-
-#### `curl` + `sed` ####
+构建 core probe：
 
 ```bash
-curl -Lso ~/.local/bin/vifm \
-    "https://github.com/vifm/vifm/releases/latest/download/vifm-v$(
-        curl -Ls "https://api.github.com/repos/vifm/vifm/releases/latest" |
-        sed -nE '/"tag_name":/s/.*"v*([^"]+)".*/\1/p'
-    )-x86_64.AppImage" && chmod +x ~/.local/bin/vifm
+scripts/fix-timestamps
+CFLAGS='-Wno-error=gnu-folding-constant' \
+  ./configure --enable-developer --without-glib
+make -C src neovifm-core-probe
 ```
 
-#### `wget` + `jq` ####
+启动新 TUI：
 
 ```bash
-wget -qO ~/.local/bin/vifm "$(
-        wget -qO - "https://api.github.com/repos/vifm/vifm/releases/latest" |
-        jq -r '.assets[] | select(.name|endswith(".AppImage")) | .browser_download_url'
-    )" && chmod +x ~/.local/bin/vifm
+cd clients/tui
+bun install --frozen-lockfile
+bun run dev ../..
 ```
 
-## License ##
+`q` 或 `Ctrl-C` 退出。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
 
-GNU General Public License, version 2 or later.
+## 测试
 
-[Q&A]: https://q2a.vifm.info/
-[email]: mailto:xaizek@posteo.net
-[vifm-announce]: https://lists.sourceforge.net/lists/listinfo/vifm-announce
-[vim-plugin]: https://github.com/vifm/vifm.vim
-[colors]: https://github.com/vifm/vifm-colors
-[colorscheme-previews]: https://vifm.info/colorschemes.shtml
-[devicons-1]: https://github.com/cirala/vifm_devicons
-[devicons-2]: https://github.com/yanzhang0219/dotfiles/tree/master/.config/vifm
-[vifmimg]: https://github.com/cirala/vifmimg
-[sixel-preview]: https://github.com/eylles/vifm-sixel-preview
-[thu.sh]: https://github.com/iambumblehead/thu.sh
-[Überzug]: https://github.com/jstkdng/ueberzugpp/
-[bugs-gh]: https://github.com/vifm/vifm/issues
-[bugs-sf]: https://sourceforge.net/p/vifm/_list/tickets
-[repo-gh]: https://github.com/vifm/vifm
-[repo-sf]: https://sourceforge.net/projects/vifm/
-[vifmrc]: https://github.com/xaizek/dotvifm/blob/master/vifmrc
-[bashrc]: https://github.com/xaizek/dotfiles/blob/404e0c5d94409a6a7342e52b84b4fff41e598597/bashrc#L538-L560
-[cheatsheet]: https://vifm.info/cheatsheets.shtml
-[wiki-manual]: https://wiki.vifm.info/index.php?title=Manual
-[Sixel]: https://www.arewesixelyet.com/
-[@benelan]: https://github.com/benelan
-[GitHub#975]: https://github.com/vifm/vifm/issues/975
+```bash
+env -u VIFM -u MYVIFMRC make -C tests neovifm_snapshot
 
-[AA]: https://ci.appveyor.com/api/projects/status/ywfhdev1l3so1f5e/branch/master?svg=true
-[A]: https://ci.appveyor.com/project/xaizek/vifm/branch/master
-[FF]: http://ci.vifm.info/badges/svg/master
-[F]: http://ci.vifm.info/
-[UU]: http://cov.vifm.info/badges/svg/master
-[U]: http://cov.vifm.info/branches/master
-[SS]: https://scan.coverity.com/projects/699/badge.svg
-[S]: https://scan.coverity.com/projects/vifm-vifm
+cd clients/tui
+bun run test:coverage
+bun run typecheck
+bun audit
+bun run test:integration
+
+cd ../..
+env -u VIFM -u MYVIFMRC make check
+```
+
+测试必须串行执行。现有 suite 会使用共享相对路径，`make -jN check` 存在竞态。
+
+## 上游同步
+
+- `origin`：NeoVifm fork。
+- `upstream`：只读的 [vifm/vifm](https://github.com/vifm/vifm)。
+- Vifm 的缺陷和 NeoVifm 的缺陷必须分别提交到对应项目；不要把 NeoVifm 功能请求提交给 Vifm 上游。
+
+## 许可证与来源
+
+Vifm 基线按 GNU GPL v2 或更高版本分发，详见 [COPYING](COPYING) 和现有源码头。
+
+NeoVifm 默认只借鉴其他项目的公开设计，不复制实现。任何第三方代码导入都必须先记录来源、许可证和 NOTICE 要求；特别是 Apache-2.0 代码不能在未完成兼容审查时直接合入。若未来导入 Apache-2.0 实现，组合发行需要采用兼容的 GPLv3 路径并保留相应声明。
+
+Vifm 的原作者和贡献者信息见 [AUTHORS](AUTHORS) 与 [THANKS](THANKS)。
