@@ -1,5 +1,6 @@
 #include <stic.h>
 
+#include <errno.h>
 #include <sys/stat.h>
 
 #include <stdint.h>
@@ -238,6 +239,53 @@ TEST(growing_entry_storage_keeps_all_entries)
 		remove_file(path);
 	}
 	remove_dir(CONTENT_DIR);
+}
+
+TEST(directory_above_m0_entry_limit_returns_structured_error)
+{
+	nv_pane_snapshot_t snapshot = {};
+	nv_snapshot_error_t error = {};
+	char path[256];
+
+	create_dir(CONTENT_DIR);
+	for(size_t i = 0U; i <= NV_PANE_SNAPSHOT_MAX_ENTRIES; ++i)
+	{
+		snprintf(path, sizeof(path), SANDBOX_PATH "/content/entry-%04zu", i);
+		create_file(path);
+	}
+
+	assert_failure(nv_pane_snapshot_build(CONTENT_DIR, &snapshot, &error));
+	assert_string_equal("snapshot-too-large", error.code);
+	assert_int_equal(0, snapshot.entry_count);
+
+	nv_pane_snapshot_free(&snapshot);
+	nv_snapshot_error_free(&error);
+	for(size_t i = 0U; i <= NV_PANE_SNAPSHOT_MAX_ENTRIES; ++i)
+	{
+		snprintf(path, sizeof(path), SANDBOX_PATH "/content/entry-%04zu", i);
+		remove_file(path);
+	}
+	remove_dir(CONTENT_DIR);
+}
+
+TEST(path_outside_protocol_field_limits_returns_structured_error)
+{
+	nv_pane_snapshot_t snapshot = {};
+	nv_snapshot_error_t error = {};
+	char path[NV_PANE_SNAPSHOT_MAX_HEX_BYTES/2U + 2U];
+
+	memset(path, 'a', sizeof(path) - 1U);
+	path[sizeof(path) - 1U] = '\0';
+
+	assert_failure(nv_pane_snapshot_build(path, &snapshot, &error));
+	assert_string_equal("snapshot-too-large", error.code);
+	assert_int_equal(E2BIG, error.os_error);
+	assert_false(error.retryable);
+	assert_null(error.path_display);
+	assert_null(error.path_bytes_hex);
+
+	nv_pane_snapshot_free(&snapshot);
+	nv_snapshot_error_free(&error);
 }
 
 TEST(empty_path_and_null_outputs_are_rejected)

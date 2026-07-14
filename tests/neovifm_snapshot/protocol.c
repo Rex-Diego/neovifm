@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <test-utils.h>
 
@@ -25,6 +26,78 @@ TEST(hello_record_declares_protocol_version)
 	nv_protocol_json_free(line);
 }
 
+TEST(workspace_record_is_atomic_and_uses_v1)
+{
+	const char *const left_dir = SANDBOX_PATH "/workspace-left";
+	const char *const right_dir = SANDBOX_PATH "/workspace-right";
+	nv_pane_snapshot_t left = {};
+	nv_pane_snapshot_t right = {};
+	nv_snapshot_error_t error = {};
+	create_dir(left_dir);
+	create_dir(right_dir);
+	make_file(SANDBOX_PATH "/workspace-left/left", "left");
+	make_file(SANDBOX_PATH "/workspace-right/right", "right");
+
+	assert_success(nv_pane_snapshot_build(left_dir, &left, &error));
+	assert_success(nv_pane_snapshot_build(right_dir, &right, &error));
+	char *line = NULL;
+	assert_success(nv_protocol_workspace_snapshot_json(&left, &right, "right",
+			1U, &line));
+	JSON_Value *value = json_parse_string(line);
+	assert_non_null(value);
+	JSON_Object *const root = json_object(value);
+	assert_int_equal(1, json_object_get_number(root, "version"));
+	assert_string_equal("workspace-snapshot", json_object_get_string(root, "type"));
+	JSON_Object *const payload = json_object_get_object(root, "payload");
+	assert_string_equal("right", json_object_get_string(payload, "active_pane"));
+	assert_string_equal(left_dir, json_object_get_string(
+			json_object_get_object(payload, "left"), "cwd_display"));
+	assert_string_equal(right_dir, json_object_get_string(
+			json_object_get_object(payload, "right"), "cwd_display"));
+
+	json_value_free(value);
+	nv_protocol_json_free(line);
+	nv_pane_snapshot_free(&left);
+	nv_pane_snapshot_free(&right);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/workspace-left/left");
+	remove_file(SANDBOX_PATH "/workspace-right/right");
+	remove_dir(left_dir);
+	remove_dir(right_dir);
+}
+
+TEST(workspace_record_rejects_combined_entry_limit_as_too_large)
+{
+	nv_pane_snapshot_t left = {
+		.cwd_display = "/left",
+		.cwd_bytes_hex = "2f6c656674",
+		.entry_count = 2049U,
+	};
+	nv_pane_snapshot_t right = {
+		.cwd_display = "/right",
+		.cwd_bytes_hex = "2f7269676874",
+		.entry_count = 2048U,
+	};
+	char *line = NULL;
+	assert_int_equal(NV_PROTOCOL_JSON_TOO_LARGE,
+			nv_protocol_workspace_snapshot_json(&left, &right, "left", 1U, &line));
+	assert_null(line);
+}
+
+TEST(snapshot_record_rejects_invalid_cursor_before_serialization)
+{
+	nv_pane_snapshot_t snapshot = {
+		.cwd_display = "/tmp",
+		.cwd_bytes_hex = "2f746d70",
+		.cursor = 0,
+		.entry_count = 0U,
+	};
+	char *line = NULL;
+	assert_int_equal(NV_PROTOCOL_JSON_ERROR,
+			nv_protocol_snapshot_json(&snapshot, 1U, &line));
+	assert_null(line);
+}
+
 TEST(snapshot_record_uses_strings_for_wide_numbers)
 {
 	const char *const dir = SANDBOX_PATH "/protocol";
@@ -34,7 +107,8 @@ TEST(snapshot_record_uses_strings_for_wide_numbers)
 	make_file(SANDBOX_PATH "/protocol/file", "abc");
 
 	assert_success(nv_pane_snapshot_build(dir, &snapshot, &error));
-	char *line = nv_protocol_snapshot_json(&snapshot, 1U);
+	char *line = NULL;
+	assert_success(nv_protocol_snapshot_json(&snapshot, 1U, &line));
 	assert_non_null(line);
 
 	JSON_Value *value = json_parse_string(line);
@@ -109,7 +183,8 @@ TEST(snapshot_record_serializes_all_entry_kinds_and_stat_errors)
 		.entry_count = sizeof(entries)/sizeof(entries[0]),
 		.entries = entries,
 	};
-	char *line = nv_protocol_snapshot_json(&snapshot, 1U);
+	char *line = NULL;
+	assert_success(nv_protocol_snapshot_json(&snapshot, 1U, &line));
 	assert_non_null(line);
 
 	JSON_Value *value = json_parse_string(line);
@@ -129,6 +204,48 @@ TEST(snapshot_record_serializes_all_entry_kinds_and_stat_errors)
 
 	json_value_free(value);
 	nv_protocol_json_free(line);
+}
+
+TEST(snapshot_record_larger_than_m0_byte_limit_is_rejected_before_serialization)
+{
+	char *const display = malloc(NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES + 1U);
+	char *const hex = malloc(NV_PANE_SNAPSHOT_MAX_HEX_BYTES + 1U);
+	const size_t entry_count = 44U;
+	nv_pane_entry_t *const entries = calloc(entry_count, sizeof(*entries));
+	assert_non_null(display);
+	assert_non_null(hex);
+	assert_non_null(entries);
+
+	memset(display, 'd', NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES);
+	display[NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES] = '\0';
+	memset(hex, 'a', NV_PANE_SNAPSHOT_MAX_HEX_BYTES);
+	hex[NV_PANE_SNAPSHOT_MAX_HEX_BYTES] = '\0';
+	for(size_t i = 0U; i < entry_count; ++i)
+	{
+		entries[i] = (nv_pane_entry_t){
+			.name_display = display,
+			.name_bytes_hex = hex,
+			.path_display = display,
+			.path_bytes_hex = hex,
+			.kind = NV_ENTRY_FILE,
+		};
+	}
+
+	nv_pane_snapshot_t snapshot = {
+		.cwd_display = display,
+		.cwd_bytes_hex = hex,
+		.cursor = 0,
+		.entry_count = entry_count,
+		.entries = entries,
+	};
+	char *line = NULL;
+	assert_int_equal(NV_PROTOCOL_JSON_TOO_LARGE,
+			nv_protocol_snapshot_json(&snapshot, 1U, &line));
+	assert_null(line);
+
+	free(entries);
+	free(hex);
+	free(display);
 }
 
 TEST(error_record_includes_os_error_and_path_identity)
@@ -158,7 +275,10 @@ TEST(error_record_includes_os_error_and_path_identity)
 
 TEST(null_protocol_models_are_rejected)
 {
-	assert_null(nv_protocol_snapshot_json(NULL, 1U));
+	char *line = NULL;
+	assert_int_equal(NV_PROTOCOL_JSON_ERROR,
+			nv_protocol_snapshot_json(NULL, 1U, &line));
+	assert_null(line);
 	assert_null(nv_protocol_error_json(NULL, 1U));
 }
 

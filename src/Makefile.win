@@ -104,10 +104,22 @@ vifm_SOURCES := $(cfg) $(compat) $(engine) $(int) $(io) $(lua) $(menus) \
 vifm_OBJECTS := $(vifm_SOURCES:.c=.o)
 vifm_EXECUTABLE := vifm.exe
 
-DIRS := $(sort $(dir $(vifm_OBJECTS)))
+neovifm_core_probe_SOURCES := neovifm/core_probe.c neovifm/pane_snapshot.c \
+	neovifm/workspace_session.c neovifm/snapshot_json.c compat/neovifm_fs.c compat/reallocarray.c \
+	utils/parson.c utils/utf8.c utils/utf8proc.c
+neovifm_core_probe_OBJECTS := $(neovifm_core_probe_SOURCES:.c=.o)
+neovifm_core_probe_EXECUTABLE := neovifm-core-probe.exe
+
+neovifm_core_session_SOURCES := neovifm/core_session.c neovifm/pane_snapshot.c \
+	neovifm/workspace_session.c neovifm/snapshot_json.c compat/neovifm_fs.c compat/reallocarray.c \
+	utils/parson.c utils/utf8.c utils/utf8proc.c
+neovifm_core_session_OBJECTS := $(neovifm_core_session_SOURCES:.c=.o)
+neovifm_core_session_EXECUTABLE := neovifm-core-session.exe
+
+DIRS := $(sort $(dir $(vifm_OBJECTS) $(neovifm_core_probe_OBJECTS) $(neovifm_core_session_OBJECTS)))
 
 # determine list of output directories that don't exist at the moment
-out_dirs := $(sort $(dir $(vifm_OBJECTS)))
+out_dirs := $(sort $(dir $(vifm_OBJECTS) $(neovifm_core_probe_OBJECTS) $(neovifm_core_session_OBJECTS)))
 out_dirs := $(filter-out $(wildcard $(out_dirs)) ./, $(out_dirs))
 out_dirs := $(addprefix $(abspath .)/,$(out_dirs))
 
@@ -117,9 +129,19 @@ win_helper_EXECUTABLE := win_helper.exe
 
 .PHONY: all clean check update_compile_info
 
-all: ../data/vifm-help.txt $(vifm_EXECUTABLE) $(win_helper_EXECUTABLE)
+all: ../data/vifm-help.txt $(vifm_EXECUTABLE) $(neovifm_core_probe_EXECUTABLE) $(neovifm_core_session_EXECUTABLE) $(win_helper_EXECUTABLE)
 
 $(vifm_EXECUTABLE): $(vifm_OBJECTS) | ../build-aux/config.h
+	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+ifeq ($(RELEASE),1)
+	$(STRIP) -S --strip-unneeded $@
+endif
+$(neovifm_core_probe_EXECUTABLE): $(neovifm_core_probe_OBJECTS) | ../build-aux/config.h
+	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+ifeq ($(RELEASE),1)
+	$(STRIP) -S --strip-unneeded $@
+endif
+$(neovifm_core_session_EXECUTABLE): $(neovifm_core_session_OBJECTS) | ../build-aux/config.h
 	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
 ifeq ($(RELEASE),1)
 	$(STRIP) -S --strip-unneeded $@
@@ -195,7 +217,7 @@ $(out_dirs) $(abspath ../data/):
 	mkdir -p $@
 
 # only builds tests without running them
-tests: | ../build-aux/config.h $(vifm_EXECUTABLE)
+tests: | ../build-aux/config.h $(vifm_EXECUTABLE) $(neovifm_core_probe_EXECUTABLE)
 	mkdir -p "$(abspath ../tests)"
 	+make -C $(src_dir)/../tests/ B='$(abspath ../tests)/' CC='$(CC)' \
 	     TEST_RUN_PREFIX='$(TEST_RUN_PREFIX)' build

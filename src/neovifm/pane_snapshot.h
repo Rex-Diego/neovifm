@@ -13,6 +13,12 @@
 #include <stddef.h> /* size_t */
 #include <stdint.h> /* int64_t uint32_t uint64_t */
 
+#define NV_PROTOCOL_MAX_RECORD_BYTES (4U*1024U*1024U)
+#define NV_PROTOCOL_MAX_STREAM_BYTES (8U*1024U*1024U)
+#define NV_PANE_SNAPSHOT_MAX_ENTRIES 4096U
+#define NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES (16U*1024U)
+#define NV_PANE_SNAPSHOT_MAX_HEX_BYTES (32U*1024U)
+
 typedef enum
 {
 	NV_ENTRY_DIRECTORY,

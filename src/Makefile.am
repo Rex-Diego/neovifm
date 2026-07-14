@@ -52,12 +52,23 @@ nodist_pkgdata_DATA = ../data/vifm-help.txt
 
 bin_PROGRAMS = vifm
 
-noinst_PROGRAMS = neovifm-core-probe
+noinst_PROGRAMS = neovifm-core-probe neovifm-core-session
 
 neovifm_core_probe_SOURCES = \
 	neovifm/core_probe.c \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/workspace_session.c neovifm/workspace_session.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
+	compat/neovifm_fs.c compat/neovifm_fs.h \
+	utils/parson.c utils/parson.h \
+	utils/utf8proc.c utils/utf8proc.h utils/utf8proc_data.inc
+
+neovifm_core_session_SOURCES = \
+	neovifm/core_session.c \
+	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/snapshot_json.c neovifm/snapshot_json.h \
+	compat/neovifm_fs.c compat/neovifm_fs.h \
 	utils/parson.c utils/parson.h \
 	utils/utf8proc.c utils/utf8proc.h utils/utf8proc_data.inc
 
@@ -276,6 +287,9 @@ vifm_SOURCES = \
 	ui/statusline.c ui/statusline.h \
 	ui/tabs.c ui/tabs.h \
 	ui/ui.c ui/ui.h \
+	neovifm/classic_pane_adapter.c neovifm/classic_pane_adapter.h \
+	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	compat/neovifm_fs.c compat/neovifm_fs.h \
 	\
 	utils/cancellation.c utils/cancellation.h \
 	utils/darray.h \

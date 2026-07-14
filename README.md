@@ -43,10 +43,10 @@ make -C src neovifm-core-probe
 ```bash
 cd clients/tui
 bun install --frozen-lockfile
-bun run dev ../..
+bun run dev ../.. /tmp
 ```
 
-`q` 或 `Ctrl-C` 退出。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
+前两个路径参数分别是左、右 pane；省略右路径时会复制左路径。`q` 或 `Ctrl-C` 退出，`Tab` 切换当前 pane。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
 
 ## 测试
 

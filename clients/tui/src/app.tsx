@@ -1,7 +1,13 @@
 import { For } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 
-import type { EntryKind, SnapshotEntry, SnapshotPayload } from "./protocol.js"
+import type {
+  EntryKind,
+  PaneId,
+  SnapshotPayload,
+  WorkspaceSnapshotPayload,
+} from "./protocol.js"
+import type { CoreSessionCommand } from "./core-client.js"
 
 const COLORS = {
   background: "#101418",
@@ -16,8 +22,11 @@ const COLORS = {
 } as const
 
 export interface AppProps {
-  readonly snapshot?: SnapshotPayload
+  readonly workspace?: WorkspaceSnapshotPayload
   readonly error?: string
+  readonly loading?: boolean
+  readonly onCancel?: () => void
+  readonly onCommand?: (command: CoreSessionCommand) => void
 }
 
 function entryMarker(kind: EntryKind): string {
@@ -40,11 +49,11 @@ function entryColor(kind: EntryKind): string {
   return COLORS.text
 }
 
-function selectedEntry(snapshot: SnapshotPayload): SnapshotEntry | undefined {
-  return snapshot.cursor < 0 ? undefined : snapshot.entries[snapshot.cursor]
+function selectedCount(snapshot: SnapshotPayload): number {
+  return snapshot.entries.filter((entry) => entry.selected).length
 }
 
-function EntryList(props: { readonly snapshot: SnapshotPayload; readonly wide: boolean }) {
+function EntryList(props: { readonly snapshot: SnapshotPayload; readonly compact: boolean }) {
   return (
     <scrollbox flexGrow={1} width="100%" backgroundColor={COLORS.panel}>
       <For each={props.snapshot.entries}>
@@ -55,7 +64,7 @@ function EntryList(props: { readonly snapshot: SnapshotPayload; readonly wide: b
             </text>
             <text width={4} fg={entryColor(entry.kind)}>{entryMarker(entry.kind)}</text>
             <text flexGrow={1} fg={entryColor(entry.kind)} truncate>{entry.name_display}</text>
-            {props.wide ? <text width={14} fg={COLORS.muted}>{entry.size_bytes} B</text> : null}
+            {props.compact ? null : <text width={12} fg={COLORS.muted}>{entry.size_bytes} B</text>}
           </box>
         )}
       </For>
@@ -63,72 +72,62 @@ function EntryList(props: { readonly snapshot: SnapshotPayload; readonly wide: b
   )
 }
 
-function Details(props: { readonly entry?: SnapshotEntry }) {
+function Pane(props: {
+  readonly pane: PaneId
+  readonly snapshot: SnapshotPayload
+  readonly active: boolean
+  readonly compact: boolean
+}) {
+  const label = props.pane.toUpperCase()
   return (
     <box
-      width="34%"
+      flexGrow={1}
       height="100%"
       flexDirection="column"
       border={true}
       borderStyle="single"
-      borderColor={COLORS.border}
+      borderColor={props.active ? COLORS.accent : COLORS.border}
       backgroundColor={COLORS.panel}
       paddingX={1}
-      title="DETAILS"
-      titleColor={COLORS.accent}
+      title={`${label}${props.active ? " ACTIVE" : ""} ${props.snapshot.cwd_display}`}
+      titleColor={props.active ? COLORS.accent : COLORS.directory}
     >
-      {props.entry === undefined ? (
-        <text fg={COLORS.muted}>No active entry</text>
-      ) : (
-        <box flexDirection="column" gap={1}>
-          <text fg={COLORS.text} wrapMode="word">{props.entry.name_display}</text>
-          <text fg={COLORS.muted}>Kind  {props.entry.kind}</text>
-          <text fg={COLORS.muted}>Size  {props.entry.size_bytes} B</text>
-          <text fg={COLORS.muted} wrapMode="word">Path  {props.entry.path_display}</text>
-        </box>
-      )}
+      <EntryList snapshot={props.snapshot} compact={props.compact} />
     </box>
   )
 }
 
-function Workspace(props: { readonly snapshot: SnapshotPayload; readonly wide: boolean }) {
-  const activeEntry = () => selectedEntry(props.snapshot)
+function Workspace(props: { readonly workspace: WorkspaceSnapshotPayload; readonly wide: boolean }) {
   return (
-    <box flexGrow={1} width="100%" flexDirection={props.wide ? "row" : "column"} gap={1}>
-      <box
-        flexGrow={1}
-        height="100%"
-        flexDirection="column"
-        border={true}
-        borderStyle="single"
-        borderColor={COLORS.border}
-        backgroundColor={COLORS.panel}
-        paddingX={1}
-        title={props.snapshot.cwd_display}
-        titleColor={COLORS.directory}
-      >
-        <EntryList snapshot={props.snapshot} wide={props.wide} />
-      </box>
-      {props.wide ? <Details entry={activeEntry()} /> : null}
+    <box flexGrow={1} width="100%" flexDirection="row" gap={1}>
+      {props.wide ? (
+        <>
+          <Pane pane="left" snapshot={props.workspace.left} active={props.workspace.active_pane === "left"} compact={false} />
+          <Pane pane="right" snapshot={props.workspace.right} active={props.workspace.active_pane === "right"} compact={false} />
+        </>
+      ) : (
+        props.workspace.active_pane === "left"
+          ? <Pane pane="left" snapshot={props.workspace.left} active={true} compact={true} />
+          : <Pane pane="right" snapshot={props.workspace.right} active={true} compact={true} />
+      )}
     </box>
   )
 }
 
 function ErrorPanel(props: { readonly message: string }) {
   return (
-    <box
-      flexGrow={1}
-      width="100%"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-      border={true}
-      borderStyle="single"
-      borderColor={COLORS.error}
-      backgroundColor={COLORS.panel}
-    >
+    <box flexGrow={1} width="100%" flexDirection="column" justifyContent="center" alignItems="center" border={true} borderStyle="single" borderColor={COLORS.error} backgroundColor={COLORS.panel}>
       <text fg={COLORS.error}>CORE ERROR</text>
       <text fg={COLORS.text} wrapMode="word">{props.message}</text>
+    </box>
+  )
+}
+
+function LoadingPanel() {
+  return (
+    <box flexGrow={1} width="100%" flexDirection="column" justifyContent="center" alignItems="center" border={true} borderStyle="single" borderColor={COLORS.border} backgroundColor={COLORS.panel}>
+      <text fg={COLORS.accent}>CONNECTING TO CORE</text>
+      <text fg={COLORS.muted}>Press q to cancel</text>
     </box>
   )
 }
@@ -140,33 +139,42 @@ export function App(props: AppProps) {
 
   useKeyboard((key) => {
     if (key.name === "q" || (key.ctrl && key.name === "c")) {
+      props.onCancel?.()
       renderer.destroy()
+      return
     }
+    if (props.workspace === undefined || props.onCommand === undefined) return
+    const active = props.workspace.active_pane
+    if (key.name === "tab") props.onCommand({ action: "focus", pane: active === "left" ? "right" : "left" })
+    else if (key.name === "up" || key.name === "k") props.onCommand({ action: "move", delta: -1 })
+    else if (key.name === "down" || key.name === "j") props.onCommand({ action: "move", delta: 1 })
+    else if (key.name === "return" || key.name === "l") props.onCommand({ action: "enter" })
+    else if (key.name === "backspace" || key.name === "h") props.onCommand({ action: "parent" })
+    else if (key.name === "space") props.onCommand({ action: "toggle-selection" })
+    else if (key.name === "r") props.onCommand({ action: "refresh" })
   })
 
+  const visibleEntries = () => {
+    if (props.workspace === undefined) return 0
+    return props.workspace.left.entry_count + props.workspace.right.entry_count
+  }
+  const visibleSelections = () => {
+    if (props.workspace === undefined) return 0
+    return selectedCount(props.workspace.left) + selectedCount(props.workspace.right)
+  }
+
   return (
-    <box
-      width="100%"
-      height="100%"
-      flexDirection="column"
-      backgroundColor={COLORS.background}
-      padding={1}
-      gap={1}
-    >
+    <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.background} padding={1} gap={1}>
       <box width="100%" height={1} flexDirection="row">
         <text flexGrow={1} fg={COLORS.accent}>NeoVifm</text>
         <text fg={COLORS.muted}>{dimensions().width}x{dimensions().height}</text>
       </box>
-      {props.error !== undefined ? (
-        <ErrorPanel message={props.error} />
-      ) : props.snapshot !== undefined ? (
-        <Workspace snapshot={props.snapshot} wide={wide()} />
-      ) : (
-        <ErrorPanel message="Core returned no snapshot" />
-      )}
+      {props.error !== undefined ? <ErrorPanel message={props.error} /> : props.workspace !== undefined ? (
+        <Workspace workspace={props.workspace} wide={wide()} />
+      ) : props.loading ? <LoadingPanel /> : <ErrorPanel message="Core returned no workspace" />}
       <box width="100%" height={1} flexDirection="row">
-        <text flexGrow={1} fg={COLORS.muted}>READ ONLY</text>
-        <text fg={COLORS.muted}>{props.snapshot?.entry_count ?? 0} entries</text>
+        <text flexGrow={1} fg={COLORS.muted}>READ ONLY · Tab pane · r refresh · q quit</text>
+        <text fg={COLORS.muted}>{props.workspace?.active_pane.toUpperCase() ?? "LEFT"} {visibleEntries()} entries · {visibleSelections()} selected</text>
       </box>
     </box>
   )

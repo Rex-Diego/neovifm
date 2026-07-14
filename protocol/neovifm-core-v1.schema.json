@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neovifm.dev/protocol/neovifm-core-v1.schema.json",
+  "title": "NeoVifm Core Protocol v1",
+  "oneOf": [
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/workspaceSnapshot" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["protocol", "version", "type", "sequence", "payload"],
+      "properties": {
+        "protocol": { "const": "neovifm-core" },
+        "version": { "const": 1 },
+        "type": { "type": "string" },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "payload": { "type": "object" }
+      }
+    },
+    "helloPayload": {
+      "type": "object",
+      "required": ["implementation", "capabilities"],
+      "properties": {
+        "implementation": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "paneSnapshot": {
+      "$ref": "neovifm-core-v0.schema.json#/$defs/snapshot/allOf/1/properties/payload"
+    },
+    "errorPayload": {
+      "$ref": "neovifm-core-v0.schema.json#/$defs/error/allOf/1/properties/payload"
+    },
+    "hello": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "hello" },
+            "payload": { "$ref": "#/$defs/helloPayload" }
+          }
+        }
+      ]
+    },
+    "workspaceSnapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "workspace-snapshot" },
+            "payload": {
+              "type": "object",
+              "required": ["active_pane", "left", "right"],
+              "properties": {
+                "active_pane": { "enum": ["left", "right"] },
+                "left": { "$ref": "#/$defs/paneSnapshot" },
+                "right": { "$ref": "#/$defs/paneSnapshot" }
+              },
+              "$comment": "left.entry_count + right.entry_count must not exceed 4096; C producer and TypeScript validator enforce this cross-pane limit."
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "error" },
+            "payload": { "$ref": "#/$defs/errorPayload" }
+          }
+        }
+      ]
+    }
+  }
+}

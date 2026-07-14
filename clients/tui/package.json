@@ -6,7 +6,7 @@
     "dev": "bun run src/index.tsx",
     "test": "bun test ./test/",
     "test:coverage": "bun test ./test/ --coverage --coverage-reporter=text",
-    "test:integration": "NEOVIFM_CORE_PROBE=../../src/neovifm-core-probe bun test ./integration/",
+    "test:integration": "NEOVIFM_CORE_PROBE=../../src/neovifm-core-probe NEOVIFM_CORE_SESSION=../../src/neovifm-core-session bun test ./integration/",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {

@@ -1,12 +1,27 @@
 export const PROTOCOL_NAME = "neovifm-core" as const
 export const PROTOCOL_VERSION = 0 as const
+export const WORKSPACE_PROTOCOL_VERSION = 1 as const
+export const SESSION_PROTOCOL_VERSION = 2 as const
 
 const DECIMAL_PATTERN = /^-?[0-9]+$/
 const UNSIGNED_DECIMAL_PATTERN = /^[0-9]+$/
 const HEX_PATTERN = /^(?:[0-9a-f]{2})*$/
 const OCTAL_PATTERN = /^[0-7]+$/
 const ATTRIBUTES_PATTERN = /^[0-9a-f]+$/
-const DEFAULT_MAX_RECORD_CHARS = 64 * 1024 * 1024
+
+export const MAX_PROTOCOL_RECORD_BYTES = 4 * 1024 * 1024
+export const MAX_PROTOCOL_TOTAL_BYTES = 8 * 1024 * 1024
+export const MAX_PROTOCOL_RECORDS = 2
+export const MAX_SNAPSHOT_ENTRIES = 4096
+export const MAX_WORKSPACE_ENTRIES = 4096
+
+const MAX_DISPLAY_TEXT_BYTES = 16 * 1024
+const MAX_HEX_TEXT_BYTES = 32 * 1024
+const MAX_DECIMAL_TEXT_BYTES = 32
+const MAX_CAPABILITIES = 64
+const MAX_CAPABILITY_BYTES = 256
+const MAX_ERROR_CODE_BYTES = 128
+const UTF8_ENCODER = new TextEncoder()
 
 export type EntryKind =
   | "directory"
@@ -63,18 +78,68 @@ export interface ErrorPayload {
   readonly os_error?: number
 }
 
-interface Envelope<Type extends string, Payload> {
+export type PaneId = "left" | "right"
+export type SessionSnapshotTrigger = "initial" | "command" | "watch"
+
+export interface WorkspaceSnapshotPayload {
+  readonly active_pane: PaneId
+  readonly left: SnapshotPayload
+  readonly right: SnapshotPayload
+}
+
+export interface SessionWorkspaceSnapshotPayload extends WorkspaceSnapshotPayload {
+  readonly command_sequence: number
+  readonly trigger: SessionSnapshotTrigger
+}
+
+export interface CommandErrorPayload extends ErrorPayload {
+  readonly command_sequence: number
+}
+
+interface Envelope<Type extends string, Payload, Version extends number> {
   readonly protocol: typeof PROTOCOL_NAME
-  readonly version: typeof PROTOCOL_VERSION
+  readonly version: Version
   readonly type: Type
   readonly sequence: number
   readonly payload: Payload
 }
 
-export type HelloRecord = Envelope<"hello", HelloPayload>
-export type SnapshotRecord = Envelope<"snapshot", SnapshotPayload>
-export type ErrorRecord = Envelope<"error", ErrorPayload>
-export type ProtocolRecord = HelloRecord | SnapshotRecord | ErrorRecord
+export type HelloRecord = Envelope<"hello", HelloPayload, typeof PROTOCOL_VERSION>
+export type SnapshotRecord = Envelope<"snapshot", SnapshotPayload, typeof PROTOCOL_VERSION>
+export type V0ErrorRecord = Envelope<"error", ErrorPayload, typeof PROTOCOL_VERSION>
+export type WorkspaceHelloRecord = Envelope<"hello", HelloPayload, typeof WORKSPACE_PROTOCOL_VERSION>
+export type WorkspaceSnapshotRecord = Envelope<
+  "workspace-snapshot",
+  WorkspaceSnapshotPayload,
+  typeof WORKSPACE_PROTOCOL_VERSION
+>
+export type V1ErrorRecord = Envelope<"error", ErrorPayload, typeof WORKSPACE_PROTOCOL_VERSION>
+export type SessionHelloRecord = Envelope<"hello", HelloPayload, typeof SESSION_PROTOCOL_VERSION>
+export type SessionWorkspaceSnapshotRecord = Envelope<
+  "workspace-snapshot",
+  SessionWorkspaceSnapshotPayload,
+  typeof SESSION_PROTOCOL_VERSION
+>
+export type CommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof SESSION_PROTOCOL_VERSION>
+export type SessionErrorRecord = Envelope<"error", ErrorPayload, typeof SESSION_PROTOCOL_VERSION>
+export type ErrorRecord = V0ErrorRecord | V1ErrorRecord | SessionErrorRecord
+export type ProtocolRecord =
+  | HelloRecord
+  | SnapshotRecord
+  | V0ErrorRecord
+  | WorkspaceHelloRecord
+  | WorkspaceSnapshotRecord
+  | V1ErrorRecord
+  | SessionHelloRecord
+  | SessionWorkspaceSnapshotRecord
+  | CommandErrorRecord
+  | SessionErrorRecord
+
+export interface JsonlLimits {
+  readonly maximumRecordBytes?: number
+  readonly maximumTotalBytes?: number
+  readonly maximumRecords?: number
+}
 
 type UnknownObject = Readonly<Record<string, unknown>>
 
@@ -84,6 +149,14 @@ export class ProtocolValidationError extends Error {
 
 function invalid(path: string, expectation: string): never {
   throw new ProtocolValidationError(`${path} ${expectation}`)
+}
+
+function frozen<Value extends object>(value: Value): Value {
+  return Object.freeze(value) as Value
+}
+
+function textByteLength(value: string): number {
+  return UTF8_ENCODER.encode(value).byteLength
 }
 
 function objectValue(value: unknown, path: string): UnknownObject {
@@ -100,8 +173,26 @@ function stringValue(value: unknown, path: string, allowEmpty = true): string {
   return value
 }
 
-function patternString(value: unknown, path: string, pattern: RegExp): string {
-  const text = stringValue(value, path)
+function boundedString(
+  value: unknown,
+  path: string,
+  maximumBytes: number,
+  allowEmpty = true,
+): string {
+  const text = stringValue(value, path, allowEmpty)
+  if (textByteLength(text) > maximumBytes) {
+    return invalid(path, `must not exceed ${maximumBytes} UTF-8 bytes`)
+  }
+  return text
+}
+
+function patternString(
+  value: unknown,
+  path: string,
+  pattern: RegExp,
+  maximumBytes = MAX_HEX_TEXT_BYTES,
+): string {
+  const text = boundedString(value, path, maximumBytes)
   if (!pattern.test(text)) {
     return invalid(path, "has an invalid format")
   }
@@ -122,30 +213,68 @@ function booleanValue(value: unknown, path: string): boolean {
   return value
 }
 
-function optionalString(
+function isUnsafeDisplayCodePoint(codePoint: number): boolean {
+  return (
+    codePoint <= 0x1f
+    || codePoint === 0x7f
+    || (codePoint >= 0x80 && codePoint <= 0x9f)
+    || (codePoint >= 0xd800 && codePoint <= 0xdfff)
+    || codePoint === 0x061c
+    || codePoint === 0x200e
+    || codePoint === 0x200f
+    || (codePoint >= 0x2028 && codePoint <= 0x202e)
+    || (codePoint >= 0x2066 && codePoint <= 0x2069)
+  )
+}
+
+export function sanitizeDisplayText(text: string): string {
+  let display = ""
+  for (const character of text) {
+    const codePoint = character.codePointAt(0)
+    display += codePoint !== undefined && isUnsafeDisplayCodePoint(codePoint) ? "�" : character
+  }
+  return display
+}
+
+function displayString(value: unknown, path: string, allowEmpty = true): string {
+  const text = boundedString(value, path, MAX_DISPLAY_TEXT_BYTES, allowEmpty)
+  const sanitized = sanitizeDisplayText(text)
+  if (textByteLength(sanitized) > MAX_DISPLAY_TEXT_BYTES) {
+    return invalid(path, `must not exceed ${MAX_DISPLAY_TEXT_BYTES} UTF-8 bytes after sanitization`)
+  }
+  return sanitized
+}
+
+function optionalDisplayString(object: UnknownObject, key: string, path: string): string | undefined {
+  const value = object[key]
+  return value === undefined ? undefined : displayString(value, `${path}.${key}`)
+}
+
+function optionalPatternString(
   object: UnknownObject,
   key: string,
   path: string,
-  pattern?: RegExp,
+  pattern: RegExp,
+  maximumBytes = MAX_HEX_TEXT_BYTES,
 ): string | undefined {
   const value = object[key]
-  if (value === undefined) {
-    return undefined
-  }
-  return pattern === undefined
-    ? stringValue(value, `${path}.${key}`)
-    : patternString(value, `${path}.${key}`, pattern)
+  return value === undefined ? undefined : patternString(value, `${path}.${key}`, pattern, maximumBytes)
 }
 
 function parseStringArray(value: unknown, path: string): readonly string[] {
   if (!Array.isArray(value)) {
     return invalid(path, "must be an array")
   }
-  const result = value.map((item, index) => stringValue(item, `${path}[${index}]`, false))
+  if (value.length > MAX_CAPABILITIES) {
+    return invalid(path, `must not contain more than ${MAX_CAPABILITIES} values`)
+  }
+  const result = value.map((item, index) =>
+    boundedString(item, `${path}[${index}]`, MAX_CAPABILITY_BYTES, false),
+  )
   if (new Set(result).size !== result.length) {
     return invalid(path, "must contain unique values")
   }
-  return result
+  return frozen(result)
 }
 
 const ENTRY_KINDS: ReadonlySet<string> = new Set<EntryKind>([
@@ -173,98 +302,160 @@ function parseStatError(value: unknown, path: string): StatError | undefined {
     return undefined
   }
   const object = objectValue(value, path)
-  return {
+  return frozen({
     code: integerValue(object.code, `${path}.code`),
-    message: stringValue(object.message, `${path}.message`),
-  }
+    message: displayString(object.message, `${path}.message`),
+  })
 }
 
-function parseEntry(value: unknown, index: number): SnapshotEntry {
-  const path = `payload.entries[${index}]`
+function parseEntry(value: unknown, path: string): SnapshotEntry {
   const object = objectValue(value, path)
-  const inode = optionalString(object, "inode", path, DECIMAL_PATTERN)
-  const mode = optionalString(object, "mode_octal", path, OCTAL_PATTERN)
-  const attributes = optionalString(object, "attributes_hex", path, ATTRIBUTES_PATTERN)
+  const inode = optionalPatternString(object, "inode", path, DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const mode = optionalPatternString(object, "mode_octal", path, OCTAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const attributes = optionalPatternString(object, "attributes_hex", path, ATTRIBUTES_PATTERN)
   const statError = parseStatError(object.stat_error, `${path}.stat_error`)
 
-  return {
-    name_display: stringValue(object.name_display, `${path}.name_display`),
+  return frozen({
+    name_display: displayString(object.name_display, `${path}.name_display`),
     name_bytes_hex: patternString(object.name_bytes_hex, `${path}.name_bytes_hex`, HEX_PATTERN),
-    path_display: stringValue(object.path_display, `${path}.path_display`),
+    path_display: displayString(object.path_display, `${path}.path_display`),
     path_bytes_hex: patternString(object.path_bytes_hex, `${path}.path_bytes_hex`, HEX_PATTERN),
     kind: parseEntryKind(object.kind, `${path}.kind`),
     size_bytes: patternString(
       object.size_bytes,
       `${path}.size_bytes`,
       UNSIGNED_DECIMAL_PATTERN,
+      MAX_DECIMAL_TEXT_BYTES,
     ),
-    mtime_unix_ms: patternString(object.mtime_unix_ms, `${path}.mtime_unix_ms`, DECIMAL_PATTERN),
+    mtime_unix_ms: patternString(
+      object.mtime_unix_ms,
+      `${path}.mtime_unix_ms`,
+      DECIMAL_PATTERN,
+      MAX_DECIMAL_TEXT_BYTES,
+    ),
     ...(inode === undefined ? {} : { inode }),
     ...(mode === undefined ? {} : { mode_octal: mode }),
     ...(attributes === undefined ? {} : { attributes_hex: attributes }),
     selected: booleanValue(object.selected, `${path}.selected`),
     hidden: booleanValue(object.hidden, `${path}.hidden`),
     ...(statError === undefined ? {} : { stat_error: statError }),
-  }
+  })
 }
 
 function parseHelloPayload(value: unknown): HelloPayload {
   const payload = objectValue(value, "payload")
-  return {
-    implementation: stringValue(payload.implementation, "payload.implementation", false),
+  return frozen({
+    implementation: displayString(payload.implementation, "payload.implementation", false),
     capabilities: parseStringArray(payload.capabilities, "payload.capabilities"),
-  }
+  })
 }
 
-function parseSnapshotPayload(value: unknown): SnapshotPayload {
-  const payload = objectValue(value, "payload")
+function parseSnapshotPayload(value: unknown, path = "payload"): SnapshotPayload {
+  const payload = objectValue(value, path)
   if (!Array.isArray(payload.entries)) {
-    return invalid("payload.entries", "must be an array")
+    return invalid(`${path}.entries`, "must be an array")
   }
-  const entries = payload.entries.map(parseEntry)
-  const entryCount = integerValue(payload.entry_count, "payload.entry_count", 0)
-  if (entryCount !== entries.length) {
-    return invalid("payload.entry_count", "must match payload.entries.length")
+  if (payload.entries.length > MAX_SNAPSHOT_ENTRIES) {
+    return invalid(`${path}.entries`, `must not contain more than ${MAX_SNAPSHOT_ENTRIES} entries`)
   }
 
-  const cursor = integerValue(payload.cursor, "payload.cursor", -1)
+  const entryCount = integerValue(payload.entry_count, `${path}.entry_count`, 0)
+  if (entryCount > MAX_SNAPSHOT_ENTRIES) {
+    return invalid(`${path}.entry_count`, `must not exceed ${MAX_SNAPSHOT_ENTRIES}`)
+  }
+  if (entryCount !== payload.entries.length) {
+    return invalid(`${path}.entry_count`, "must match payload.entries.length")
+  }
+  const entries = frozen(payload.entries.map((entry, index) => parseEntry(entry, `${path}.entries[${index}]`)))
+
+  const cursor = integerValue(payload.cursor, `${path}.cursor`, -1)
   if (
     (entryCount === 0 && cursor !== -1)
     || (entryCount !== 0 && (cursor < 0 || cursor >= entryCount))
   ) {
-    return invalid("payload.cursor", "must identify an entry or be -1 for an empty snapshot")
+    return invalid(`${path}.cursor`, "must identify an entry or be -1 for an empty snapshot")
   }
 
-  return {
-    cwd_display: stringValue(payload.cwd_display, "payload.cwd_display"),
-    cwd_bytes_hex: patternString(payload.cwd_bytes_hex, "payload.cwd_bytes_hex", HEX_PATTERN),
+  return frozen({
+    cwd_display: displayString(payload.cwd_display, `${path}.cwd_display`),
+    cwd_bytes_hex: patternString(payload.cwd_bytes_hex, `${path}.cwd_bytes_hex`, HEX_PATTERN),
     generated_at_unix_ms: patternString(
       payload.generated_at_unix_ms,
-      "payload.generated_at_unix_ms",
+      `${path}.generated_at_unix_ms`,
       DECIMAL_PATTERN,
+      MAX_DECIMAL_TEXT_BYTES,
     ),
     cursor,
     entry_count: entryCount,
     entries,
+  })
+}
+
+function parsePaneId(value: unknown, path: string): PaneId {
+  const pane = stringValue(value, path)
+  if (pane !== "left" && pane !== "right") {
+    return invalid(path, "must be left or right")
   }
+  return pane
+}
+
+function parseSessionSnapshotTrigger(value: unknown, path: string): SessionSnapshotTrigger {
+  const trigger = stringValue(value, path)
+  if (trigger !== "initial" && trigger !== "command" && trigger !== "watch") {
+    return invalid(path, "must be initial, command, or watch")
+  }
+  return trigger
+}
+
+function parseWorkspaceSnapshotPayload(value: unknown): WorkspaceSnapshotPayload {
+  const payload = objectValue(value, "payload")
+  const left = parseSnapshotPayload(payload.left, "payload.left")
+  const right = parseSnapshotPayload(payload.right, "payload.right")
+  if (left.entry_count + right.entry_count > MAX_WORKSPACE_ENTRIES) {
+    return invalid("payload", `must not contain more than ${MAX_WORKSPACE_ENTRIES} combined entries`)
+  }
+  return frozen({
+    active_pane: parsePaneId(payload.active_pane, "payload.active_pane"),
+    left,
+    right,
+  })
+}
+
+function parseSessionWorkspaceSnapshotPayload(value: unknown): SessionWorkspaceSnapshotPayload {
+  const payload = objectValue(value, "payload")
+  const workspace = parseWorkspaceSnapshotPayload(payload)
+  return frozen({
+    ...workspace,
+    command_sequence: integerValue(payload.command_sequence, "payload.command_sequence", 0),
+    trigger: parseSessionSnapshotTrigger(payload.trigger, "payload.trigger"),
+  })
 }
 
 function parseErrorPayload(value: unknown): ErrorPayload {
   const payload = objectValue(value, "payload")
-  const pathDisplay = optionalString(payload, "path_display", "payload")
-  const pathBytes = optionalString(payload, "path_bytes_hex", "payload", HEX_PATTERN)
+  const pathDisplay = optionalDisplayString(payload, "path_display", "payload")
+  const pathBytes = optionalPatternString(payload, "path_bytes_hex", "payload", HEX_PATTERN)
   const osError = payload.os_error === undefined
     ? undefined
     : integerValue(payload.os_error, "payload.os_error")
 
-  return {
-    code: stringValue(payload.code, "payload.code", false),
-    message: stringValue(payload.message, "payload.message"),
+  return frozen({
+    code: boundedString(payload.code, "payload.code", MAX_ERROR_CODE_BYTES, false),
+    message: displayString(payload.message, "payload.message"),
     retryable: booleanValue(payload.retryable, "payload.retryable"),
     ...(pathDisplay === undefined ? {} : { path_display: pathDisplay }),
     ...(pathBytes === undefined ? {} : { path_bytes_hex: pathBytes }),
     ...(osError === undefined ? {} : { os_error: osError }),
-  }
+  })
+}
+
+function parseCommandErrorPayload(value: unknown): CommandErrorPayload {
+  const payload = objectValue(value, "payload")
+  const error = parseErrorPayload(payload)
+  return frozen({
+    ...error,
+    command_sequence: integerValue(payload.command_sequence, "payload.command_sequence", 1),
+  })
 }
 
 export function parseProtocolRecord(value: unknown): ProtocolRecord {
@@ -272,7 +463,7 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
   if (envelope.protocol !== PROTOCOL_NAME) {
     return invalid("record.protocol", `must equal ${PROTOCOL_NAME}`)
   }
-  if (envelope.version !== PROTOCOL_VERSION) {
+  if (envelope.version !== PROTOCOL_VERSION && envelope.version !== WORKSPACE_PROTOCOL_VERSION && envelope.version !== SESSION_PROTOCOL_VERSION) {
     throw new ProtocolValidationError(
       `Unsupported NeoVifm protocol version: ${String(envelope.version)}`,
     )
@@ -280,56 +471,209 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
 
   const sequence = integerValue(envelope.sequence, "record.sequence", 0)
   const type = stringValue(envelope.type, "record.type")
+  const version = envelope.version
+  if (version === SESSION_PROTOCOL_VERSION) {
+    switch (type) {
+      case "hello": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseHelloPayload(envelope.payload) })
+      case "workspace-snapshot": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseSessionWorkspaceSnapshotPayload(envelope.payload) })
+      case "command-error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseCommandErrorPayload(envelope.payload) })
+      case "error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseErrorPayload(envelope.payload) })
+      default: return invalid("record.type", `is unsupported for v2: ${type}`)
+    }
+  }
+  if (version === WORKSPACE_PROTOCOL_VERSION) {
+    switch (type) {
+      case "hello":
+        return frozen({
+          protocol: PROTOCOL_NAME,
+          version,
+          type,
+          sequence,
+          payload: parseHelloPayload(envelope.payload),
+        })
+      case "workspace-snapshot":
+        return frozen({
+          protocol: PROTOCOL_NAME,
+          version,
+          type,
+          sequence,
+          payload: parseWorkspaceSnapshotPayload(envelope.payload),
+        })
+      case "error":
+        return frozen({
+          protocol: PROTOCOL_NAME,
+          version,
+          type,
+          sequence,
+          payload: parseErrorPayload(envelope.payload),
+        })
+      default:
+        return invalid("record.type", `is unsupported for v1: ${type}`)
+    }
+  }
   switch (type) {
     case "hello":
-      return { protocol: PROTOCOL_NAME, version: PROTOCOL_VERSION, type, sequence, payload: parseHelloPayload(envelope.payload) }
+      return frozen({
+        protocol: PROTOCOL_NAME,
+        version: PROTOCOL_VERSION,
+        type,
+        sequence,
+        payload: parseHelloPayload(envelope.payload),
+      })
     case "snapshot":
-      return { protocol: PROTOCOL_NAME, version: PROTOCOL_VERSION, type, sequence, payload: parseSnapshotPayload(envelope.payload) }
+      return frozen({
+        protocol: PROTOCOL_NAME,
+        version: PROTOCOL_VERSION,
+        type,
+        sequence,
+        payload: parseSnapshotPayload(envelope.payload),
+      })
     case "error":
-      return { protocol: PROTOCOL_NAME, version: PROTOCOL_VERSION, type, sequence, payload: parseErrorPayload(envelope.payload) }
+      return frozen({
+        protocol: PROTOCOL_NAME,
+        version: PROTOCOL_VERSION,
+        type,
+        sequence,
+        payload: parseErrorPayload(envelope.payload),
+      })
     default:
       return invalid("record.type", `is unsupported: ${type}`)
   }
 }
 
-export class JsonlDecoder {
-  readonly #decoder = new TextDecoder("utf-8", { fatal: true })
-  readonly #maximumRecordChars: number
-  #buffer = ""
+function positiveLimit(
+  value: number | undefined,
+  name: string,
+  defaultValue: number,
+  maximum: number,
+): number {
+  const selected = value ?? defaultValue
+  if (!Number.isSafeInteger(selected) || selected <= 0 || selected > maximum) {
+    throw new RangeError(`${name} must be a positive safe integer no greater than ${maximum}`)
+  }
+  return selected
+}
 
-  constructor(maximumRecordChars = DEFAULT_MAX_RECORD_CHARS) {
-    if (!Number.isSafeInteger(maximumRecordChars) || maximumRecordChars <= 0) {
-      throw new RangeError("maximumRecordChars must be a positive safe integer")
+export class JsonlDecoder {
+  readonly #maximumRecordBytes: number
+  readonly #maximumTotalBytes: number
+  readonly #maximumRecords: number
+  #partialChunks: Uint8Array[] = []
+  #partialBytes = 0
+  #totalBytes = 0
+  #recordCount = 0
+
+  constructor(limits: JsonlLimits = {}) {
+    this.#maximumRecordBytes = positiveLimit(
+      limits.maximumRecordBytes,
+      "maximumRecordBytes",
+      MAX_PROTOCOL_RECORD_BYTES,
+      MAX_PROTOCOL_RECORD_BYTES,
+    )
+    this.#maximumTotalBytes = positiveLimit(
+      limits.maximumTotalBytes,
+      "maximumTotalBytes",
+      MAX_PROTOCOL_TOTAL_BYTES,
+      Number.MAX_SAFE_INTEGER,
+    )
+    this.#maximumRecords = positiveLimit(
+      limits.maximumRecords,
+      "maximumRecords",
+      MAX_PROTOCOL_RECORDS,
+      1_000_000,
+    )
+    if (this.#maximumRecordBytes > this.#maximumTotalBytes) {
+      throw new RangeError("maximumRecordBytes must not exceed maximumTotalBytes")
     }
-    this.#maximumRecordChars = maximumRecordChars
   }
 
   push(chunk: string | Uint8Array): readonly ProtocolRecord[] {
-    const text = typeof chunk === "string" ? chunk : this.#decoder.decode(chunk, { stream: true })
-    const lines = `${this.#buffer}${text}`.split("\n")
-    this.#buffer = lines.pop() ?? ""
-    this.#assertRecordSize(this.#buffer)
-    return lines.flatMap((line) => this.#parseLine(line))
+    const bytes = typeof chunk === "string" ? UTF8_ENCODER.encode(chunk) : chunk
+    this.#appendTotalBytes(bytes.byteLength)
+
+    const records: ProtocolRecord[] = []
+    let start = 0
+    for (let index = 0; index < bytes.byteLength; index += 1) {
+      if (bytes[index] !== 0x0a) {
+        continue
+      }
+
+      const segment = bytes.subarray(start, index)
+      records.push(this.#parseRecord(this.#consumeLine(segment)))
+      start = index + 1
+    }
+
+    if (start < bytes.byteLength) {
+      this.#appendPartial(bytes.subarray(start))
+    }
+    this.#assertRecordSize(this.#partialBytes)
+    return records
   }
 
   flush(): readonly ProtocolRecord[] {
-    const tail = this.#decoder.decode()
-    this.#buffer = `${this.#buffer}${tail}`
-    if (this.#buffer.trim().length !== 0) {
+    if (this.#partialBytes !== 0) {
       throw new ProtocolValidationError("Incomplete JSONL record at end of stream")
     }
-    this.#buffer = ""
     return []
   }
 
-  #parseLine(rawLine: string): readonly ProtocolRecord[] {
-    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine
-    if (line.trim().length === 0) {
-      return []
+  #appendTotalBytes(length: number): void {
+    if (length > this.#maximumTotalBytes - this.#totalBytes) {
+      throw new ProtocolValidationError(
+        `JSONL stream exceeds maximumTotalBytes of ${this.#maximumTotalBytes} bytes`,
+      )
     }
-    this.#assertRecordSize(line)
+    this.#totalBytes += length
+  }
+
+  #appendPartial(segment: Uint8Array): void {
+    this.#assertRecordSize(this.#partialBytes + segment.byteLength)
+    this.#partialChunks.push(segment)
+    this.#partialBytes += segment.byteLength
+  }
+
+  #consumeLine(segment: Uint8Array): Uint8Array {
+    const length = this.#partialBytes + segment.byteLength
+    this.#assertRecordSize(length)
+    const chunks = this.#partialChunks
+    this.#partialChunks = []
+    this.#partialBytes = 0
+
+    if (chunks.length === 0) {
+      return segment
+    }
+
+    const line = new Uint8Array(length)
+    let offset = 0
+    for (const chunk of chunks) {
+      line.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    line.set(segment, offset)
+    return line
+  }
+
+  #parseRecord(rawLine: Uint8Array): ProtocolRecord {
+    if (this.#recordCount >= this.#maximumRecords) {
+      throw new ProtocolValidationError(
+        `JSONL stream exceeds maximumRecords of ${this.#maximumRecords} records`,
+      )
+    }
+    this.#recordCount += 1
+    const line = rawLine.byteLength > 0 && rawLine[rawLine.byteLength - 1] === 0x0d
+      ? rawLine.subarray(0, rawLine.byteLength - 1)
+      : rawLine
+    let text: string
     try {
-      return [parseProtocolRecord(JSON.parse(line) as unknown)]
+      text = new TextDecoder("utf-8", { fatal: true }).decode(line)
+    } catch (error) {
+      throw new ProtocolValidationError("JSONL record is not valid UTF-8", { cause: error })
+    }
+    if (text.trim().length === 0) {
+      throw new ProtocolValidationError("Empty JSONL record")
+    }
+    try {
+      return parseProtocolRecord(JSON.parse(text) as unknown)
     } catch (error) {
       if (error instanceof ProtocolValidationError) {
         throw error
@@ -341,10 +685,10 @@ export class JsonlDecoder {
     }
   }
 
-  #assertRecordSize(value: string): void {
-    if (value.length > this.#maximumRecordChars) {
+  #assertRecordSize(length: number): void {
+    if (length > this.#maximumRecordBytes) {
       throw new ProtocolValidationError(
-        `JSONL record exceeds ${this.#maximumRecordChars} characters`,
+        `JSONL record exceeds maximumRecordBytes of ${this.#maximumRecordBytes} bytes`,
       )
     }
   }

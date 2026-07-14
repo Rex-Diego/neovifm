@@ -15,7 +15,7 @@
         "protocol": { "const": "neovifm-core" },
         "version": { "const": 0 },
         "type": { "type": "string" },
-        "sequence": { "type": "integer", "minimum": 0 },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "payload": { "type": "object" }
       }
     },
@@ -41,10 +41,11 @@
               "type": "object",
               "required": ["implementation", "capabilities"],
               "properties": {
-                "implementation": { "type": "string", "minLength": 1 },
+                "implementation": { "type": "string", "minLength": 1, "maxLength": 16384 },
                 "capabilities": {
                   "type": "array",
-                  "items": { "type": "string", "minLength": 1 },
+                  "maxItems": 64,
+                  "items": { "type": "string", "minLength": 1, "maxLength": 256 },
                   "uniqueItems": true
                 }
               }
@@ -67,10 +68,10 @@
         "hidden"
       ],
       "properties": {
-        "name_display": { "type": "string" },
-        "name_bytes_hex": { "$ref": "#/$defs/hexBytes" },
-        "path_display": { "type": "string" },
-        "path_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+        "name_display": { "type": "string", "maxLength": 16384 },
+        "name_bytes_hex": { "$ref": "#/$defs/hexBytes", "maxLength": 32768 },
+        "path_display": { "type": "string", "maxLength": 16384 },
+        "path_bytes_hex": { "$ref": "#/$defs/hexBytes", "maxLength": 32768 },
         "kind": {
           "enum": [
             "directory",
@@ -84,11 +85,11 @@
             "unknown"
           ]
         },
-        "size_bytes": { "$ref": "#/$defs/unsignedDecimalString" },
-        "mtime_unix_ms": { "$ref": "#/$defs/decimalString" },
-        "inode": { "$ref": "#/$defs/unsignedDecimalString" },
-        "mode_octal": { "type": "string", "pattern": "^[0-7]+$" },
-        "attributes_hex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "size_bytes": { "$ref": "#/$defs/unsignedDecimalString", "maxLength": 32 },
+        "mtime_unix_ms": { "$ref": "#/$defs/decimalString", "maxLength": 32 },
+        "inode": { "$ref": "#/$defs/unsignedDecimalString", "maxLength": 32 },
+        "mode_octal": { "type": "string", "pattern": "^[0-7]+$", "maxLength": 32 },
+        "attributes_hex": { "type": "string", "pattern": "^[0-9a-f]+$", "maxLength": 32768 },
         "selected": { "type": "boolean" },
         "hidden": { "type": "boolean" },
         "stat_error": {
@@ -96,12 +97,13 @@
           "required": ["code", "message"],
           "properties": {
             "code": { "type": "integer" },
-            "message": { "type": "string" }
+            "message": { "type": "string", "maxLength": 16384 }
           }
         }
       }
     },
     "snapshot": {
+      "$comment": "cursor is -1 exactly when entry_count is 0; otherwise 0 <= cursor < entry_count",
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
@@ -118,13 +120,14 @@
                 "entries"
               ],
               "properties": {
-                "cwd_display": { "type": "string" },
-                "cwd_bytes_hex": { "$ref": "#/$defs/hexBytes" },
-                "generated_at_unix_ms": { "$ref": "#/$defs/decimalString" },
+                "cwd_display": { "type": "string", "maxLength": 16384 },
+                "cwd_bytes_hex": { "$ref": "#/$defs/hexBytes", "maxLength": 32768 },
+                "generated_at_unix_ms": { "$ref": "#/$defs/decimalString", "maxLength": 32 },
                 "cursor": { "type": "integer", "minimum": -1 },
-                "entry_count": { "type": "integer", "minimum": 0 },
+                "entry_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
                 "entries": {
                   "type": "array",
+                  "maxItems": 4096,
                   "items": { "$ref": "#/$defs/entry" }
                 }
               },
@@ -153,11 +156,11 @@
               "type": "object",
               "required": ["code", "message", "retryable"],
               "properties": {
-                "code": { "type": "string", "minLength": 1 },
-                "message": { "type": "string" },
+                "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "message": { "type": "string", "maxLength": 16384 },
                 "retryable": { "type": "boolean" },
-                "path_display": { "type": "string" },
-                "path_bytes_hex": { "$ref": "#/$defs/hexBytes" },
+                "path_display": { "type": "string", "maxLength": 16384 },
+                "path_bytes_hex": { "$ref": "#/$defs/hexBytes", "maxLength": 32768 },
                 "os_error": { "type": "integer" }
               }
             }
