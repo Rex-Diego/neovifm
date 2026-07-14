@@ -4,6 +4,7 @@
 
 - planning-with-files session catchup 已确认上一轮 watcher 交付与验证已写入工作树；`git diff --stat` 显示的是既有 M0/M1 未提交基线及 watcher 变更，未发现额外外部改动。当前继续把两个已加载 classic `view_t` 原子转换为 workspace snapshot 的独立适配层，仍不让 headless session 持有 view 指针。
 - 新增 classic workspace adapter 与原子失败回归：它深拷贝左右已加载 view，并在右 pane 无效时保留上一次完整 workspace。focused `neovifm_snapshot` 通过（26 tests/8472 checks）；用户随后要求提交并推送，将把现有 M0/M1、协议、TUI、测试和计划上下文一并提交。
+- 已发布 `9aad055ea feat: establish neovifm hybrid m1` 至 `origin/master`。生成的 `src/neovifm-core-session` 二进制未纳入版本控制，保留在工作树供本地 integration 使用。
 - 已按 planning-with-files 恢复活动计划；session catchup 无待同步上下文，重读 M1 计划、发现记录、架构文档和 HACKING.md。当前继续 Phase 4 的 macOS kqueue watcher 实现前核查。
 - TDD：新增真实 session integration，先在 left 目录创建文件并要求无需 `refresh` command 即收到保持同一 command sequence 的 workspace；旧 session 在 5 秒内超时，确认 watcher 缺失。新增 v2 trigger/parser/reducer/schema 测试后，旧实现按预期失败（缺少 `trigger`，reducer 拒绝相同 command sequence，schema 未声明 trigger）。
 - 构建命令首次从 `clients/tui` 目录错误指向不存在的 `src/`（`make -C src neovifm-core-session`）；将改用仓库根 `make -C src neovifm-core-session`，不重复该错误路径。
