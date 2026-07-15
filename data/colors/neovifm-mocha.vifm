@@ -1,0 +1,65 @@
+" vim: filetype=vifm :
+
+" NeoVifm Mocha is an opt-in 256-color scheme for the classic Vifm UI.
+" It keeps all visual behavior in Vifm's native colorscheme and highlight API.
+
+highlight clear
+
+" Catppuccin Mocha approximations for ANSI-256 terminals.
+highlight Win          cterm=none                    ctermfg=252  ctermbg=235
+highlight OtherWin     cterm=none                    ctermfg=250  ctermbg=234
+highlight AuxWin       cterm=none                    ctermfg=250  ctermbg=236
+highlight OddLine      cterm=none                    ctermfg=252  ctermbg=235
+
+highlight TopLine      cterm=bold                    ctermfg=235  ctermbg=153
+highlight TopLineSel   cterm=bold                    ctermfg=153  ctermbg=235
+highlight TabLine      cterm=none                    ctermfg=252  ctermbg=236
+highlight TabLineSel   cterm=bold                    ctermfg=235  ctermbg=110
+
+highlight JobLine      cterm=bold                    ctermfg=235  ctermbg=150
+highlight StatusLine   cterm=bold                    ctermfg=235  ctermbg=110
+highlight Border       cterm=none                    ctermfg=147  ctermbg=235
+highlight CurrLine     cterm=bold                    ctermfg=235  ctermbg=153
+highlight OtherLine    cterm=bold                    ctermfg=235  ctermbg=60
+highlight LineNr       cterm=none                    ctermfg=103  ctermbg=235
+
+highlight Selected     cterm=bold                    ctermfg=216  ctermbg=235
+highlight CmpMismatch  cterm=bold                    ctermfg=235  ctermbg=204
+highlight CmpUnmatched cterm=bold                    ctermfg=235  ctermbg=150
+highlight CmpBlank     cterm=none                    ctermfg=250  ctermbg=235
+highlight SuggestBox   cterm=bold                    ctermfg=235  ctermbg=147
+highlight WildMenu     cterm=bold                    ctermfg=235  ctermbg=60
+highlight CmdLine      cterm=bold                    ctermfg=252  ctermbg=235
+highlight ErrorMsg     cterm=bold                    ctermfg=235  ctermbg=204
+
+highlight Directory    cterm=bold                    ctermfg=110  ctermbg=default
+highlight Executable   cterm=bold                    ctermfg=150  ctermbg=default
+highlight Socket       cterm=bold                    ctermfg=216  ctermbg=default
+highlight Device       cterm=bold                    ctermfg=204  ctermbg=default
+highlight Fifo         cterm=bold                    ctermfg=153  ctermbg=default
+highlight Link         cterm=bold                    ctermfg=117  ctermbg=default
+highlight BrokenLink   cterm=bold                    ctermfg=204  ctermbg=default
+highlight HardLink     cterm=bold                    ctermfg=222  ctermbg=default
+
+" Statusline segments can use %1* through %4* without requiring a powerline
+" font.  User configuration decides the glyphs and segment arrangement.
+highlight User1 cterm=bold ctermfg=235 ctermbg=153
+highlight User2 cterm=bold ctermfg=235 ctermbg=110
+highlight User3 cterm=bold ctermfg=235 ctermbg=150
+highlight User4 cterm=bold ctermfg=235 ctermbg=216
+
+" lsd-like type hierarchy for common media and source formats.
+highlight {*.bmp,*.gif,*.jpeg,*.jpg,*.png,*.svg,*.tif,*.tiff,*.webp}
+        \ cterm=none ctermfg=117 ctermbg=default
+highlight {*.avi,*.mkv,*.mov,*.mp4,*.mpeg,*.mpg,*.webm,*.wmv}
+        \ cterm=none ctermfg=153 ctermbg=default
+highlight {*.aac,*.flac,*.m4a,*.mp3,*.ogg,*.opus,*.wav}
+        \ cterm=none ctermfg=150 ctermbg=default
+highlight {*.7z,*.bz2,*.gz,*.rar,*.tar,*.xz,*.zip,*.zst}
+        \ cterm=none ctermfg=216 ctermbg=default
+highlight {*.c,*.cc,*.cpp,*.go,*.h,*.hpp,*.js,*.lua,*.py,*.rs,*.ts}
+        \ cterm=none ctermfg=147 ctermbg=default
+highlight {*.json,*.md,*.toml,*.txt,*.yaml,*.yml}
+        \ cterm=none ctermfg=222 ctermbg=default
+
+" vim: filetype=vifm :

@@ -6,7 +6,7 @@
 
 ## 当前阶段
 
-Phase 6：真实终端输入、鼠标按钮与状态栏返工
+Phase 7：范围收敛与 Vifm 原生能力复用
 
 ## 本轮边界（2026-07-15）
 
@@ -68,19 +68,20 @@ Phase 6：真实终端输入、鼠标按钮与状态栏返工
 - [x] sort 必须由 C core 应用并重新发布 snapshot，UI 不得本地重排导致 cursor/selection 身份错位
 - [x] 文件行改为 lsd 级图标与紧凑对齐：Nerd Font 图标优先、扩展名/类型配色、无字体时显式 ASCII 降级
 - [x] 完成最终 reviewer 回归、全量测试
-- [ ] 提交并 push
-- **状态：** in_progress
+- [x] 提交并 push
+- **状态：** completed
 
 ### Phase 7：范围收敛与 Vifm 原生能力复用（等待 Phase 6 交接后执行）
 
-- [ ] 以未改动的上游文件为基线，完整盘点 Vifm 已有 `event_loop`、`fswatch`、`fileviewer`、`quickview`、`vcache`、`background`、colorscheme、`classify`、`viewcolumns`、`statusline` 和 `fillchars`
+- [x] 以未改动的上游文件为基线，完整盘点 Vifm 已有 `event_loop`、`fswatch`、`fileviewer`、`quickview`、`vcache`、`background`、colorscheme、`classify`、`viewcolumns`、`statusline` 和 `fillchars`
+- [x] 新增可选原生 `neovifm-mocha` colorscheme，建立经典 ncurses 的视觉基线且不改变默认主题
 - [ ] 明确多媒体目标矩阵：图片、视频缩略图/首帧、音频 metadata/封面，以及 Kitty/Sixel/iTerm2/chafa 等终端能力与纯文本降级
 - [ ] 设计最小增强路径：优先扩展现有 viewer 命令、缓存、清理宏和配置，不新建第二套 preview/task/session 架构
 - [ ] 设计 Vifm 原生 ncurses 美化路径：默认主题、文件类型/扩展名图标、紧凑列、状态栏、边框、选中态和 Miller/quickview 布局
 - [ ] 审计现有 Hybrid/OpenTUI 改动，形成“主线保留 / 实验分支保留 / 可移除”清单；未经用户确认不得执行删除、回退或历史改写
 - [ ] 验证 Linux 使用现有 inotify、macOS 使用现有 filemon/polling fallback、Windows 使用原有 change notification；平台差异不得改变 Vifm 主架构
-- [ ] 用户确认收敛方案后再按 TDD 实施和验收
-- **状态：** pending
+- [x] 用户确认推进 Phase 7；先按最小原生增强路径实施和验收
+- **状态：** in_progress
 
 ## Phase 6 非范围
 

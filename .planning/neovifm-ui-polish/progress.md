@@ -72,3 +72,7 @@
 - 终审修复补齐：queue 在 terminal event 被主循环发布和确认前保持 busy，避免 UAF 与后续动作穿插；F10 先关闭 stdin 让 core 协作取消，3 秒后才兜底 SIGKILL；终态 action detail 优先显示失败/partial code。
 - snapshot 扫描改用已打开目录的 fd 读取 cwd 与 entry metadata，并在发布前核对 path 仍指向同一目录；文件 copy 失败不再 unlink 可能被替换的 destination。macOS delete 将对象放进私有隔离目录但保留原 basename 再交给 Trash；取消 Trash 有 TERM deadline 后 SIGKILL。
 - 最新 focused C：8922 checks / 48 tests；TUI unit：82 tests + typecheck；真实 integration：6 tests 全通过。仍待 coverage、audit、串行 make check、最终 review 与提交推送。
+- Phase 6 已提交并推送：`a87c8e2e6 fix: harden neovifm tui file actions`，`origin/master...HEAD` 为 `0 0`。
+- Phase 7 已开始：完成原生事件循环、watcher、preview/cache、background 和可配置 UI 表面的代码盘点；下一步据此选择并实现最小的经典 Vifm 多媒体/视觉增强，不扩张 Hybrid runtime。
+- 新增 `data/colors/neovifm-mocha.vifm`：基于 Vifm 原生 highlight/color scheme API 的 256 色 Mocha 主题，覆盖 pane、状态栏段、文件类型与常见媒体扩展；它是 opt-in，不改变经典默认视图。
+- `env -u VIFM -u MYVIFMRC make -C tests commands.colorscheme` 通过（50 checks / 11 tests），确认经典 colorscheme 命令路径仍正常；待全仓串行回归后提交 Phase 7 首项。

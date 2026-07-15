@@ -117,3 +117,10 @@
 - macOS move 使用原子 no-replace rename，跨文件系统 move 显式拒绝，绝不 copy-delete；delete 先移动到同目录私有隔离目录、保留原 basename 后调用 `/usr/bin/trash`，同名替换不会被误删。其他平台不发布 `file-actions-v1`。
 - F4 不再使用 `path_display` 执行编辑器；只在 `path_bytes_hex` 可严格 UTF-8 解码时传入 raw identity，并在 editor argv 前加入 `--`，非 UTF-8 identity 显式拒绝。
 - 正式 PTY 回归使用 `/usr/bin/expect` 获取真实 pty：等待 ready frame 后发送 `j`、Tab，再用 SGR mouse 点击 F7 创建目录、点击 F10 退出。该测试直接覆盖 VSCode/宿主抢占 Fn 键时依赖鼠标入口的产品目标。
+
+## 2026-07-15 Phase 7 原生基线盘点
+
+- 经典 Vifm 已有 `event_loop` 在输入等待期间处理 redraw、background、watcher 和 UI 状态；`background` 已提供外部命令、内部任务、进度、取消和错误生命周期。
+- `utils/fswatch_nix.c` 在 Linux 使用 inotify，并保留 polling fallback；`fswatch_win.c` 提供 Windows change notification。原生 watcher 不需要 Hybrid session 才能工作。
+- `ui/quickview.c` + `vcache.c` 已把 previewprg、fileviewer、viewer geometry、缓存、后台读取和取消接入经典 UI；后续图片/视频/音频优先扩展这一条路径。
+- 既有可配置的展示面是 colorscheme/highlight、`classify`、`viewcolumns`、`statusline`、`fillchars` 和 Miller/quickview。Phase 7 最小实现应只增强这些已有契约，不复制 Yazi runtime。
