@@ -35,8 +35,18 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_non_null(value);
 	JSON_Object *root = json_object(value);
 	assert_int_equal(3, json_object_get_number(root, "version"));
+	JSON_Array *const capabilities = json_object_get_array(
+			json_object_get_object(root, "payload"), "capabilities");
 	assert_string_equal("preview-session-v3", json_array_get_string(
-			json_object_get_array(json_object_get_object(root, "payload"), "capabilities"), 0U));
+			capabilities, 0U));
+	assert_string_equal("workspace-sort-v1", json_array_get_string(capabilities,
+			1U));
+	#ifdef __APPLE__
+	assert_string_equal("file-actions-v1", json_array_get_string(capabilities,
+			2U));
+	#else
+	assert_int_equal(2, json_array_get_count(capabilities));
+	#endif
 	json_value_free(value);
 	nv_protocol_json_free(hello);
 
@@ -58,6 +68,27 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_string_equal("7", json_object_get_string(payload, "generation"));
 	assert_string_equal("right", json_object_get_string(payload, "pane"));
 	assert_string_equal("done", json_object_get_string(payload, "state"));
+	json_value_free(value);
+	nv_protocol_json_free(line);
+
+	nv_action_event_t action = {
+		.task_id = 9U, .command_sequence = 3U,
+		.kind = NV_SESSION_COPY, .pane = NV_SESSION_LEFT,
+		.state = NV_ACTION_TASK_FAILED, .completed_count = 1U,
+		.total_count = 2U, .failed_index = 1U, .has_failed_index = 1,
+		.partial = 1, .error_code = "destination-exists", .os_error = EEXIST,
+	};
+	line = nv_protocol_action_task_json(&action, 3U);
+	assert_non_null(line);
+	value = json_parse_string(line);
+	assert_non_null(value);
+	root = json_object(value);
+	assert_string_equal("action-task", json_object_get_string(root, "type"));
+	payload = json_object_get_object(root, "payload");
+	assert_string_equal("copy", json_object_get_string(payload, "action"));
+	assert_string_equal("failed", json_object_get_string(payload, "state"));
+	assert_int_equal(1, json_object_get_number(payload, "completed_count"));
+	assert_true(json_object_get_boolean(payload, "partial"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
 }

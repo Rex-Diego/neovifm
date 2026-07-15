@@ -4,8 +4,10 @@ import { CoreClientError, type CoreSession, type CoreSessionRequest } from "../s
 import {
   appPropsFor,
   defaultCoreProbePath,
+  editorCommand,
   exitCodeFor,
   main,
+  renderUntilDestroyed,
   type MainDependencies,
   toUiErrorMessage,
 } from "../src/index.js"
@@ -81,7 +83,11 @@ test("derives loading, workspace-ready, and core-error app props from immutable 
   }))
 
   expect(appPropsFor(waiting)).toMatchObject({ loading: true })
-  expect(appPropsFor(ready)).toMatchObject({ loading: false, workspace: workspace.type === "workspace-snapshot" ? workspace.payload : {} })
+  expect(appPropsFor(ready)).toMatchObject({
+    loading: false,
+    workspace: workspace.type === "workspace-snapshot" ? workspace.payload : {},
+    capabilities: ["workspace-v1"],
+  })
   expect(appPropsFor(failed)).toMatchObject({ error: "permission denied" })
   expect(appPropsFor(ready, "client failed")).toMatchObject({ error: "client failed" })
 })
@@ -89,6 +95,15 @@ test("derives loading, workspace-ready, and core-error app props from immutable 
 test("uses a stable default location and sanitizes unknown errors", () => {
   expect(defaultCoreProbePath()).toContain("neovifm-core-session")
   expect(toUiErrorMessage(new Error("bad\u001bmessage"))).toBe("bad�message")
+})
+
+test("builds a direct editor argv without invoking a shell", () => {
+  expect(editorCommand("/tmp/file name.ts", { VISUAL: "code --wait" })).toEqual([
+    "code", "--wait", "--", "/tmp/file name.ts",
+  ])
+  expect(editorCommand("/tmp/file", { EDITOR: "'nvim' -f" })).toEqual([
+    "nvim", "-f", "--", "/tmp/file",
+  ])
 })
 
 test("preserves structured core error context without rendering stderr", () => {
@@ -120,10 +135,25 @@ test("starts the session before rendering and applies records through the reduce
     request.onRecord(workspaceHello)
     request.onRecord(workspace)
     calls.push(request.executable, request.leftPath, request.rightPath)
-    return { completion: Promise.resolve(), send: () => true, close: () => undefined }
+    return { completion: Promise.resolve(), send: async () => true, close: () => undefined }
   }))
 
   expect(calls).toEqual(["/mock/neovifm-core-probe", "/tmp", "/tmp"])
+})
+
+test("keeps the production renderer lifecycle open until onDestroy", async () => {
+  let destroy: (() => void) | undefined
+  let finished = false
+  const lifetime = renderUntilDestroyed(() => ({}), async (_node, config) => {
+    destroy = config.onDestroy
+  }).then(() => { finished = true })
+
+  await Bun.sleep(0)
+  expect(finished).toBe(false)
+  expect(destroy).toBeDefined()
+  destroy?.()
+  await lifetime
+  expect(finished).toBe(true)
 })
 
 test("keeps a non-zero exit status after displaying a structured core failure", async () => {
@@ -133,7 +163,7 @@ test("keeps a non-zero exit status after displaying a structured core failure", 
       coreCode: "open-directory",
       exitCode: 2,
     }))
-    return { completion: Promise.resolve(), send: () => true, close: () => undefined }
+    return { completion: Promise.resolve(), send: async () => true, close: () => undefined }
   }))
 
   expect(process.exitCode).toBe(2)
@@ -159,7 +189,7 @@ test("aborts and waits for the core probe when renderer startup fails", async ()
           resolve()
         }, { once: true })
       })
-      return { completion, send: () => true, close: () => undefined }
+      return { completion, send: async () => true, close: () => undefined }
     },
   }
 

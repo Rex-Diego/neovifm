@@ -22,6 +22,7 @@ static nv_protocol_json_result_t serialize_payload(const char type[],
 static JSON_Value *snapshot_payload(const nv_pane_snapshot_t *snapshot);
 static JSON_Value *entry_value(const nv_pane_entry_t *entry);
 static char *hello_json(unsigned int version, const char capability[],
+		const char secondary_capability[], const char tertiary_capability[],
 		unsigned int sequence);
 static char *error_json(unsigned int version, const nv_snapshot_error_t *error,
 		unsigned int sequence);
@@ -128,6 +129,7 @@ sort_key_name(nv_pane_sort_key_t key)
 		case NV_SORT_EXTENSION: return "extension";
 		case NV_SORT_SIZE: return "size";
 		case NV_SORT_MTIME: return "mtime";
+		case NV_SORT_MODE: return "mode";
 		case NV_SORT_TYPE: return "type";
 		case NV_SORT_OTHER: return "other";
 	}
@@ -218,7 +220,9 @@ serialize_payload(const char type[], unsigned int version, unsigned int sequence
 }
 
 static char *
-hello_json(unsigned int version, const char capability[], unsigned int sequence)
+hello_json(unsigned int version, const char capability[],
+		const char secondary_capability[], const char tertiary_capability[],
+		unsigned int sequence)
 {
 	JSON_Value *const payload_value = json_value_init_object();
 	JSON_Value *const capabilities_value = json_value_init_array();
@@ -234,6 +238,12 @@ hello_json(unsigned int version, const char capability[], unsigned int sequence)
 	if(json_object_set_string(payload, "implementation",
 				"neovifm-core-probe") != JSONSuccess ||
 			json_array_append_string(capabilities, capability) != JSONSuccess ||
+			(secondary_capability != NULL &&
+			 json_array_append_string(capabilities, secondary_capability) !=
+			 JSONSuccess) ||
+			(tertiary_capability != NULL &&
+			 json_array_append_string(capabilities, tertiary_capability) !=
+			 JSONSuccess) ||
 			json_object_set_value(payload, "capabilities",
 					capabilities_value) != JSONSuccess)
 	{
@@ -255,25 +265,31 @@ hello_json(unsigned int version, const char capability[], unsigned int sequence)
 char *
 nv_protocol_hello_json(unsigned int sequence)
 {
-	return hello_json(0U, "snapshot-v0", sequence);
+	return hello_json(0U, "snapshot-v0", NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_workspace_hello_json(unsigned int sequence)
 {
-	return hello_json(1U, "workspace-v1", sequence);
+	return hello_json(1U, "workspace-v1", NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_session_hello_json(unsigned int sequence)
 {
-	return hello_json(2U, "workspace-session-v2", sequence);
+	return hello_json(2U, "workspace-session-v2", NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_preview_session_hello_json(unsigned int sequence)
 {
-	return hello_json(3U, "preview-session-v3", sequence);
+	#ifdef __APPLE__
+	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
+			"file-actions-v1", sequence);
+	#else
+	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
+			NULL, sequence);
+	#endif
 }
 
 static const char *
@@ -376,6 +392,74 @@ nv_protocol_preview_json(const nv_preview_event_t *event,
 			&json) == NV_PROTOCOL_JSON_OK ? json : NULL;
 }
 
+static const char *
+action_kind_name(nv_session_command_kind_t kind)
+{
+	return kind == NV_SESSION_COPY ? "copy" :
+		kind == NV_SESSION_MOVE_FILES ? "move" :
+		kind == NV_SESSION_MKDIR ? "mkdir" :
+		kind == NV_SESSION_DELETE ? "delete" : NULL;
+}
+
+static const char *
+action_state_name(nv_action_task_state_t state)
+{
+	switch(state)
+	{
+		case NV_ACTION_TASK_QUEUED: return "queued";
+		case NV_ACTION_TASK_RUNNING: return "running";
+		case NV_ACTION_TASK_DONE: return "done";
+		case NV_ACTION_TASK_FAILED: return "failed";
+		case NV_ACTION_TASK_CANCELLED: return "cancelled";
+	}
+	return NULL;
+}
+
+char *
+nv_protocol_action_task_json(const nv_action_event_t *event,
+		unsigned int output_sequence)
+{
+	if(event == NULL || event->task_id == 0U || event->command_sequence == 0U ||
+			action_kind_name(event->kind) == NULL ||
+			action_state_name(event->state) == NULL ||
+			event->completed_count > event->total_count ||
+			(event->has_failed_index && event->failed_index >= event->total_count) ||
+			(event->error_code != NULL && !string_fits(event->error_code, 128U)))
+	{
+		return NULL;
+	}
+	JSON_Value *const value = json_value_init_object();
+	if(value == NULL) return NULL;
+	JSON_Object *const payload = json_value_get_object(value);
+	if(set_u64_string(payload, "task_id", event->task_id) != JSONSuccess ||
+			json_object_set_number(payload, "command_sequence",
+				event->command_sequence) != JSONSuccess ||
+			json_object_set_string(payload, "pane",
+				event->pane == NV_SESSION_LEFT ? "left" : "right") != JSONSuccess ||
+			json_object_set_string(payload, "action",
+				action_kind_name(event->kind)) != JSONSuccess ||
+			json_object_set_string(payload, "state",
+				action_state_name(event->state)) != JSONSuccess ||
+			json_object_set_number(payload, "completed_count",
+				event->completed_count) != JSONSuccess ||
+			json_object_set_number(payload, "total_count",
+				event->total_count) != JSONSuccess ||
+			json_object_set_boolean(payload, "partial", event->partial) != JSONSuccess ||
+			(event->has_failed_index && json_object_set_number(payload,
+				"failed_index", event->failed_index) != JSONSuccess) ||
+			(event->error_code != NULL && json_object_set_string(payload,
+				"error_code", event->error_code) != JSONSuccess) ||
+			(event->os_error != 0 && json_object_set_number(payload, "os_error",
+				event->os_error) != JSONSuccess))
+	{
+		json_value_free(value);
+		return NULL;
+	}
+	char *json = NULL;
+	return serialize_payload("action-task", 3U, output_sequence, value, &json) ==
+		NV_PROTOCOL_JSON_OK ? json : NULL;
+}
+
 static int
 set_stat_error(JSON_Object *object, int error_number)
 {
@@ -412,7 +496,10 @@ set_optional_stat(JSON_Object *object, const nv_pane_entry_t *entry)
 
 	char mode[16];
 	snprintf(mode, sizeof(mode), "%o", (unsigned int)entry->mode);
-	if(set_u64_string(object, "inode", entry->inode) != JSONSuccess ||
+	if(set_u64_string(object, "device", entry->device) != JSONSuccess ||
+			set_u64_string(object, "inode", entry->inode) != JSONSuccess ||
+			set_u64_string(object, "ctime_unix_ns", entry->ctime_unix_ns) !=
+				JSONSuccess ||
 			json_object_set_string(object, "mode_octal", mode) != JSONSuccess)
 	{
 		return JSONFailure;
@@ -486,6 +573,16 @@ snapshot_payload(const nv_pane_snapshot_t *snapshot)
 					snapshot->cwd_bytes_hex) != JSONSuccess ||
 			set_i64_string(payload, "generated_at_unix_ms",
 					snapshot->generated_at_unix_ms) != JSONSuccess ||
+			set_u64_string(payload, "snapshot_revision",
+					snapshot->snapshot_revision) != JSONSuccess ||
+			(snapshot->has_cwd_stat &&
+			 (set_u64_string(payload, "cwd_device", snapshot->cwd_device) !=
+			  JSONSuccess ||
+			  set_u64_string(payload, "cwd_inode", snapshot->cwd_inode) !=
+			  JSONSuccess ||
+			  set_u64_string(payload, "cwd_ctime_unix_ns",
+					snapshot->cwd_ctime_unix_ns) !=
+			  JSONSuccess)) ||
 			json_object_set_number(payload, "cursor", snapshot->cursor) != JSONSuccess ||
 			json_object_set_number(payload, "entry_count", snapshot->entry_count) !=
 			JSONSuccess ||
@@ -600,7 +697,8 @@ nv_protocol_session_snapshot_json(const nv_pane_snapshot_t *left,
 			active_pane == NULL ||
 			(strcmp(active_pane, "left") != 0 && strcmp(active_pane, "right") != 0) ||
 			trigger == NULL || (strcmp(trigger, "initial") != 0 &&
-					strcmp(trigger, "command") != 0 && strcmp(trigger, "watch") != 0) ||
+					strcmp(trigger, "command") != 0 && strcmp(trigger, "watch") != 0 &&
+					strcmp(trigger, "action") != 0) ||
 			json == NULL)
 	{
 		return NV_PROTOCOL_JSON_ERROR;

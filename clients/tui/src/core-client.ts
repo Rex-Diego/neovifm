@@ -3,6 +3,7 @@ import {
   type JsonlLimits,
   type ErrorRecord,
   type HelloPayload,
+  type PaneSortKey,
   type ProtocolRecord,
   type SnapshotPayload,
   type WorkspaceSnapshotPayload,
@@ -70,11 +71,56 @@ export interface CoreWorkspaceProbeResult {
 
 export type CoreProbeResult = CoreSnapshotProbeResult | CoreWorkspaceProbeResult
 
+export interface CoreActionTarget {
+  readonly path_bytes_hex: string
+  readonly device: string
+  readonly inode: string
+  readonly ctime_unix_ns: string
+  readonly kind: SnapshotPayload["entries"][number]["kind"]
+}
+
 export type CoreSessionCommand =
   | Readonly<{ action: "focus"; pane: "left" | "right" }>
   | Readonly<{ action: "focus-next" }>
   | Readonly<{ action: "move"; delta: -1 | 1 }>
   | Readonly<{ action: "move-to"; target: "first" | "last" }>
+  | Readonly<{ action: "sort-cycle"; delta: -1 | 1 }>
+  | Readonly<{ action: "sort-by"; pane: "left" | "right"; key: PaneSortKey }>
+  | Readonly<{
+      action: "copy" | "move-files"
+      pane: "left" | "right"
+      cwd_bytes_hex: string
+      snapshot_revision: string
+      cwd_device: string
+      cwd_inode: string
+      cwd_ctime_unix_ns: string
+      destination_cwd_bytes_hex: string
+      destination_snapshot_revision: string
+      destination_cwd_device: string
+      destination_cwd_inode: string
+      destination_cwd_ctime_unix_ns: string
+      targets: readonly CoreActionTarget[]
+    }>
+  | Readonly<{
+      action: "delete"
+      pane: "left" | "right"
+      cwd_bytes_hex: string
+      snapshot_revision: string
+      cwd_device: string
+      cwd_inode: string
+      cwd_ctime_unix_ns: string
+      targets: readonly CoreActionTarget[]
+    }>
+  | Readonly<{
+      action: "mkdir"
+      pane: "left" | "right"
+      cwd_bytes_hex: string
+      snapshot_revision: string
+      cwd_device: string
+      cwd_inode: string
+      cwd_ctime_unix_ns: string
+      name: string
+    }>
   | Readonly<{ action: "enter" | "parent" | "toggle-selection" | "refresh" }>
 
 export interface CoreSessionRequest {
@@ -89,7 +135,7 @@ export interface CoreSessionRequest {
 
 export interface CoreSession {
   readonly completion: Promise<void>
-  send(command: CoreSessionCommand): boolean
+  send(command: CoreSessionCommand): Promise<boolean>
   close(): void
 }
 
@@ -510,6 +556,8 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
 
   let commandSequence = 0
   let closed = false
+  let gracefulShutdownTimer: ReturnType<typeof setTimeout> | undefined
+  let writeQueue: Promise<void> = Promise.resolve()
   const fail = (message: string, cause?: unknown) => {
     if (!closed) controller.abort()
     request.onError(new CoreClientError(message, { kind: "protocol", cause }))
@@ -535,6 +583,7 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
     } catch (cause) {
       if (!closed && !controller.signal.aborted) fail("Core session emitted an invalid protocol stream", cause)
     } finally {
+      if (gracefulShutdownTimer !== undefined) clearTimeout(gracefulShutdownTimer)
       void diagnostics.catch(() => undefined)
       reader.releaseLock()
       request.signal?.removeEventListener("abort", abort)
@@ -543,22 +592,30 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
   return {
     completion,
     send(command) {
-      if (closed || controller.signal.aborted || commandSequence >= Number.MAX_SAFE_INTEGER) return false
-      const line = JSON.stringify({ protocol: "neovifm-core", version: 3, type: "command", sequence: ++commandSequence, payload: command })
-      if (new TextEncoder().encode(line).byteLength > 16 * 1024) return false
-      try {
-        process.stdin.write(`${line}\n`)
-        process.stdin.flush()
+      if (closed || controller.signal.aborted || commandSequence >= Number.MAX_SAFE_INTEGER) return Promise.resolve(false)
+      const nextSequence = commandSequence + 1
+      const bytes = new TextEncoder().encode(`${JSON.stringify({ protocol: "neovifm-core", version: 3, type: "command", sequence: nextSequence, payload: command })}\n`)
+      if (bytes.byteLength > 16 * 1024 + 1) return Promise.resolve(false)
+      commandSequence = nextSequence
+      const write = writeQueue.then(async () => {
+        const written = await process.stdin.write(bytes)
+        if (written !== bytes.byteLength) throw new Error(`short core command write: ${written}/${bytes.byteLength}`)
+        await process.stdin.flush()
         return true
-      } catch (cause) {
-        fail("Failed to write core session command", cause)
+      }).catch((cause) => {
+        if (!closed && !controller.signal.aborted) fail("Failed to write core session command", cause)
         return false
-      }
+      })
+      writeQueue = write.then(() => undefined)
+      return write
     },
     close() {
       if (closed) return
       closed = true
-      process.stdin.end()
+      void writeQueue.then(() => {
+        process.stdin.end()
+        gracefulShutdownTimer = setTimeout(() => process.kill("SIGKILL"), 3_000)
+      }).catch(() => controller.abort())
     },
   }
 }

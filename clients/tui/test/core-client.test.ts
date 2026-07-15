@@ -3,7 +3,7 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { CoreClientError, runCoreProbe } from "../src/core-client.js"
+import { CoreClientError, runCoreProbe, startCoreSession } from "../src/core-client.js"
 
 const hello =
   '{"protocol":"neovifm-core","version":0,"type":"hello","sequence":0,"payload":{"implementation":"test-probe","capabilities":["snapshot-v0"]}}'
@@ -304,3 +304,30 @@ exec sleep 6
     }
   })
 })
+
+test("serializes session writes and reports a closed command pipe", async () => {
+  const sessionHello = '{"protocol":"neovifm-core","version":3,"type":"hello","sequence":0,"payload":{"implementation":"test-session","capabilities":["preview-session-v3"]}}'
+  const sessionSnapshot = '{"protocol":"neovifm-core","version":3,"type":"workspace-snapshot","sequence":1,"payload":{"command_sequence":0,"trigger":"initial","active_pane":"left","left":{"cwd_display":"/tmp","cwd_bytes_hex":"2f746d70","generated_at_unix_ms":"0","cursor":-1,"entry_count":0,"entries":[]},"right":{"cwd_display":"/var","cwd_bytes_hex":"2f766172","generated_at_unix_ms":"0","cursor":-1,"entry_count":0,"entries":[]}}}'
+  const executable = await makeProbe(`
+exec 0<&-
+printf '%s\\n' '${sessionHello}'
+printf '%s\\n' '${sessionSnapshot}'
+sleep 1
+`)
+  const errors: CoreClientError[] = []
+  let ready = false
+  const session = startCoreSession({
+    executable,
+    leftPath: "/tmp",
+    rightPath: "/var",
+    onRecord: (record) => { if (record.type === "workspace-snapshot") ready = true },
+    onError: (error) => errors.push(error),
+  })
+  for (let attempt = 0; !ready && attempt < 300; ++attempt) await Bun.sleep(10)
+  expect(ready).toBe(true)
+  expect(await session.send({ action: "refresh" })).toBe(false)
+  expect(errors).toHaveLength(1)
+  expect(errors[0]).toMatchObject({ kind: "protocol" })
+  session.close()
+  await session.completion
+}, 8_000)

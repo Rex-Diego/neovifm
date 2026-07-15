@@ -11,12 +11,16 @@
 #define VIFM__COMPAT__NEOVIFM_FS_H__
 
 #include <sys/stat.h> /* struct stat */
+#include <stdint.h> /* uint64_t */
 
 typedef struct nv_dir_t nv_dir_t;
 
 nv_dir_t * nv_dir_open(const char path[]);
 const char * nv_dir_read(nv_dir_t *dir);
 int nv_dir_close(nv_dir_t *dir);
+int nv_dir_fstat(nv_dir_t *dir, struct stat *st);
+int nv_dir_lstat(nv_dir_t *dir, const char name[], struct stat *st,
+		int *is_symlink);
 
 /*
  * Gets no-follow metadata and reports symbolic-link identity separately.
@@ -24,6 +28,34 @@ int nv_dir_close(nv_dir_t *dir);
  * identity even though struct stat has no portable S_IFLNK representation.
  */
 int nv_lstat(const char path[], struct stat *st, int *is_symlink);
+
+typedef struct
+{
+	uint64_t device;
+	uint64_t inode;
+	uint64_t ctime_unix_ns;
+} nv_fs_identity_t;
+
+typedef int (*nv_fs_cancel_hook)(void *arg);
+typedef void (*nv_fs_test_before_atomic_hook)(const char path[]);
+
+int nv_fs_copy(const char source[], const char destination[],
+		nv_fs_identity_t source_directory,
+		nv_fs_identity_t destination_directory, nv_fs_identity_t source_entry,
+		nv_fs_cancel_hook cancelled, void *cancel_arg);
+int nv_fs_move(const char source[], const char destination[],
+		nv_fs_identity_t source_directory,
+		nv_fs_identity_t destination_directory, nv_fs_identity_t source_entry,
+		nv_fs_cancel_hook cancelled, void *cancel_arg);
+int nv_fs_remove(const char path[], nv_fs_identity_t source_directory,
+		nv_fs_identity_t source_entry, nv_fs_cancel_hook cancelled,
+		void *cancel_arg);
+int nv_fs_mkdir(const char path[], int mode,
+		nv_fs_identity_t destination_directory);
+
+/* Deterministic race seams used only by the C test suite. */
+void nv_fs_test_set_before_atomic_hook(nv_fs_test_before_atomic_hook hook);
+void nv_fs_test_force_cross_device_move(int enabled);
 
 #endif /* VIFM__COMPAT__NEOVIFM_FS_H__ */
 

@@ -12,6 +12,7 @@
 
 #include "pane_snapshot.h"
 #include "preview_task.h"
+#include "action_task.h"
 
 typedef enum
 {
@@ -49,6 +50,8 @@ char *nv_protocol_preview_session_command_error_json(
 char *nv_protocol_preview_task_json(const nv_preview_event_t *event,
 		unsigned int output_sequence);
 char *nv_protocol_preview_json(const nv_preview_event_t *event,
+		unsigned int output_sequence);
+char *nv_protocol_action_task_json(const nv_action_event_t *event,
 		unsigned int output_sequence);
 
 void nv_protocol_json_free(char *json);

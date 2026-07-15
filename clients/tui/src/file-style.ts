@@ -12,7 +12,29 @@ const TYPE_CHARACTER: Readonly<Record<EntryKind, string>> = {
   unknown: "?",
 }
 
-export function iconForEntry(kind: EntryKind): string {
+export type IconMode = "fancy" | "ascii"
+
+const FANCY_EXTENSIONS: Readonly<Record<string, string>> = {
+  c: "", h: "", cpp: "", hpp: "",
+  go: "", rs: "", py: "", js: "", jsx: "", ts: "", tsx: "",
+  lua: "", sh: "", zsh: "", fish: "",
+  json: "", toml: "", yaml: "", yml: "",
+  md: "", txt: "", pdf: "", doc: "󰈬", docx: "󰈬",
+  png: "", jpg: "", jpeg: "", gif: "", webp: "", svg: "󰜡",
+  zip: "", tar: "", gz: "", bz2: "", xz: "", "7z": "", rar: "",
+  mp3: "", flac: "", wav: "", mp4: "", mkv: "", mov: "", avi: "",
+} as const
+
+const FANCY_FILENAMES: Readonly<Record<string, string>> = {
+  "readme.md": "󰂺",
+  "license": "",
+  "license.md": "",
+  "makefile": "",
+  "dockerfile": "󰡨",
+  ".gitignore": "",
+} as const
+
+function asciiIcon(kind: EntryKind): string {
   switch (kind) {
     case "directory": return "d"
     case "executable": return "x"
@@ -26,13 +48,35 @@ export function iconForEntry(kind: EntryKind): string {
   }
 }
 
+export function iconForEntry(entry: SnapshotEntry, mode: IconMode = "fancy"): string {
+  if (mode === "ascii") return asciiIcon(entry.kind)
+  if (entry.kind === "directory") return ""
+  if (entry.kind === "symlink") return ""
+  if (entry.kind === "fifo") return "󰟥"
+  if (entry.kind === "socket") return "󰆨"
+  if (entry.kind === "char-device" || entry.kind === "block-device") return ""
+  if (entry.kind === "unknown") return ""
+  const filename = entry.name_display.toLowerCase()
+  const named = FANCY_FILENAMES[filename]
+  if (named !== undefined) return named
+  const dot = filename.lastIndexOf(".")
+  const extension = dot < 0 ? "" : filename.slice(dot + 1)
+  const byExtension = FANCY_EXTENSIONS[extension]
+  if (byExtension !== undefined) return byExtension
+  return entry.kind === "executable" ? "" : ""
+}
+
 export function formatMode(modeOctal: string | undefined, kind: EntryKind): string {
   const type = TYPE_CHARACTER[kind]
   if (modeOctal === undefined || !/^[0-7]+$/.test(modeOctal)) return `${type}?????????`
   const mode = Number.parseInt(modeOctal, 8)
   const masks = [0o400, 0o200, 0o100, 0o040, 0o020, 0o010, 0o004, 0o002, 0o001]
   const characters = ["r", "w", "x", "r", "w", "x", "r", "w", "x"]
-  return `${type}${masks.map((mask, index) => (mode & mask) === 0 ? "-" : characters[index]).join("")}`
+  const permissions = masks.map((mask, index) => (mode & mask) === 0 ? "-" : characters[index])
+  if ((mode & 0o4000) !== 0) permissions[2] = (mode & 0o100) !== 0 ? "s" : "S"
+  if ((mode & 0o2000) !== 0) permissions[5] = (mode & 0o010) !== 0 ? "s" : "S"
+  if ((mode & 0o1000) !== 0) permissions[8] = (mode & 0o001) !== 0 ? "t" : "T"
+  return `${type}${permissions.join("")}`
 }
 
 export function formatFileSize(sizeBytes: string): string {
@@ -58,7 +102,8 @@ export function formatMtime(mtimeUnixMs: string): string {
   if (!Number.isFinite(value)) return "---- -- -- --:--"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "---- -- -- --:--"
-  return date.toISOString().slice(0, 16).replace("T", " ")
+  const pad = (part: number) => String(part).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 export function extensionGroup(entry: SnapshotEntry): "archive" | "code" | "document" | "image" | "media" | "plain" {

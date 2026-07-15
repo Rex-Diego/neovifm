@@ -108,14 +108,21 @@ test("v3 schema declares task identity and terminal preview boundaries", () => {
 })
 
 test("v3 schema exposes core-owned pane toggle and Vifm first/last movement", () => {
-  const command = objectValue(previewSessionDefinitions.command)
-  const commandParts = command.allOf
-  if (!Array.isArray(commandParts)) throw new Error("expected command allOf")
-  const commandVariant = objectValue(commandParts[1])
-  const commandProperties = objectValue(commandVariant.properties)
-  const commandPayload = objectValue(commandProperties.payload)
-  const commandPayloadProperties = objectValue(commandPayload.properties)
-  expect(objectValue(commandPayloadProperties.action).enum).toContain("focus-next")
-  expect(objectValue(commandPayloadProperties.action).enum).toContain("move-to")
-  expect(objectValue(commandPayloadProperties.target).enum).toEqual(["first", "last"])
+  const commandPayload = objectValue(previewSessionDefinitions.commandPayload)
+  const serialized = JSON.stringify(commandPayload)
+  expect(serialized).toContain('"focus-next"')
+  expect(serialized).toContain('"move-to"')
+  expect(serialized).toContain('"first"')
+  expect(serialized).toContain('"last"')
+})
+
+test("v3 file actions require snapshot identities instead of display paths", () => {
+  const actionTarget = objectValue(previewSessionDefinitions.actionTarget)
+  expect(actionTarget.required).toEqual(["path_bytes_hex", "device", "inode", "ctime_unix_ns", "kind"])
+  const actionTargets = objectValue(previewSessionDefinitions.actionTargets)
+  expect(actionTargets.maxItems).toBe(64)
+  const identity = objectValue(previewSessionDefinitions.sourceIdentity)
+  expect(objectValue(identity.properties).cwd_ctime_unix_ns).toBeDefined()
+  const actionTask = objectValue(previewSessionDefinitions.actionTaskPayload)
+  expect(actionTask.required).toEqual(["task_id", "command_sequence", "pane", "action", "state", "completed_count", "total_count", "partial"])
 })

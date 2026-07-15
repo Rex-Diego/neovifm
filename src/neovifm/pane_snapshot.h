@@ -38,6 +38,7 @@ typedef enum
 	NV_SORT_EXTENSION,
 	NV_SORT_SIZE,
 	NV_SORT_MTIME,
+	NV_SORT_MODE,
 	NV_SORT_TYPE,
 	NV_SORT_OTHER,
 } nv_pane_sort_key_t;
@@ -51,7 +52,9 @@ typedef struct
 	nv_entry_kind_t kind;
 	uint64_t size_bytes;
 	int64_t mtime_unix_ms;
+	uint64_t device;
 	uint64_t inode;
+	uint64_t ctime_unix_ns;
 	uint32_t mode;
 	int has_stat;
 	int stat_error;
@@ -64,6 +67,11 @@ typedef struct
 	char *cwd_display;
 	char *cwd_bytes_hex;
 	int64_t generated_at_unix_ms;
+	uint64_t snapshot_revision;
+	uint64_t cwd_device;
+	uint64_t cwd_inode;
+	uint64_t cwd_ctime_unix_ns;
+	int has_cwd_stat;
 	int cursor;
 	size_t entry_count;
 	size_t selection_count;
@@ -92,6 +100,9 @@ typedef struct
  */
 int nv_pane_snapshot_build(const char path[], nv_pane_snapshot_t *snapshot,
 		nv_snapshot_error_t *error);
+
+void nv_pane_snapshot_sort(nv_pane_snapshot_t *snapshot,
+		nv_pane_sort_key_t key, int descending);
 
 void nv_pane_snapshot_free(nv_pane_snapshot_t *snapshot);
 void nv_snapshot_error_free(nv_snapshot_error_t *error);

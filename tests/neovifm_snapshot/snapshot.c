@@ -99,6 +99,26 @@ TEST(snapshot_owns_basic_file_and_directory_metadata)
 	remove_dir(CONTENT_DIR);
 }
 
+TEST(initial_name_sort_places_cursor_on_first_sorted_entry)
+{
+	nv_pane_snapshot_t snapshot = {};
+	nv_snapshot_error_t error = {};
+
+	create_dir(CONTENT_DIR);
+	create_file(SANDBOX_PATH "/content/z-file");
+	create_file(SANDBOX_PATH "/content/a-file");
+
+	assert_success(nv_pane_snapshot_build(CONTENT_DIR, &snapshot, &error));
+	assert_int_equal(0, snapshot.cursor);
+	assert_string_equal("a-file", snapshot.entries[snapshot.cursor].name_display);
+
+	nv_pane_snapshot_free(&snapshot);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/content/z-file");
+	remove_file(SANDBOX_PATH "/content/a-file");
+	remove_dir(CONTENT_DIR);
+}
+
 TEST(hidden_entry_is_marked)
 {
 	nv_pane_snapshot_t snapshot = {};

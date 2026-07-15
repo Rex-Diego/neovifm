@@ -49,7 +49,9 @@ export interface SnapshotEntry {
   readonly kind: EntryKind
   readonly size_bytes: string
   readonly mtime_unix_ms: string
+  readonly device?: string
   readonly inode?: string
+  readonly ctime_unix_ns?: string
   readonly mode_octal?: string
   readonly attributes_hex?: string
   readonly selected: boolean
@@ -66,6 +68,10 @@ export interface SnapshotPayload {
   readonly cwd_display: string
   readonly cwd_bytes_hex: string
   readonly generated_at_unix_ms: string
+  readonly snapshot_revision: string
+  readonly cwd_device?: string
+  readonly cwd_inode?: string
+  readonly cwd_ctime_unix_ns?: string
   readonly cursor: number
   readonly entry_count: number
   readonly selection_count: number
@@ -86,8 +92,8 @@ export interface ErrorPayload {
 }
 
 export type PaneId = "left" | "right"
-export type PaneSortKey = "name" | "extension" | "size" | "mtime" | "type" | "other"
-export type SessionSnapshotTrigger = "initial" | "command" | "watch"
+export type PaneSortKey = "name" | "extension" | "size" | "mtime" | "mode" | "type" | "other"
+export type SessionSnapshotTrigger = "initial" | "command" | "watch" | "action"
 
 export interface WorkspaceSnapshotPayload {
   readonly active_pane: PaneId
@@ -124,6 +130,22 @@ export interface PreviewPayload extends PreviewTaskPayload {
   readonly truncated: boolean
 }
 
+export type ActionTaskAction = "copy" | "move" | "mkdir" | "delete"
+
+export interface ActionTaskPayload {
+  readonly task_id: string
+  readonly command_sequence: number
+  readonly pane: PaneId
+  readonly action: ActionTaskAction
+  readonly state: PreviewTaskState
+  readonly completed_count: number
+  readonly total_count: number
+  readonly failed_index?: number
+  readonly partial: boolean
+  readonly error_code?: string
+  readonly os_error?: number
+}
+
 interface Envelope<Type extends string, Payload, Version extends number> {
   readonly protocol: typeof PROTOCOL_NAME
   readonly version: Version
@@ -158,6 +180,7 @@ export type PreviewSessionWorkspaceSnapshotRecord = Envelope<
 >
 export type PreviewTaskRecord = Envelope<"task", PreviewTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewRecord = Envelope<"preview", PreviewPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type ActionTaskRecord = Envelope<"action-task", ActionTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionCommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionErrorRecord = Envelope<"error", ErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type ErrorRecord = V0ErrorRecord | V1ErrorRecord | SessionErrorRecord | PreviewSessionErrorRecord
@@ -176,6 +199,7 @@ export type ProtocolRecord =
   | PreviewSessionWorkspaceSnapshotRecord
   | PreviewTaskRecord
   | PreviewRecord
+  | ActionTaskRecord
   | PreviewSessionCommandErrorRecord
   | PreviewSessionErrorRecord
 
@@ -354,7 +378,9 @@ function parseStatError(value: unknown, path: string): StatError | undefined {
 
 function parseEntry(value: unknown, path: string): SnapshotEntry {
   const object = objectValue(value, path)
-  const inode = optionalPatternString(object, "inode", path, DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const device = optionalPatternString(object, "device", path, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const inode = optionalPatternString(object, "inode", path, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const ctime = optionalPatternString(object, "ctime_unix_ns", path, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
   const mode = optionalPatternString(object, "mode_octal", path, OCTAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
   const attributes = optionalPatternString(object, "attributes_hex", path, ATTRIBUTES_PATTERN)
   const statError = parseStatError(object.stat_error, `${path}.stat_error`)
@@ -377,7 +403,9 @@ function parseEntry(value: unknown, path: string): SnapshotEntry {
       DECIMAL_PATTERN,
       MAX_DECIMAL_TEXT_BYTES,
     ),
+    ...(device === undefined ? {} : { device }),
     ...(inode === undefined ? {} : { inode }),
+    ...(ctime === undefined ? {} : { ctime_unix_ns: ctime }),
     ...(mode === undefined ? {} : { mode_octal: mode }),
     ...(attributes === undefined ? {} : { attributes_hex: attributes }),
     selected: booleanValue(object.selected, `${path}.selected`),
@@ -443,6 +471,18 @@ function parseSnapshotPayload(value: unknown, path = "payload"): SnapshotPayload
       DECIMAL_PATTERN,
       MAX_DECIMAL_TEXT_BYTES,
     ),
+    snapshot_revision: payload.snapshot_revision === undefined
+      ? "0"
+      : patternString(payload.snapshot_revision, `${path}.snapshot_revision`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    ...(payload.cwd_device === undefined ? {} : {
+      cwd_device: patternString(payload.cwd_device, `${path}.cwd_device`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    }),
+    ...(payload.cwd_inode === undefined ? {} : {
+      cwd_inode: patternString(payload.cwd_inode, `${path}.cwd_inode`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    }),
+    ...(payload.cwd_ctime_unix_ns === undefined ? {} : {
+      cwd_ctime_unix_ns: patternString(payload.cwd_ctime_unix_ns, `${path}.cwd_ctime_unix_ns`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    }),
     cursor,
     entry_count: entryCount,
     selection_count: selectionCount,
@@ -464,7 +504,7 @@ function parsePaneId(value: unknown, path: string): PaneId {
 
 function parsePaneSortKey(value: unknown, path: string): PaneSortKey {
   const key = stringValue(value, path)
-  if (key !== "name" && key !== "extension" && key !== "size" && key !== "mtime" && key !== "type" && key !== "other") {
+  if (key !== "name" && key !== "extension" && key !== "size" && key !== "mtime" && key !== "mode" && key !== "type" && key !== "other") {
     return invalid(path, "is not a supported sort key")
   }
   return key
@@ -472,8 +512,8 @@ function parsePaneSortKey(value: unknown, path: string): PaneSortKey {
 
 function parseSessionSnapshotTrigger(value: unknown, path: string): SessionSnapshotTrigger {
   const trigger = stringValue(value, path)
-  if (trigger !== "initial" && trigger !== "command" && trigger !== "watch") {
-    return invalid(path, "must be initial, command, or watch")
+  if (trigger !== "initial" && trigger !== "command" && trigger !== "watch" && trigger !== "action") {
+    return invalid(path, "must be initial, command, watch, or action")
   }
   return trigger
 }
@@ -579,6 +619,44 @@ function parsePreviewPayload(value: unknown): PreviewPayload {
   })
 }
 
+function parseActionTaskPayload(value: unknown): ActionTaskPayload {
+  const payload = objectValue(value, "payload")
+  const action = stringValue(payload.action, "payload.action")
+  if (action !== "copy" && action !== "move" && action !== "mkdir" && action !== "delete") {
+    return invalid("payload.action", "is not a supported file action")
+  }
+  const state = parsePreviewTaskState(payload.state, "payload.state")
+  const completed = integerValue(payload.completed_count, "payload.completed_count", 0)
+  const total = integerValue(payload.total_count, "payload.total_count", 1)
+  if (total > 64 || completed > total) return invalid("payload", "has invalid action progress counts")
+  const failedIndex = payload.failed_index === undefined
+    ? undefined
+    : integerValue(payload.failed_index, "payload.failed_index", 0)
+  if (failedIndex !== undefined && failedIndex >= total) return invalid("payload.failed_index", "must identify an action target")
+  const partial = booleanValue(payload.partial, "payload.partial")
+  if (state === "done" && partial) return invalid("payload.partial", "must be false for a completed action")
+  if (state === "done" && completed !== total) return invalid("payload.completed_count", "must equal total_count for done")
+  if ((state === "queued" || state === "running") && completed !== 0) return invalid("payload.completed_count", "must be zero before completion")
+  if ((state === "failed" || state === "cancelled") && failedIndex === undefined) return invalid("payload.failed_index", "is required for a terminal incomplete action")
+  const errorCode = payload.error_code === undefined
+    ? undefined
+    : boundedString(payload.error_code, "payload.error_code", MAX_ERROR_CODE_BYTES, false)
+  const osError = payload.os_error === undefined ? undefined : integerValue(payload.os_error, "payload.os_error")
+  return frozen({
+    task_id: patternString(payload.task_id, "payload.task_id", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    command_sequence: integerValue(payload.command_sequence, "payload.command_sequence", 1),
+    pane: parsePaneId(payload.pane, "payload.pane"),
+    action,
+    state,
+    completed_count: completed,
+    total_count: total,
+    ...(failedIndex === undefined ? {} : { failed_index: failedIndex }),
+    partial,
+    ...(errorCode === undefined ? {} : { error_code: errorCode }),
+    ...(osError === undefined ? {} : { os_error: osError }),
+  })
+}
+
 export function parseProtocolRecord(value: unknown): ProtocolRecord {
   const envelope = objectValue(value, "record")
   if (envelope.protocol !== PROTOCOL_NAME) {
@@ -599,6 +677,7 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
       case "workspace-snapshot": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseSessionWorkspaceSnapshotPayload(envelope.payload) })
       case "task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewTaskPayload(envelope.payload) })
       case "preview": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewPayload(envelope.payload) })
+      case "action-task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseActionTaskPayload(envelope.payload) })
       case "command-error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseCommandErrorPayload(envelope.payload) })
       case "error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseErrorPayload(envelope.payload) })
       default: return invalid("record.type", `is unsupported for v3: ${type}`)

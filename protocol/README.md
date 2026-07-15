@@ -43,13 +43,16 @@
 - v2 每条 stdout record 仍受 4 MiB 与 4096 combined entries 限制；client 对单个 session 设置 64 MiB/1,000,000 record 的硬边界，并不会累积历史 workspace。
 - watcher 仅存在于 TUI 持有的 macOS 子进程：它监听两个 pane 的 cwd，并在目录进入/返回后重开对应 FD。watch 刷新失败只停用该 pane watcher 并写入 stderr，stdin command session 继续运行；后台不会接触 TUI 状态。
 
-## M2 可取消预览 Session v3
+## M2 可取消预览与文件任务 Session v3
 
-- hello capability 为 `preview-session-v3`。v3 保留 v2 完整 `workspace-snapshot` 与 command acknowledgement 语义；每条 task lifecycle event 另发 `task` record，终态另发 `preview` record。
+- hello capability 至少包含 `preview-session-v3`；支持本阶段交互扩展的 core 还会显式发布 `workspace-sort-v1`。`file-actions-v1` 目前只在 macOS headless session 发布；Windows 和尚未具备同等原子文件操作的其他平台不会发布该 capability。v3 保留 v2 完整 `workspace-snapshot` 与 command acknowledgement 语义；每条 preview task lifecycle event 另发 `task` record，终态另发 `preview` record。
 - task 与 preview 都必须携带 task id、generation、pane、preview kind、cwd/path 原始 hex identity、状态和（适用时）结构化 error。完成 preview 额外携带至多 64 KiB 的文本；过时 generation 的 preview 不得覆盖新 generation。请求在 deadline 前未开始或在受限读取循环中超时，会以 `failed` / `preview-timeout` 终态发布。
-- v3 session 在主线程从当前不可变 pane snapshot 构造 preview request（pane、generation、cwd/path 原始 hex 与 kind），每次 cursor/focus 工作区更新都会替换同 pane 的旧请求。stdin 仍只接受受限导航 command，不接受 shell、任意外部路径或文件操作。
-- v3 导航 command 在 v2 基础上增加 `focus-next` 与 `move-to`（`target` 仅允许 `first`/`last`）。前者由 core 基于当前 workspace 原子切换 pane，避免 TUI 使用陈旧 snapshot 推导目标 pane；后者用于 Vifm 的 `gg`/`G` 首尾移动。`focus` 仍用于 Ctrl-W h/l 的显式定向切栏。
-- worker 只执行受限文本/目录 I/O；stdout 由 session 主循环批量发布，stderr 只留诊断。图片、archive、Git 元数据与文件操作 session 不在 v3。
+- v3 session 在主线程从当前不可变 pane snapshot 构造 preview request（pane、generation、cwd/path 原始 hex 与 kind），每次 cursor/focus 工作区更新都会替换同 pane 的旧请求。stdin 不接受 shell command；所有交互都必须匹配 schema 中的有限 action。
+- v3 导航 command 在 v2 基础上增加 `focus-next`、`move-to`、`sort-cycle` 与 `sort-by`。`focus-next` 由 core 基于当前 workspace 原子切换 pane；`move-to` 的 `target` 仅允许 `first`/`last`；排序也由 core 重排不可变 snapshot 并保留 cursor identity。
+- 只有 hello 发布 `file-actions-v1` 时，client 才可发送 `copy`、`move-files`、`mkdir` 与 `delete`。命令必须携带点击/按键当时的 pane、cwd hex、snapshot revision、cwd 的 device/inode/ctime identity；每个 target 必须携带 path hex、device/inode/ctime 和 kind。copy/move 还必须携带目标 pane 的同一组 identity。core 只接受仍属于对应不可变 snapshot 的 target，worker 又会以 parent-FD-relative no-follow 操作重新校验真实目录和 entry identity；不执行 display path 或任意外部路径。
+- 文件动作由单 worker action queue 执行，主循环仍可处理 `hjkl`、Tab、watcher 与 F10。提交后立即以不变 workspace 的 `trigger: "command"` 确认；queue 依次发 `action-task` 的 queued/running/terminal record。terminal 前主线程刷新双 pane 并发 `trigger: "action"`，随后 event 给出 completed_count、failed_index、partial、error_code 和 os_error。队列只接受一个未完成动作，额外请求以可恢复 `action-queue-full` 拒绝；EOF/F10 会取消未完成动作。
+- 文件动作默认 no-overwrite，并以 no-follow 方式处理符号链接；目录不得复制到自身子树。move 只允许原子同文件系统 `RENAME_EXCL`，不进行 copy-then-delete fallback。delete 先原子移动到同目录的私有隔离目录、保留原 basename，再交给 `/usr/bin/trash`；post-check 或 Trash 失败只会无覆盖地恢复，绝不删除并发替换的对象。测试可用 `NEOVIFM_TRASH_EXECUTABLE` 注入绝对路径 helper。copy 中断或失败可能留下已复制部分，`partial` 会显式标记，主线程总会刷新 pane。
+- preview worker 只执行受限文本/目录 I/O；stdout 由 session 主循环批量发布，stderr 只留诊断。图片、archive 与 Git 元数据仍不在 v3。
 
 ## Pane 元数据
 
@@ -62,6 +65,9 @@
 
 - `size_bytes`
 - `inode`
+- `device`
+- `ctime_unix_ns`
+- `snapshot_revision`
 - `mtime_unix_ms`
 - `generated_at_unix_ms`
 

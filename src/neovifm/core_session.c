@@ -15,6 +15,7 @@
 #ifdef __APPLE__
 # include <fcntl.h>
 # include <sys/event.h>
+# include <sys/select.h>
 # include <unistd.h>
 #endif
 
@@ -38,11 +39,17 @@ static int set_error(nv_snapshot_error_t *error, const char code[],
 static int process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
 		unsigned int *command_sequence, int *directory_changed,
-		nv_preview_queue_t *preview_queue, uint64_t *preview_generation);
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
+		nv_action_queue_t *action_queue);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
 static int drain_preview_events(nv_preview_queue_t *queue,
 		unsigned int *output_sequence);
+static int drain_action_events(nv_action_queue_t *queue,
+		nv_workspace_session_t *session, unsigned int *output_sequence,
+		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
+		uint64_t *preview_generation);
+static int command_is_action(nv_session_command_kind_t kind);
 
 #ifdef __APPLE__
 typedef struct
@@ -63,7 +70,9 @@ static int watcher_init(nv_session_watcher_t *watcher,
 static void watcher_free(nv_session_watcher_t *watcher);
 static int watcher_handle_events(nv_session_watcher_t *watcher,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
-		unsigned int command_sequence, int *stdin_ready);
+		unsigned int command_sequence, int *stdin_ready,
+		nv_action_queue_t *action_queue);
+static int poll_stdin(int *stdin_ready);
 #endif
 
 static int
@@ -135,6 +144,134 @@ pane_from_string(const char pane[], nv_session_pane_t *result)
 }
 
 static int
+sort_key_from_string(const char key[], nv_pane_sort_key_t *result)
+{
+	if(key == NULL || result == NULL) return -1;
+	if(strcmp(key, "name") == 0) { *result = NV_SORT_NAME; return 0; }
+	if(strcmp(key, "extension") == 0) { *result = NV_SORT_EXTENSION; return 0; }
+	if(strcmp(key, "size") == 0) { *result = NV_SORT_SIZE; return 0; }
+	if(strcmp(key, "mtime") == 0) { *result = NV_SORT_MTIME; return 0; }
+	if(strcmp(key, "mode") == 0) { *result = NV_SORT_MODE; return 0; }
+	if(strcmp(key, "type") == 0) { *result = NV_SORT_TYPE; return 0; }
+	if(strcmp(key, "other") == 0) { *result = NV_SORT_OTHER; return 0; }
+	return -1;
+}
+
+static int
+copy_action_string(JSON_Object *payload, const char field[], char **result)
+{
+	const char *const value = json_object_get_string(payload, field);
+	if(value == NULL || strlen(value) > 32U*1024U) return -1;
+	*result = strdup(value);
+	return *result == NULL ? -1 : 0;
+}
+
+static int
+parse_u64_field(JSON_Object *object, const char field[], uint64_t *result)
+{
+	const char *const value = json_object_get_string(object, field);
+	if(value == NULL || value[0] == '\0' || strlen(value) > 32U) return -1;
+	for(const char *character = value; *character != '\0'; ++character)
+	{
+		if(*character < '0' || *character > '9') return -1;
+	}
+	char *end = NULL;
+	errno = 0;
+	const unsigned long long parsed = strtoull(value, &end, 10);
+	if(errno != 0 || end == value || *end != '\0') return -1;
+	*result = (uint64_t)parsed;
+	return (unsigned long long)*result == parsed ? 0 : -1;
+}
+
+static int
+entry_kind_from_string(const char kind[], nv_entry_kind_t *result)
+{
+	if(kind == NULL || result == NULL) return -1;
+	static const struct { const char *name; nv_entry_kind_t kind; } kinds[] = {
+		{ "directory", NV_ENTRY_DIRECTORY }, { "file", NV_ENTRY_FILE },
+		{ "symlink", NV_ENTRY_SYMLINK }, { "executable", NV_ENTRY_EXECUTABLE },
+		{ "fifo", NV_ENTRY_FIFO }, { "socket", NV_ENTRY_SOCKET },
+		{ "char-device", NV_ENTRY_CHAR_DEVICE },
+		{ "block-device", NV_ENTRY_BLOCK_DEVICE }, { "unknown", NV_ENTRY_UNKNOWN },
+	};
+	for(size_t i = 0U; i < sizeof(kinds)/sizeof(kinds[0]); ++i)
+	{
+		if(strcmp(kind, kinds[i].name) == 0) { *result = kinds[i].kind; return 0; }
+	}
+	return -1;
+}
+
+static int
+parse_action_identity(JSON_Object *payload, nv_session_command_t *command,
+		int needs_destination, int needs_paths)
+{
+	command->owns_action_fields = 1;
+	if(pane_from_string(json_object_get_string(payload, "pane"),
+			&command->pane) != 0 ||
+			copy_action_string(payload, "cwd_bytes_hex",
+				&command->action_cwd_bytes_hex) != 0 ||
+			parse_u64_field(payload, "snapshot_revision",
+				&command->action_snapshot_revision) != 0 ||
+			parse_u64_field(payload, "cwd_device",
+				&command->action_cwd_device) != 0 ||
+			parse_u64_field(payload, "cwd_inode",
+				&command->action_cwd_inode) != 0 ||
+			parse_u64_field(payload, "cwd_ctime_unix_ns",
+				&command->action_cwd_ctime_unix_ns) != 0)
+	{
+		return -1;
+	}
+	if(needs_destination && copy_action_string(payload,
+			"destination_cwd_bytes_hex",
+			&command->action_destination_cwd_bytes_hex) != 0)
+	{
+		return -1;
+	}
+	if(needs_destination &&
+			(parse_u64_field(payload, "destination_snapshot_revision",
+				&command->action_destination_snapshot_revision) != 0 ||
+			 parse_u64_field(payload, "destination_cwd_device",
+				&command->action_destination_cwd_device) != 0 ||
+			 parse_u64_field(payload, "destination_cwd_inode",
+				&command->action_destination_cwd_inode) != 0 ||
+			 parse_u64_field(payload, "destination_cwd_ctime_unix_ns",
+				&command->action_destination_cwd_ctime_unix_ns) != 0)) return -1;
+	if(!needs_paths) return 0;
+
+	JSON_Array *const targets = json_object_get_array(payload, "targets");
+	const size_t count = targets == NULL ? 0U : json_array_get_count(targets);
+	if(count == 0U || count > NV_SESSION_MAX_ACTION_PATHS) return -1;
+	command->action_targets = calloc(count, sizeof(*command->action_targets));
+	if(command->action_targets == NULL) return -1;
+	command->action_target_count = count;
+	for(size_t i = 0U; i < count; ++i)
+	{
+		JSON_Object *const target = json_array_get_object(targets, i);
+		const char *const path = target == NULL ? NULL :
+			json_object_get_string(target, "path_bytes_hex");
+		if(path == NULL || strlen(path) > 32U*1024U ||
+				(command->action_targets[i].path_bytes_hex = strdup(path)) == NULL ||
+				parse_u64_field(target, "device",
+					&command->action_targets[i].device) != 0 ||
+				parse_u64_field(target, "inode",
+					&command->action_targets[i].inode) != 0 ||
+				parse_u64_field(target, "ctime_unix_ns",
+					&command->action_targets[i].ctime_unix_ns) != 0 ||
+				entry_kind_from_string(json_object_get_string(target, "kind"),
+					&command->action_targets[i].kind) != 0)
+		{
+			return -1;
+		}
+		for(size_t j = 0U; j < i; ++j)
+		{
+			if(strcmp(command->action_targets[j].path_bytes_hex, path) == 0)
+				return -1;
+		}
+	}
+	return 0;
+}
+
+static int
 parse_command(const char line[], unsigned int previous_sequence,
 		unsigned int *sequence, nv_session_command_t *command)
 {
@@ -196,8 +333,59 @@ parse_command(const char line[], unsigned int previous_sequence,
 	else if(strcmp(action, "parent") == 0) command->kind = NV_SESSION_PARENT;
 	else if(strcmp(action, "toggle-selection") == 0) command->kind = NV_SESSION_TOGGLE_SELECTION;
 	else if(strcmp(action, "refresh") == 0) command->kind = NV_SESSION_REFRESH;
+	else if(strcmp(action, "sort-cycle") == 0)
+	{
+		const double delta = json_object_get_number(payload, "delta");
+		if(delta != -1.0 && delta != 1.0)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_SORT_CYCLE;
+		command->delta = (int)delta;
+	}
+	else if(strcmp(action, "sort-by") == 0)
+	{
+		command->kind = NV_SESSION_SORT_BY;
+		if(pane_from_string(json_object_get_string(payload, "pane"),
+				&command->pane) != 0 ||
+				sort_key_from_string(json_object_get_string(payload, "key"),
+					&command->sort_key) != 0)
+		{
+			json_value_free(value);
+			return -1;
+		}
+	}
+	else if(strcmp(action, "copy") == 0 || strcmp(action, "move-files") == 0 ||
+			strcmp(action, "delete") == 0)
+	{
+		command->kind = strcmp(action, "copy") == 0 ? NV_SESSION_COPY :
+			strcmp(action, "move-files") == 0 ? NV_SESSION_MOVE_FILES :
+			NV_SESSION_DELETE;
+		if(parse_action_identity(payload, command,
+				command->kind != NV_SESSION_DELETE, 1) != 0)
+		{
+			nv_session_command_free(command);
+			json_value_free(value);
+			return -1;
+		}
+	}
+	else if(strcmp(action, "mkdir") == 0)
+	{
+		const char *const name = json_object_get_string(payload, "name");
+		command->kind = NV_SESSION_MKDIR;
+		if(name == NULL || strlen(name) > NV_SESSION_MAX_NAME_BYTES ||
+				parse_action_identity(payload, command, 0, 0) != 0)
+		{
+			nv_session_command_free(command);
+			json_value_free(value);
+			return -1;
+		}
+		strcpy(command->name, name);
+	}
 	else
 	{
+		nv_session_command_free(command);
 		json_value_free(value);
 		return -1;
 	}
@@ -215,10 +403,18 @@ discard_command_tail(void)
 }
 
 static int
+command_is_action(nv_session_command_kind_t kind)
+{
+	return kind == NV_SESSION_COPY || kind == NV_SESSION_MOVE_FILES ||
+		kind == NV_SESSION_MKDIR || kind == NV_SESSION_DELETE;
+}
+
+static int
 process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
 		unsigned int *command_sequence, int *directory_changed,
-		nv_preview_queue_t *preview_queue, uint64_t *preview_generation)
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
+		nv_action_queue_t *action_queue)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
@@ -236,7 +432,39 @@ process_command_line(nv_workspace_session_t *session, char line[],
 	}
 	else
 	{
-		if(nv_workspace_session_apply(session, &command, &error) == 0)
+		if(command_is_action(command.kind))
+		{
+			nv_session_prepared_action_t action = {};
+			if(action_queue == NULL)
+			{
+				set_error(&error, "unsupported-action",
+						"file actions are unavailable on this platform");
+			}
+			else if(nv_workspace_session_prepare_action(session, &command, &action,
+					&error) == 0)
+			{
+				if(nv_action_queue_submit(action_queue, &action, next_sequence,
+						NULL) == 0)
+				{
+					*command_sequence = next_sequence;
+					const int result = write_workspace(session,
+							(*output_sequence)++, *command_sequence, "command");
+					nv_session_prepared_action_free(&action);
+					nv_snapshot_error_free(&error);
+					nv_session_command_free(&command);
+					return result;
+				}
+				const int submit_error = errno;
+				set_error(&error, submit_error == EBUSY ? "action-queue-full" :
+						"action-queue-failed", submit_error == EBUSY ?
+						"another file action is still running" :
+						"failed to queue file action");
+				error.os_error = submit_error;
+				error.retryable = submit_error == EBUSY;
+			}
+			nv_session_prepared_action_free(&action);
+		}
+		else if(nv_workspace_session_apply(session, &command, &error) == 0)
 		{
 			*command_sequence = next_sequence;
 			if(directory_changed != NULL &&
@@ -252,6 +480,7 @@ process_command_line(nv_workspace_session_t *session, char line[],
 				fputs("neovifm-core-session: failed to queue preview\n", stderr);
 			}
 			nv_snapshot_error_free(&error);
+			nv_session_command_free(&command);
 			return result;
 		}
 		/* A recoverable command error is still acknowledged, so subsequent watch
@@ -264,6 +493,7 @@ process_command_line(nv_workspace_session_t *session, char line[],
 	const int result = write_command_error(&error, (*output_sequence)++,
 			next_sequence);
 	nv_snapshot_error_free(&error);
+	nv_session_command_free(&command);
 	return result;
 }
 
@@ -310,6 +540,65 @@ drain_preview_events(nv_preview_queue_t *queue, unsigned int *output_sequence)
 		nv_protocol_json_free(preview);
 		nv_preview_event_free(&event);
 		if(result != 0) return result;
+	}
+}
+
+static int
+action_terminal(nv_action_task_state_t state)
+{
+	return state == NV_ACTION_TASK_DONE || state == NV_ACTION_TASK_FAILED ||
+		state == NV_ACTION_TASK_CANCELLED;
+}
+
+static int
+drain_action_events(nv_action_queue_t *queue,
+		nv_workspace_session_t *session, unsigned int *output_sequence,
+		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
+		uint64_t *preview_generation)
+{
+	if(queue == NULL) return 0;
+	if(nv_action_queue_failed(queue))
+	{
+		fputs("neovifm-core-session: failed to publish action terminal event\n",
+				stderr);
+		return -1;
+	}
+	for(;;)
+	{
+		nv_action_event_t event = {};
+		const int popped = nv_action_queue_pop(queue, &event);
+		if(popped < 0) return -1;
+		if(popped == 0) return 0;
+		int refresh_failed = 0;
+		if(action_terminal(event.state))
+		{
+			nv_snapshot_error_t error = {};
+			refresh_failed = nv_workspace_session_refresh_pane(session, NV_SESSION_LEFT,
+					&error) != 0 || nv_workspace_session_refresh_pane(session,
+					NV_SESSION_RIGHT, &error) != 0 ||
+					write_workspace(session, (*output_sequence)++, command_sequence,
+						"action") != 0;
+			if(refresh_failed)
+			{
+				fprintf(stderr, "neovifm-core-session: action refresh failed: %s\n",
+						error.message == NULL ? "unknown error" : error.message);
+			}
+			nv_snapshot_error_free(&error);
+			if(!refresh_failed && submit_active_preview(session, preview_queue,
+					preview_generation) != 0)
+			{
+				fputs("neovifm-core-session: failed to queue action preview\n",
+						stderr);
+			}
+		}
+		char *const json = nv_protocol_action_task_json(&event,
+				(*output_sequence)++);
+		const int result = json == NULL || write_line(json) != 0 ? -1 : 0;
+		nv_protocol_json_free(json);
+		if(action_terminal(event.state))
+			nv_action_queue_ack_terminal(queue, event.task_id);
+		nv_action_event_free(&event);
+		if(result != 0 || refresh_failed) return -1;
 	}
 }
 
@@ -438,7 +727,8 @@ watcher_free(nv_session_watcher_t *watcher)
 static int
 watcher_handle_events(nv_session_watcher_t *watcher,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
-		unsigned int command_sequence, int *stdin_ready)
+		unsigned int command_sequence, int *stdin_ready,
+		nv_action_queue_t *action_queue)
 {
 	struct kevent events[3];
 	const struct timespec timeout = { .tv_sec = 0, .tv_nsec = 12L*1000L*1000L };
@@ -461,6 +751,7 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 				NV_SESSION_LEFT) ? NV_SESSION_LEFT : NV_SESSION_RIGHT;
 		if(events[i].filter != EVFILT_VNODE || watcher_fd(watcher, pane) < 0 ||
 				events[i].ident != (uintptr_t)watcher_fd(watcher, pane)) continue;
+		if(nv_action_queue_busy(action_queue)) continue;
 		nv_snapshot_error_t error = {};
 		if(nv_workspace_session_refresh_pane(session, pane, &error) != 0)
 		{
@@ -476,6 +767,19 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 			return -1;
 		}
 	}
+	return 0;
+}
+
+static int
+poll_stdin(int *stdin_ready)
+{
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+	FD_SET(STDIN_FILENO, &read_fds);
+	struct timeval timeout = { .tv_sec = 0, .tv_usec = 12000 };
+	const int result = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
+	if(result < 0) return errno == EINTR ? 0 : -1;
+	*stdin_ready = result != 0;
 	return 0;
 }
 #endif
@@ -504,11 +808,23 @@ main(int argc, char *argv[])
 		nv_workspace_session_free(&session);
 		return 1;
 	}
+	nv_action_queue_t *action_queue = NULL;
+#ifdef __APPLE__
+	action_queue = nv_action_queue_alloc();
+	if(action_queue == NULL)
+	{
+		fputs("neovifm-core-session: failed to initialize action queue\n", stderr);
+		nv_preview_queue_free(preview_queue);
+		nv_workspace_session_free(&session);
+		return 1;
+	}
+#endif
 	uint64_t preview_generation = 0U;
 	char *const hello = nv_protocol_preview_session_hello_json(0U);
 	if(write_line(hello) != 0 || write_workspace(&session, 1U, 0U, "initial") != 0)
 	{
 		nv_protocol_json_free(hello);
+		nv_action_queue_free(action_queue);
 		nv_preview_queue_free(preview_queue);
 		nv_workspace_session_free(&session);
 		return 1;
@@ -531,7 +847,7 @@ main(int argc, char *argv[])
 		{
 			int stdin_ready = 0;
 			if(watcher_handle_events(&watcher, &session, &output_sequence,
-					command_sequence, &stdin_ready) != 0)
+					command_sequence, &stdin_ready, action_queue) != 0)
 			{
 				result = 1;
 				break;
@@ -541,12 +857,18 @@ main(int argc, char *argv[])
 				result = 1;
 				break;
 			}
+			if(drain_action_events(action_queue, &session, &output_sequence,
+					command_sequence, preview_queue, &preview_generation) != 0)
+			{
+				result = 1;
+				break;
+			}
 			if(!stdin_ready) continue;
 			if(fgets(line, sizeof(line), stdin) == NULL) break;
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, &directory_changed, preview_queue,
-					&preview_generation) != 0)
+					&preview_generation, action_queue) != 0)
 			{
 				result = 1;
 				break;
@@ -563,17 +885,41 @@ main(int argc, char *argv[])
 	}
 	else
 #endif
-	while(fgets(line, sizeof(line), stdin) != NULL)
+	for(;;)
 	{
+		int stdin_ready = 0;
+#ifdef __APPLE__
+		if(poll_stdin(&stdin_ready) != 0)
+		{
+			result = 1;
+			break;
+		}
+#else
+		stdin_ready = 1;
+#endif
+		if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
+				drain_action_events(action_queue, &session, &output_sequence,
+						command_sequence, preview_queue, &preview_generation) != 0)
+		{
+			result = 1;
+			break;
+		}
+		if(!stdin_ready) continue;
+		if(fgets(line, sizeof(line), stdin) == NULL) break;
 		if(process_command_line(&session, line, sizeof(line), &output_sequence,
-				&command_sequence, NULL, preview_queue, &preview_generation) != 0)
+				&command_sequence, NULL, preview_queue, &preview_generation,
+				action_queue) != 0)
 		{
 			result = 1;
 			break;
 		}
 	}
+	nv_action_queue_cancel_all(action_queue);
+	if(drain_action_events(action_queue, &session, &output_sequence,
+			command_sequence, preview_queue, &preview_generation) != 0) result = 1;
 	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
 	nv_snapshot_error_free(&error);
+	nv_action_queue_free(action_queue);
 	nv_preview_queue_free(preview_queue);
 	nv_workspace_session_free(&session);
 	return result != 0 || ferror(stdin) ? 1 : 0;

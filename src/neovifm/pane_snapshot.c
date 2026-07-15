@@ -33,7 +33,7 @@ static int snapshot_protocol_budget(const nv_pane_snapshot_t *snapshot,
 		size_t *budget);
 static int entry_protocol_budget(const nv_pane_entry_t *entry, size_t *budget);
 static char *join_path(const char dir[], const char name[]);
-static int build_entry(const char dir[], const char name[],
+static int build_entry(nv_dir_t *dir, const char directory[], const char name[],
 		nv_pane_entry_t *entry);
 static int append_entry(nv_pane_snapshot_t *snapshot,
 		nv_pane_entry_t *entry, size_t *capacity, size_t *protocol_bytes);
@@ -245,6 +245,26 @@ stat_mtime_ms(const struct stat *st)
 #endif
 }
 
+static uint64_t
+stat_ctime_ns(const struct stat *st)
+{
+#if defined(__APPLE__)
+	const time_t seconds = st->st_ctimespec.tv_sec;
+	const long nanoseconds = st->st_ctimespec.tv_nsec;
+#elif defined(HAVE_STRUCT_STAT_ST_CTIM)
+	const time_t seconds = st->st_ctim.tv_sec;
+	const long nanoseconds = st->st_ctim.tv_nsec;
+#else
+	const time_t seconds = st->st_ctime;
+	const long nanoseconds = 0L;
+#endif
+	if(seconds < 0) return 0U;
+	const uint64_t value = (uint64_t)seconds;
+	if(value > (UINT64_MAX - (uint64_t)nanoseconds)/1000000000U)
+		return UINT64_MAX;
+	return value*1000000000U + (uint64_t)nanoseconds;
+}
+
 static nv_entry_kind_t
 entry_kind(const struct stat *st)
 {
@@ -283,19 +303,22 @@ set_stat(nv_pane_entry_t *entry, const struct stat *st, int is_symlink)
 	entry->kind = is_symlink ? NV_ENTRY_SYMLINK : entry_kind(st);
 	entry->size_bytes = (st->st_size > 0) ? (uint64_t)st->st_size : 0U;
 	entry->mtime_unix_ms = stat_mtime_ms(st);
+	entry->device = (uint64_t)st->st_dev;
 	entry->inode = (uint64_t)st->st_ino;
+	entry->ctime_unix_ns = stat_ctime_ns(st);
 	entry->mode = (uint32_t)st->st_mode;
 	entry->has_stat = 1;
 }
 
 static int
-build_entry(const char dir[], const char name[], nv_pane_entry_t *entry)
+build_entry(nv_dir_t *dir, const char directory[], const char name[],
+		nv_pane_entry_t *entry)
 {
 	memset(entry, 0, sizeof(*entry));
 	entry->kind = NV_ENTRY_UNKNOWN;
 	entry->hidden = name[0] == '.';
 
-	char *const raw_path = join_path(dir, name);
+	char *const raw_path = join_path(directory, name);
 	if(raw_path == NULL)
 	{
 		return BUILD_ENTRY_NO_MEMORY;
@@ -329,7 +352,7 @@ build_entry(const char dir[], const char name[], nv_pane_entry_t *entry)
 
 	struct stat st;
 	int is_symlink = 0;
-	if(nv_lstat(raw_path, &st, &is_symlink) == 0)
+	if(nv_dir_lstat(dir, name, &st, &is_symlink) == 0)
 	{
 		set_stat(entry, &st, is_symlink);
 	}
@@ -398,11 +421,136 @@ entry_free(nv_pane_entry_t *entry)
 }
 
 static int
-entry_compare(const void *left, const void *right)
+compare_name(const nv_pane_entry_t *left, const nv_pane_entry_t *right)
 {
-	const nv_pane_entry_t *const lhs = left;
-	const nv_pane_entry_t *const rhs = right;
-	return strcmp(lhs->name_bytes_hex, rhs->name_bytes_hex);
+	return strcmp(left->name_bytes_hex, right->name_bytes_hex);
+}
+
+static const char *
+entry_extension(const nv_pane_entry_t *entry)
+{
+	const char *const dot = strrchr(entry->name_display, '.');
+	return dot == NULL || dot == entry->name_display ? "" : dot + 1;
+}
+
+static int
+compare_uint64(uint64_t left, uint64_t right)
+{
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+static int
+compare_int64(int64_t left, int64_t right)
+{
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+static int
+compare_entry_key(const nv_pane_entry_t *left, const nv_pane_entry_t *right,
+		nv_pane_sort_key_t key)
+{
+	int result = 0;
+	switch(key)
+	{
+		case NV_SORT_NAME:
+			break;
+		case NV_SORT_EXTENSION:
+			result = strcmp(entry_extension(left), entry_extension(right));
+			break;
+		case NV_SORT_SIZE:
+			result = compare_uint64(left->size_bytes, right->size_bytes);
+			break;
+		case NV_SORT_MTIME:
+			result = compare_int64(left->mtime_unix_ms, right->mtime_unix_ms);
+			break;
+		case NV_SORT_MODE:
+			result = compare_uint64(left->mode, right->mode);
+			break;
+		case NV_SORT_TYPE:
+			result = compare_int64(left->kind, right->kind);
+			break;
+		case NV_SORT_OTHER:
+			break;
+	}
+	return result == 0 ? compare_name(left, right) : result;
+}
+
+#define DEFINE_ENTRY_COMPARATOR(name, key, descending) \
+	static int name(const void *left, const void *right) \
+	{ \
+		const nv_pane_entry_t *const lhs = left; \
+		const nv_pane_entry_t *const rhs = right; \
+		return compare_entry_key(descending ? rhs : lhs, descending ? lhs : rhs, key); \
+	}
+
+DEFINE_ENTRY_COMPARATOR(compare_name_asc, NV_SORT_NAME, 0)
+DEFINE_ENTRY_COMPARATOR(compare_name_desc, NV_SORT_NAME, 1)
+DEFINE_ENTRY_COMPARATOR(compare_extension_asc, NV_SORT_EXTENSION, 0)
+DEFINE_ENTRY_COMPARATOR(compare_extension_desc, NV_SORT_EXTENSION, 1)
+DEFINE_ENTRY_COMPARATOR(compare_size_asc, NV_SORT_SIZE, 0)
+DEFINE_ENTRY_COMPARATOR(compare_size_desc, NV_SORT_SIZE, 1)
+DEFINE_ENTRY_COMPARATOR(compare_mtime_asc, NV_SORT_MTIME, 0)
+DEFINE_ENTRY_COMPARATOR(compare_mtime_desc, NV_SORT_MTIME, 1)
+DEFINE_ENTRY_COMPARATOR(compare_mode_asc, NV_SORT_MODE, 0)
+DEFINE_ENTRY_COMPARATOR(compare_mode_desc, NV_SORT_MODE, 1)
+DEFINE_ENTRY_COMPARATOR(compare_type_asc, NV_SORT_TYPE, 0)
+DEFINE_ENTRY_COMPARATOR(compare_type_desc, NV_SORT_TYPE, 1)
+DEFINE_ENTRY_COMPARATOR(compare_other_asc, NV_SORT_OTHER, 0)
+DEFINE_ENTRY_COMPARATOR(compare_other_desc, NV_SORT_OTHER, 1)
+
+#undef DEFINE_ENTRY_COMPARATOR
+
+typedef int (*entry_comparator_t)(const void *, const void *);
+
+static entry_comparator_t
+entry_comparator(nv_pane_sort_key_t key, int descending)
+{
+	switch(key)
+	{
+		case NV_SORT_NAME: return descending ? compare_name_desc : compare_name_asc;
+		case NV_SORT_EXTENSION: return descending ? compare_extension_desc : compare_extension_asc;
+		case NV_SORT_SIZE: return descending ? compare_size_desc : compare_size_asc;
+		case NV_SORT_MTIME: return descending ? compare_mtime_desc : compare_mtime_asc;
+		case NV_SORT_MODE: return descending ? compare_mode_desc : compare_mode_asc;
+		case NV_SORT_TYPE: return descending ? compare_type_desc : compare_type_asc;
+		case NV_SORT_OTHER: return descending ? compare_other_desc : compare_other_asc;
+	}
+	return NULL;
+}
+
+void
+nv_pane_snapshot_sort(nv_pane_snapshot_t *snapshot, nv_pane_sort_key_t key,
+		int descending)
+{
+	if(snapshot == NULL)
+	{
+		return;
+	}
+	entry_comparator_t const comparator = entry_comparator(key, descending != 0);
+	if(comparator == NULL)
+	{
+		return;
+	}
+	const char *const cursor_identity = snapshot->cursor < 0 ? NULL :
+		snapshot->entries[snapshot->cursor].path_bytes_hex;
+	if(snapshot->entry_count > 1U)
+	{
+		qsort(snapshot->entries, snapshot->entry_count,
+				sizeof(*snapshot->entries), comparator);
+	}
+	if(cursor_identity != NULL)
+	{
+		for(size_t i = 0U; i < snapshot->entry_count; ++i)
+		{
+			if(snapshot->entries[i].path_bytes_hex == cursor_identity)
+			{
+				snapshot->cursor = (int)i;
+				break;
+			}
+		}
+	}
+	snapshot->sort_key = key;
+	snapshot->sort_descending = descending != 0;
 }
 
 static int
@@ -503,7 +651,7 @@ scan_directory(nv_dir_t *dir, const char path[], nv_pane_snapshot_t *snapshot,
 		}
 
 		nv_pane_entry_t entry;
-		const int build_result = build_entry(path, name, &entry);
+		const int build_result = build_entry(dir, path, name, &entry);
 		if(build_result != 0)
 		{
 			entry_free(&entry);
@@ -578,6 +726,20 @@ nv_pane_snapshot_build(const char path[], nv_pane_snapshot_t *snapshot,
 		set_error(&next_error, "open-directory", errno, path);
 		goto failed;
 	}
+#ifndef _WIN32
+	struct stat cwd_stat;
+	if(nv_dir_fstat(dir, &cwd_stat) != 0 || !S_ISDIR(cwd_stat.st_mode))
+	{
+		const int stat_error = errno == 0 ? ENOTDIR : errno;
+		nv_dir_close(dir);
+		set_error(&next_error, "stat-directory", stat_error, path);
+		goto failed;
+	}
+	next_snapshot.cwd_device = (uint64_t)cwd_stat.st_dev;
+	next_snapshot.cwd_inode = (uint64_t)cwd_stat.st_ino;
+	next_snapshot.cwd_ctime_unix_ns = stat_ctime_ns(&cwd_stat);
+	next_snapshot.has_cwd_stat = 1;
+#endif
 	if(initialize_snapshot(path, &next_snapshot, &next_error) != 0 ||
 			snapshot_protocol_budget(&next_snapshot, &protocol_bytes) != 0 ||
 			scan_directory(dir, path, &next_snapshot, &next_error, &capacity,
@@ -590,6 +752,18 @@ nv_pane_snapshot_build(const char path[], nv_pane_snapshot_t *snapshot,
 		nv_dir_close(dir);
 		goto failed;
 	}
+#ifndef _WIN32
+	struct stat published_stat;
+	if(stat(path, &published_stat) != 0 ||
+			published_stat.st_dev != cwd_stat.st_dev ||
+			published_stat.st_ino != cwd_stat.st_ino)
+	{
+		const int stat_error = errno == 0 ? ESTALE : errno;
+		nv_dir_close(dir);
+		set_error(&next_error, "stale-directory", stat_error, path);
+		goto failed;
+	}
+#endif
 	if(nv_dir_close(dir) != 0)
 	{
 		const int close_error = errno;
@@ -597,14 +771,10 @@ nv_pane_snapshot_build(const char path[], nv_pane_snapshot_t *snapshot,
 		goto failed;
 	}
 
-	if(next_snapshot.entry_count > 1U)
-	{
-		qsort(next_snapshot.entries, next_snapshot.entry_count,
-				sizeof(*next_snapshot.entries), entry_compare);
-	}
 	next_snapshot.generated_at_unix_ms = current_time_ms();
+	next_snapshot.cursor = -1;
+	nv_pane_snapshot_sort(&next_snapshot, NV_SORT_NAME, 0);
 	next_snapshot.cursor = (next_snapshot.entry_count == 0U) ? -1 : 0;
-	next_snapshot.sort_key = NV_SORT_NAME;
 
 	nv_pane_snapshot_free(snapshot);
 	nv_snapshot_error_free(error);

@@ -52,10 +52,10 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
 		expect(state.version).toBe(3)
 		expect(state.tasks?.some((task) => task.state === "done" && task.kind === "text")).toBe(true)
 
-    expect(session.send({ action: "focus", pane: "right" })).toBe(true)
+    expect(await session.send({ action: "focus", pane: "right" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "right")
     const beforeMove = state
-    expect(session.send({ action: "move", delta: 1 })).toBe(true)
+    expect(await session.send({ action: "move", delta: 1 })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === 2)
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected updated session")
     expect(state.workspace.left).toEqual(beforeMove.workspace.left)
@@ -66,9 +66,9 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
     expect(state.commandSequence).toBe(2)
     expect(state.workspace.right).toEqual(beforeMove.workspace.right)
 
-    expect(session.send({ action: "focus", pane: "left" })).toBe(true)
+    expect(await session.send({ action: "focus", pane: "left" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "left")
-    expect(session.send({ action: "refresh" })).toBe(true)
+    expect(await session.send({ action: "refresh" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "left-refreshed"))
     expect(errors).toEqual([])
   } finally {

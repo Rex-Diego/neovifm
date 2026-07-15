@@ -67,6 +67,7 @@ neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/action_task.c neovifm/action_task.h \
 	neovifm/preview_task.c neovifm/preview_task.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \

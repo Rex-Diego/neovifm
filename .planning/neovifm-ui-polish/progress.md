@@ -33,3 +33,42 @@
 - Vifm 一致性修正 GREEN：Home/End、Ctrl-L、ZZ/ZQ 通过；普通 q/r/Ctrl-C 和不支持的大写 H/L 不再误触发退出、刷新或目录导航。
 - 最终 TUI 验收：68 unit/text-frame tests，85.65% functions / 94.50% lines，typecheck 通过；5 integration tests 通过。
 - 最终仓库验收：focused C 8625 checks / 36 tests、串行 `make check`、`bun audit`、`git diff --check` 全部通过。Phase 5 完成。
+- 用户现场否定 Phase 5 的真实可用性结论：正式终端 `h/j/k/l`、Tab 无效，功能键条不可点击，状态栏视觉未达到 Starship 水准。重新打开 Phase 6，验收源切换为真实 PTY + 鼠标事件。
+- 用户补充 pane header 与排序交互：列名需类似 btop；Left/Right 切换 size/time/permissions 等字段，点击列标题切换 sort 升降序。该排序将下沉到 core，避免 UI/cursor 状态分叉。
+- 用户进一步指出文件行并未达到 lsd：当前 ASCII `d/x/-` 与过宽左留白仅可作为降级，不应作为默认。Phase 6 增加 Nerd Font 图标和紧凑行布局。
+- 正式 PTY 已复现现场：ready 后 `j`、Tab 无输出，F10 可退出。下一步记录真实 KeyEvent 的 `name/sequence/raw/source`，为该差异写 RED 测试。
+- 阅读 OpenTUI parser/dispatch 源码：普通 ASCII 与 Tab 理论上会立即进入全局 useKeyboard；开始用 OpenTUI 自带 raw-input capture 区分 renderer 输入丢失与 App/session 丢失。
+- 用户明确功能键条是 Fn 被宿主占用时的鼠标替代入口；Phase 6 扩展到真实 F5--F8 操作并统一 mouse/keyboard dispatcher。
+- 真实 PTY instrumentation 定位根因：j/Tab 均到达 renderer 和 keymap，但 command send=false；OpenTUI render() 在 mount 后立即 resolve，main 随即关闭 core session。进入生命周期 TDD 修复。
+- 已确认修复接口：用 renderer `onDestroy` 构造生命周期 Promise；鼠标测试使用 renderable id + mockMouse，而不是文本坐标猜测。
+- 生命周期 RED/GREEN 完成：新增 `renderUntilDestroyed()`，index unit test 与 typecheck 通过。
+- 同一正式 PTY 回归已证明修复有效：ready 后 `j` 将 cursor 从第 1 行移动到第 2 行，Tab 将 active pane 从 left 切到 right，F10 正常退出。
+- 完成视觉基线采样：读取本机 lsd 的 Nerd Font 输出、用户 Catppuccin Mocha Starship 配置与 btop normal screenshot；新视觉将按这些实物实现。
+- 完成 sort 边界设计：新增 mode sort、core-owned cycle/by commands，并在排序中保留 cursor identity 与 selection。
+- Phase 6 RED 已建立：TUI 5 个预期失败覆盖 headers/powerline/icons/mouse/sort/F10 dispatcher；C 编译因缺少 sort command enums 按预期失败。
+- Phase 6 sort GREEN：新增 `mode` sort、`sort-cycle`/`sort-by` v3 command、cursor identity 保持、refresh sort 继承；focused C suite 通过。
+- Phase 6 视觉 GREEN：pane title + 列标题、Catppuccin Powerline 状态栏、lsd Nerd Font 图标、ASCII fallback 与紧凑单宽 marker 已落地。
+- Phase 6 鼠标 GREEN：所有 F3--F10 按钮与 sort headers 均有稳定 renderable id/onMouseDown；test renderer 已验证点击 copy、mkdir 输入、delete 确认与 quit。
+- Phase 6 action RED/GREEN：先由缺少 `NV_SESSION_COPY/MOVE_FILES/MKDIR/DELETE` 编译失败，再实现 no-overwrite copy/move、mkdir、确认 delete 与双 pane refresh；38 个 focused C tests / 8672 checks 通过。
+- F4 已接 `$VISUAL/$EDITOR` argv 服务，TUI suspend 后启动外部编辑器，命令不经过 shell；单测覆盖含参数 editor argv。
+- 真实 C session 集成已扩展：实际验证 `h/j/k/l`、Space/Tab、Left/Right sort、鼠标 sort toggle、点击 F5 copy、点击 F7 mkdir、点击 F8 + Y delete。
+- 当前 TUI 全量 unit/text-frame 72 tests 通过，coverage 85.31% functions / 92.89% lines，typecheck 通过；真实 keyboard/mouse/action integration 通过。
+- 真实 PTY 再验收：80 列双 pane、Nerd Font 图标、Powerline 状态栏与完整 F3--F10 条正常；Tab、Right sort、F10 有实际终端重绘/退出。
+- 下一步：串行全仓 `make check`、依赖审计、diff/security review，然后提交并 push。
+- 用户在其他 agent 工作期间下达范围纠正：本轮不得改源码，只把新方向写入活动计划。
+- 已将 Phase 7 设为 pending：后续回归 Vifm 原生 C/ncurses、`fileviewer`/`quickview`/`vcache` 和现有跨平台 watcher，只借鉴 Yazi 的多媒体预览与视觉美化。
+- 现有 Hybrid/OpenTUI 代码暂时冻结评估；本轮没有修改、回退、提交或推送源码，也没有改动 Phase 6 的进行中状态。
+- 用户随后明确要求继续完成并提交 Phase 6；恢复源码执行，并将首轮 code/security/test review 的阻塞项全部纳入修复。
+- action command 已改为 dispatch-time exact identity；补充 captured-target regression，证明 cursor 移动后仍操作原目标，并拒绝 stale cwd/path。
+- 递归文件动作完成安全重写：POSIX fd-relative no-follow/no-overwrite、自身子树拒绝、macOS atomic no-replace rename、cross-filesystem move 不做危险 destination rollback；Windows reparse point 与 subtree 边界同步收紧。
+- capability/schema/docs 已同步：v3 hello 发布 `workspace-sort-v1`/`file-actions-v1`，F5--F8 capability-gated，action payload 必须携带 pane/cwd/destination/paths raw identity。
+- F4 editor 边界改为 raw hex identity 严格 UTF-8 解码，并使用 direct argv + `--`；新增 display-path spoof 与 invalid UTF-8 测试。
+- 功能键鼠标覆盖补齐 F3/F4/F5/F6/F7/F8/F10；modal 期间底栏点击被屏蔽，F7 可正常输入含 `n` 的目录名，关闭的 core channel 会显示失败而不是假成功。
+- 新增正式入口 `production-pty.test.ts`：真实 pty 验证 `j`、Tab、SGR mouse F7 创建目录和 mouse F10 退出；真实 C integration 同时验证 F5 copy、F6 move、F7 mkdir、F8 delete 的磁盘结果。
+- 最终 TUI unit/text-frame：78 tests，85.61% functions / 94.14% lines；typecheck 通过。真实 C/PTY integration：6 tests 全通过；`bun audit` 无漏洞。
+- 首轮 reviewer 指出同步文件操作、只依赖 inode、跨文件系统 copy-delete move、写入错误被吞掉及 action capability 误报等阻塞问题；Phase 6 重新进入收敛。
+- action 改为单 worker queue：主循环继续处理 hjkl、Tab、watcher 和 F10；协议发布 queued/running/terminal lifecycle，终态前刷新双 pane。客户端串行 await stdin write/flush，并将失败显示为 command error。
+- 文件动作改为 macOS capability-gated；snapshot 与 command 绑定 cwd/entry 的 device、inode、ctime 和 revision，执行时再次用 parent fd 的 no-follow identity 校验。move 拒绝跨文件系统 fallback；delete/move 使用原子交换及占位回滚避免同名替换误操作。
+- 终审修复补齐：queue 在 terminal event 被主循环发布和确认前保持 busy，避免 UAF 与后续动作穿插；F10 先关闭 stdin 让 core 协作取消，3 秒后才兜底 SIGKILL；终态 action detail 优先显示失败/partial code。
+- snapshot 扫描改用已打开目录的 fd 读取 cwd 与 entry metadata，并在发布前核对 path 仍指向同一目录；文件 copy 失败不再 unlink 可能被替换的 destination。macOS delete 将对象放进私有隔离目录但保留原 basename 再交给 Trash；取消 Trash 有 TERM deadline 后 SIGKILL。
+- 最新 focused C：8922 checks / 48 tests；TUI unit：82 tests + typecheck；真实 integration：6 tests 全通过。仍待 coverage、audit、串行 make check、最终 review 与提交推送。

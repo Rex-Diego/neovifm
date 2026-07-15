@@ -91,10 +91,19 @@ describe("JSONL protocol", () => {
         content: "note", truncated: false,
       },
     })
+    const actionTask = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "action-task", sequence: 4,
+      payload: {
+        task_id: "9", command_sequence: 3, pane: "left", action: "copy",
+        state: "failed", completed_count: 1, total_count: 2, failed_index: 1,
+        partial: true, error_code: "destination-exists", os_error: 17,
+      },
+    })
 
     expect(task).toMatchObject({ version: 3, type: "task", payload: { generation: "7", state: "running" } })
     expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", truncated: false } })
     expect(Object.isFrozen(preview)).toBe(true)
+    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true } })
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },

@@ -8,10 +8,12 @@ export interface KeyLike {
   readonly meta: boolean
 }
 
+export type FunctionAction = "view" | "edit" | "copy" | "move" | "mkdir" | "delete" | "quit"
+
 export type KeymapResult =
   | Readonly<{ kind: "command"; command: CoreSessionCommand }>
   | Readonly<{ kind: "cancel" }>
-  | Readonly<{ kind: "function"; action: "view" | "edit" | "copy" | "move" | "mkdir" | "delete" }>
+  | Readonly<{ kind: "function"; action: FunctionAction }>
   | Readonly<{ kind: "pending" }>
   | Readonly<{ kind: "unhandled" }>
 
@@ -69,7 +71,7 @@ export class VifmKeymap {
     if (key.ctrl) return { kind: "unhandled" }
     if (key.meta) return { kind: "unhandled" }
 
-    if (name === "f10") return { kind: "cancel" }
+    if (name === "f10") return { kind: "function", action: "quit" }
     if (name === "f3") return { kind: "function", action: "view" }
     if (name === "f4") return { kind: "function", action: "edit" }
     if (name === "f5") return { kind: "function", action: "copy" }
@@ -92,10 +94,12 @@ export class VifmKeymap {
       this.#prefix = "g"
       return { kind: "pending" }
     }
-    if (name === "h" || name === "left" || name === "backspace") return command({ action: "parent" })
+    if (name === "h" || name === "backspace") return command({ action: "parent" })
     if (name === "j" || name === "down") return command({ action: "move", delta: 1 })
     if (name === "k" || name === "up") return command({ action: "move", delta: -1 })
-    if (name === "l" || name === "right" || name === "return") return command({ action: "enter" })
+    if (name === "l" || name === "return") return command({ action: "enter" })
+    if (name === "left") return command({ action: "sort-cycle", delta: -1 })
+    if (name === "right") return command({ action: "sort-cycle", delta: 1 })
     if (name === "space" || name === "tab") return command({ action: "focus-next" })
     if (name === "t") return command({ action: "toggle-selection" })
     return { kind: "unhandled" }

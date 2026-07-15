@@ -10,13 +10,15 @@ const key = (name: string, options: Partial<KeyLike> = {}): KeyLike => ({
   meta: options.meta ?? false,
 })
 
-test("maps Vifm h/j/k/l and arrow navigation", () => {
+test("keeps Vifm h/j/k/l while reserving horizontal arrows for btop-style sort selection", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("h"))).toEqual({ kind: "command", command: { action: "parent" } })
   expect(map.handle(key("j"))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
   expect(map.handle(key("k"))).toEqual({ kind: "command", command: { action: "move", delta: -1 } })
   expect(map.handle(key("l"))).toEqual({ kind: "command", command: { action: "enter" } })
   expect(map.handle(key("down", { sequence: "\u001b[B" }))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
+  expect(map.handle(key("left", { sequence: "\u001b[D" }))).toEqual({ kind: "command", command: { action: "sort-cycle", delta: -1 } })
+  expect(map.handle(key("right", { sequence: "\u001b[C" }))).toEqual({ kind: "command", command: { action: "sort-cycle", delta: 1 } })
 })
 
 test("maps Vifm pane switching aliases instead of selecting on Space", () => {
@@ -58,9 +60,13 @@ test("falls back to sequence when a terminal leaves key name empty", () => {
   expect(map.handle(key("", { sequence: "j" }))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
 })
 
-test("exposes Total Commander function keys without inventing file operations", () => {
+test("exposes every Total Commander function key through the shared action dispatcher", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("f3"))).toEqual({ kind: "function", action: "view" })
   expect(map.handle(key("f4"))).toEqual({ kind: "function", action: "edit" })
-  expect(map.handle(key("f10"))).toEqual({ kind: "cancel" })
+  expect(map.handle(key("f5"))).toEqual({ kind: "function", action: "copy" })
+  expect(map.handle(key("f6"))).toEqual({ kind: "function", action: "move" })
+  expect(map.handle(key("f7"))).toEqual({ kind: "function", action: "mkdir" })
+  expect(map.handle(key("f8"))).toEqual({ kind: "function", action: "delete" })
+  expect(map.handle(key("f10"))).toEqual({ kind: "function", action: "quit" })
 })

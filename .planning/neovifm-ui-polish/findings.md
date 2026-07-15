@@ -57,3 +57,63 @@
 - 项目统一参考源码目录已经存在于 `/Users/rex/soft/_refs/neovifm`，其中 btop、lsd 等均采用 shallow clone；ViATc 应沿用该组织方式，不能嵌套进 NeoVifm Git 工作树。
 - GitHub 搜索确认目标为 `linxinhong/ViATc`（Vim Mode At Total Commander）。已 shallow clone 到 `/Users/rex/soft/_refs/neovifm/viatc`，origin 为 `https://github.com/linxinhong/ViATc.git`，master HEAD 为 `755cead6477dfc8968009f41dc7d41252fc1ac4b`。
 - ViATc 是 AutoHotkey 快捷键/动作映射平台，可参考多键序列、计数、Total Commander command action 与 pane/tab 切换；其实现语言和 Windows 注入模型不进入 NeoVifm runtime。
+
+## 2026-07-15 真实终端返工
+
+- 用户确认已能看到新版双行底栏，但真实终端中的 `h/j/k/l` 与 Tab 都没有效果；这证明 renderer mock + C session 集成没有覆盖正式入口的真实输入订阅或终端事件形态。
+- 当前 `FunctionKey` 只是 `<box>/<text>` 视觉组件，没有任何 mouse handler；按钮点了无反应是确定性实现缺失，不是环境问题。
+- 当前状态栏仅由矩形背景块和 ASCII `|` 拼接，缺少 Starship 的连续箭头边界、主次层级、右侧上下文以及一致的 palette；必须按真实文本帧和支持 Nerd Font/ASCII 两种能力重新设计。
+- 每个 pane 需要 btop 风格的列标题。为同时满足 Vifm 语义与用户新要求，字母 `h/l` 继续负责父目录/进入，独立的 Left/Right 方向键改为在 `name/size/mtime/mode` 排序字段间移动。
+- 排序不能只在 Solid 组件内对 entries 建派生数组，否则 core cursor index、selection 和预览 identity 会与画面错位；排序字段和方向必须通过版本化 command 交给 C session，再发布新的不可变 snapshot。
+- 正式入口确实通过 `render(() => <App ...>)` 启动，`useKeyboard` 在 `onMount` 后订阅全局 `renderer.keyInput`；真实键无效仍需 PTY 事件日志确认，不能继续由 test renderer 推断。
+- OpenTUI renderable 原生支持 `onMouseDown`，test renderer 也暴露 mock mouse；当前 FunctionKey 完全没有 handler，因此可以先用鼠标 RED 测试稳定复现。
+- 用户明确拒绝 `d/x/-` 作为主视觉。新的默认应是 Nerd Font/lsd 图标，ASCII 只作为 capability fallback；同时压缩 cursor、selection 与 icon 之间的固定空白。
+- 功能键条的产品目的已澄清：当 VSCode/终端宿主抢占 Fn 键时，用户仍能鼠标点击直达同一功能。因此键盘与鼠标必须复用一个 dispatcher，F5--F8 不能停留在 disabled 文案。
+- 本机 `lsd 1.2.0 --icon always` 的真实输出使用 Nerd Font 文件类型图标：目录 `/󱧼`、TS ``、TSX ``，图标紧贴名称且只留一个 separator；这应成为默认 fancy 模式的视觉基线。
+- 用户自己的 Starship 配置是 Catppuccin Mocha powerline：`` 起始、连续 `` 过渡、`` 收尾，palette 依次 red/peach/yellow/green/sapphire/lavender，文字使用 crust。状态栏应直接遵循这套本机审美，而不是泛化的彩色矩形加 `|`。
+- btop `normal.png` 与帮助文本显示：panel title 嵌在边框，列标题颜色区分，当前 sort 在标题处带 `▼/▲`；Left/Right 选择前后排序列，reverse 独立切换。这与用户要求一致，可映射为 pane header 上的 active sort column + arrow indicator。
+- Snapshot 已有 `sort_key`/`sort_descending`，现有枚举含 name/extension/size/mtime/type/other，但没有 permissions/mode；Phase 6 需增加 `mode` 并保持 JSON/schema/TS/C 一致。
+- Headless snapshot 当前只在 build 末尾按 name qsort；workspace session 没有 sort command。需要新增 cursor-identity-preserving sort API，并让 refresh/enter 后继承当前 pane 的 sort key/direction。
+- 为避免再次由 UI 陈旧状态推导，键盘用 core-owned `sort-cycle(delta)`；点击列头用 `sort-by(pane,key)`，core 对相同 key 切换升降、不同 key 切换到升序并激活被点击 pane。
+- 已用正式命令 `bun run dev ../.. /tmp` 在真实 PTY 复现：界面完成加载后发送普通 `j` 与 Tab 均没有任何重绘；同一 PTY 发送 F10 序列 `ESC [ 21 ~` 能正常退出。由此排除 stdin 整体断开，范围已缩到普通字符/Tab 的真实 KeyEvent 解析或归一化。
+- 首次在应用加载前发送的 `j` 会落在 OpenTUI 终端能力握手窗口，不能作为键盘验收；新的 PTY 测试必须等待 ready frame，再发送按键。
+- OpenTUI 0.4.3 的 `StdinParser` 对单字节 ASCII 会立即生成 key event，`parseKeypress()` 明确将 `j` 解析为 name/sequence `j`、Tab 解析为 `tab`；源码层并不存在仅支持功能键的设计。
+- `useKeyboard` 注册的是全局 `renderer.keyInput` listener，且全局 listener 优先于 renderable；scrollbox 焦点不应在 callback 之前吞掉按键。下一步用 `OTUI_DEBUG/OTUI_DUMP_CAPTURES` 确认字节是否到达 renderer，再检查 App handler 与 session.send。
+- 原因已精确定位：真实 PTY 中 renderer 收到 `j`/Tab，App keymap 也分别产生 `{action:"move"}` / `focus-next`，但 `session.send()` 返回 `false`。
+- `@opentui/solid` 的 `render()` 只负责创建 renderer 和挂载 Solid root，挂载完成后 Promise 立即 resolve，并不等待 renderer destroy。`main()` 错把它当应用生命周期 Promise，随即执行 `session.close()`；因此画面仍在、F10 本地退出有效，但所有 core command 都被拒绝。这也解释了为何直接持有 session 的 integration test 全绿而正式入口完全失效。
+- 正确生命周期应通过 renderer config 的 `onDestroy` Promise 等待应用退出；必须给 `main()` 增加正式入口生命周期 RED 测试，防止 mount resolve 后提前关闭 session。
+- `render()` 支持 `onDestroy` config，但其返回值只表示 mount 完成；可封装 `renderUntilDestroyed()`，以 onDestroy resolve 的独立 Promise 作为 `main()` 生命周期。
+- OpenTUI test renderer 提供 `mockMouse.click(x,y)`，renderable 支持稳定 `id` 和 `x/y`；功能键与列标题测试应按 renderable id 定位，避免硬编码屏幕坐标。
+- 修复后的正式 PTY 已直接观察到最小重绘：`j` 更新 cursor marker，Tab 更新两 pane border/title 与状态栏 active pane。键盘主故障已由实际入口验证关闭。
+
+## 2026-07-15 Phase 6 落地结果
+
+- 正式入口生命周期已由 renderer `onDestroy` 控制；core session 不再在 mount 后被提前关闭。真实 PTY 中 Tab、Left/Right sort 与 F10 均产生预期重绘/退出。
+- 两个 pane 的 border title 明确显示 `LEFT/RIGHT`、active 状态和 cwd；列标题嵌入 pane 内容首行，当前 sort 使用 `▲/▼`。
+- 宽屏同时展示 Name/Permissions/Size/Modified；中等宽度展示一个可轮换 metadata 列，Left/Right 在 size/mtime/mode/name 间切换，避免选中字段在画面中不可见。
+- 文件行默认使用 lsd 风格 Nerd Font 映射，cursor/selection 固定为单宽 `>`/`*`，图标与名称只留一个 separator；`NEOVIFM_ICONS=ascii` 提供明确降级。
+- 状态栏采用本机 Starship 的 Catppuccin Mocha 与 `//` 连续 powerline 结构；ASCII 模式不输出 powerline glyph。
+- F3--F10 的键盘与鼠标都进入同一个 dispatcher。F4 以 argv 方式启动 `$VISUAL/$EDITOR`，不经过 shell；F5/F6 操作当前项或 selection 到另一 pane；F7 使用输入框；F8 强制确认。
+- headless 文件动作通过 `compat/neovifm_fs` 实现 no-overwrite copy/move、mkdir 与递归 remove；所有路径来自 snapshot identity，目录名拒绝空值、`.`、`..`、斜杠、反斜杠与 NUL。
+- sort 由 C snapshot API 执行；qsort 后按 path identity 恢复 cursor，refresh/enter/parent 继承 pane 当前 sort key/direction。
+- 当前文件动作仍为同步 core command；若后续处理大目录，需要按架构路线迁移到带取消与进度事件的 action task queue，但本轮不再保留假按钮或 disabled 占位。
+
+## 2026-07-15 用户范围纠正：Yazi 仅用于多媒体与美化
+
+- 用户澄清原意：以 Vifm 原有实现为产品底座，只借鉴 Yazi 的多媒体支持与视觉美化；此前把 Yazi 的异步任务、VFS、并发插件等扩展成 Hybrid/OpenTUI 主架构，属于范围扩大。
+- 上游 Vifm 原本就是单体 C/ncurses 双 pane：主 `event_loop` 在等待输入的时间片内轮询目录变化、IPC、background callback、viewer cache 和延迟 redraw，不需要 headless core 或 JSONL 客户端才能工作。
+- Vifm 已有跨平台 `fswatch`：Linux 使用非阻塞 inotify；无 inotify 的 Unix（包括当前 macOS 路径）退化为 file metadata polling；Windows 使用 change notification。Linux 支持不要求另建 kqueue session 架构。
+- Vifm 已有成熟预览扩展面：`:fileviewer`/`previewprg` 选择外部 viewer，`quickview`/Miller view 提供区域，`vcache` 通过 `background` 异步启动外部命令、非阻塞读取、缓存输出、超时和取消，并在数据到达时触发 redraw。
+- 图形预览已有三种 viewer kind：textual、graphical、pass-through；`%px/%py/%pw/%ph` 提供区域，`%pd` 支持直接终端序列（如 sixel），`%pc` 定义清理命令，`%pu` 禁用缓存。因此多媒体增强应优先复用这些机制。
+- Vifm 原生美化面已经包括 colorscheme/highlight、按文件类型或名称装饰的 `classify`、图标配置、`viewcolumns`、可定制 `statusline`、`fillchars`、Miller view 和多种 pane highlight。
+- 当前不执行代码动作。Hybrid/OpenTUI 现有成果待 Phase 6 agent 交接后再由用户决定是主线保留、转实验分支还是选择性移除。
+
+## 2026-07-15 Phase 6 文件动作安全收敛
+
+- 首轮最终审查发现 destructive action 不能只读取执行时 cursor：确认对话期间 cursor/pane 变化会造成“确认 A、操作 B”。修复后 dispatcher 在点击/按键当时冻结 `pane`、`cwd_bytes_hex`、另一 pane 的 `destination_cwd_bytes_hex` 与最多 64 个 `paths_bytes_hex`；core 只接受仍属于对应 snapshot 的精确 identity。
+- v3 hello 新增显式 `workspace-sort-v1` 与 `file-actions-v1` capability；TUI 仅在 capability 存在时启用 F5--F8，schema 为 copy/move/delete/mkdir 分别声明必填 identity 字段，core parser 同时实施数量、长度和重复项边界。
+- POSIX 文件动作改为 parent-fd-relative `openat/fstatat/readlinkat/symlinkat/unlinkat`，目录与普通文件均 no-follow；destination 使用 `O_EXCL`/`mkdirat`，目录 ancestry 通过 fd 的 dev/inode 向上检查，阻止复制到自身子树。
+- 递归 copy 使用 parent-fd-relative no-follow/no-overwrite 与自身子树拒绝；copy 中断或失败可能保留已复制部分，terminal event 必须标记 `partial`，而不是危险地递归清理可能被并发修改的 destination。
+- macOS move 使用原子 no-replace rename，跨文件系统 move 显式拒绝，绝不 copy-delete；delete 先移动到同目录私有隔离目录、保留原 basename 后调用 `/usr/bin/trash`，同名替换不会被误删。其他平台不发布 `file-actions-v1`。
+- F4 不再使用 `path_display` 执行编辑器；只在 `path_bytes_hex` 可严格 UTF-8 解码时传入 raw identity，并在 editor argv 前加入 `--`，非 UTF-8 identity 显式拒绝。
+- 正式 PTY 回归使用 `/usr/bin/expect` 获取真实 pty：等待 ready frame 后发送 `j`、Tab，再用 SGR mouse 点击 F7 创建目录、点击 F10 退出。该测试直接覆盖 VSCode/宿主抢占 Fn 键时依赖鼠标入口的产品目标。

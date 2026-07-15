@@ -1,6 +1,7 @@
 import { resolve } from "node:path"
 import { createSignal } from "solid-js"
 import { render } from "@opentui/solid"
+import type { CliRendererConfig } from "@opentui/core"
 
 import { App, type AppProps } from "./app.js"
 import { CoreClientError, startCoreSession } from "./core-client.js"
@@ -15,12 +16,59 @@ export interface MainDependencies {
   readonly defaultCoreProbePath: () => string
   readonly renderApp: (props: () => AppProps) => Promise<void>
   readonly startCoreSession: typeof startCoreSession
+  readonly openEditor?: (path: string) => Promise<void>
+}
+
+export type RenderMount = (
+  node: Parameters<typeof render>[0],
+  config: CliRendererConfig,
+) => Promise<void>
+
+export function renderUntilDestroyed(
+  props: () => AppProps,
+  mount: RenderMount = render,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    void mount(() => <App {...props()} />, { onDestroy: resolve }).catch(reject)
+  })
 }
 
 const DEFAULT_MAIN_DEPENDENCIES: MainDependencies = {
   defaultCoreProbePath,
-  renderApp: async (props) => render(() => <App {...props()} />),
+  renderApp: renderUntilDestroyed,
   startCoreSession,
+}
+
+function splitEditorCommand(command: string): readonly string[] {
+  const parts = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []
+  return parts.map((part) => {
+    const quote = part[0]
+    return (quote === '"' || quote === "'") && part.at(-1) === quote
+      ? part.slice(1, -1)
+      : part
+  }).filter((part) => part.length !== 0)
+}
+
+export function editorCommand(
+  path: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): readonly string[] {
+  if (path.length === 0 || path.includes("\0")) throw new Error("Editor path is invalid")
+  const configured = environment.VISUAL?.trim() || environment.EDITOR?.trim() || "vi"
+  const command = splitEditorCommand(configured)
+  if (command.length === 0) throw new Error("Editor command is empty")
+  return [...command, "--", path]
+}
+
+export async function openEditor(path: string): Promise<void> {
+  const process = Bun.spawn({
+    cmd: [...editorCommand(path)],
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  })
+  const exitCode = await process.exited
+  if (exitCode !== 0) throw new Error(`Editor exited with status ${exitCode}`)
 }
 
 export function toUiErrorMessage(error: unknown): string {
@@ -60,6 +108,9 @@ export function appPropsFor(state: ProbeState, clientError?: string): AppProps {
     error: clientError ?? (state.phase === "failed" ? state.error.message : undefined),
     preview: session?.preview,
     tasks: session?.tasks,
+    actionTasks: session?.actionTasks,
+    commandError: session?.commandError?.message,
+    capabilities: state.phase === "ready" ? state.hello.capabilities : undefined,
   }
 }
 
@@ -92,8 +143,9 @@ export async function main(
       return (
         {
           ...appPropsFor(state, clientError()),
-          onCancel: () => { session.close(); controller.abort() },
+          onCancel: () => { session.close() },
           onCommand: (command) => session.send(command),
+          onEdit: dependencies.openEditor ?? openEditor,
         }
       )
     })
