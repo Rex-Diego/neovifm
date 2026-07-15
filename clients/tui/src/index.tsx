@@ -53,10 +53,13 @@ export function exitCodeFor(error: unknown): number {
 }
 
 export function appPropsFor(state: ProbeState, clientError?: string): AppProps {
+	const session = state.phase === "ready" && "session" in state ? state : undefined
   return {
     loading: state.phase === "awaiting-hello" || state.phase === "awaiting-terminal",
     workspace: state.phase === "ready" && "workspace" in state ? state.workspace : undefined,
     error: clientError ?? (state.phase === "failed" ? state.error.message : undefined),
+    preview: session?.preview,
+    tasks: session?.tasks,
   }
 }
 

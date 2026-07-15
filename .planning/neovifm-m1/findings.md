@@ -80,3 +80,14 @@
 
 - 新增 `nv_classic_workspace_snapshot_from_views()`：在 classic UI 线程把两个已加载 `view_t` 原子深拷贝为 owned left/right snapshots 与明确 active pane；任一 pane 复制失败时保留旧 workspace。
 - 该 adapter 不接入 headless stdio session，也不调用 filelist 加载或改变 cwd；它是之后从 classic runtime 发布不可变 DTO 的受限桥接面，避免把 `view_t` 泄漏到 C/TypeScript 边界。
+
+## 2026-07-14 M1 收尾证据
+
+- `nv_workspace_session_init_from_classic_views()` 已把两个已加载的 classic panes 转为同一 owned session model；`vifm` 现在显式链接该 model，headless session 仍保持独立扫描以避免跨进程共享 `view_t`。
+- snapshot DTO 现在包含 selection、filter 和 primary sort metadata；classic adapter 从可见 list 计算 selection count，复制 filtered count/排序方向，并在所有权转换失败时保持旧 workspace。
+- M2 首切片评估见 `docs/NEOVIFM_M2_ENTRY.md`：只允许进程内 task queue 与可取消 preview，不引入 daemon、socket、网络或运行时替换。
+
+## 2026-07-14 完整验收
+
+- 当前活动计划无未勾选项。M1 仍保持 classic renderer 默认、v0/v1 one-shot probe 兼容与 v2 TUI-owned stdio session；未引入网络、daemon、Rust/C++ 或文件操作语义改动。
+- 验收证据：focused C 26 tests/8492 checks，classic `make check` 通过；TUI 53 unit tests/115 assertions、coverage 87.85% functions/93.63% lines、typecheck、4 integration tests、Bun audit、Windows session target dry-run 与 `git diff --check` 均通过。

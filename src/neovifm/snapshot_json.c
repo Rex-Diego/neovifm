@@ -29,6 +29,11 @@ static int snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot);
 static int entry_model_is_valid(const nv_pane_entry_t *entry);
 static int string_fits(const char value[], size_t maximum);
 static int hex_string_is_valid(const char value[], size_t maximum);
+static const char *sort_key_name(nv_pane_sort_key_t key);
+static JSON_Value *preview_task_payload(const nv_preview_event_t *event);
+static const char *preview_pane_name(nv_preview_pane_t pane);
+static const char *preview_kind_name(nv_preview_kind_t kind);
+static const char *preview_state_name(nv_preview_task_state_t state);
 
 static int
 set_i64_string(JSON_Object *object, const char name[], int64_t value)
@@ -114,6 +119,21 @@ entry_model_is_valid(const nv_pane_entry_t *entry)
 		hex_string_is_valid(entry->path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES);
 }
 
+static const char *
+sort_key_name(nv_pane_sort_key_t key)
+{
+	switch(key)
+	{
+		case NV_SORT_NAME: return "name";
+		case NV_SORT_EXTENSION: return "extension";
+		case NV_SORT_SIZE: return "size";
+		case NV_SORT_MTIME: return "mtime";
+		case NV_SORT_TYPE: return "type";
+		case NV_SORT_OTHER: return "other";
+	}
+	return NULL;
+}
+
 static int
 snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot)
 {
@@ -122,6 +142,11 @@ snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot)
 			!hex_string_is_valid(snapshot->cwd_bytes_hex,
 				NV_PANE_SNAPSHOT_MAX_HEX_BYTES) ||
 			snapshot->entry_count > NV_PANE_SNAPSHOT_MAX_ENTRIES ||
+			snapshot->selection_count > snapshot->entry_count ||
+			snapshot->filtered_count > NV_PANE_SNAPSHOT_MAX_ENTRIES ||
+			sort_key_name(snapshot->sort_key) == NULL ||
+			(snapshot->sort_descending != 0 && snapshot->sort_descending != 1) ||
+			(snapshot->filter_active != 0 && snapshot->filter_active != 1) ||
 			(snapshot->entry_count == 0U && snapshot->cursor != -1) ||
 			(snapshot->entry_count != 0U &&
 				(snapshot->cursor < 0 || (size_t)snapshot->cursor >= snapshot->entry_count)) ||
@@ -129,14 +154,16 @@ snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot)
 	{
 		return 0;
 	}
+	size_t selected = 0U;
 	for(size_t i = 0U; i < snapshot->entry_count; ++i)
 	{
 		if(!entry_model_is_valid(&snapshot->entries[i]))
 		{
 			return 0;
 		}
+		selected += snapshot->entries[i].selected != 0;
 	}
-	return 1;
+	return selected == snapshot->selection_count;
 }
 
 static nv_protocol_json_result_t
@@ -241,6 +268,112 @@ char *
 nv_protocol_session_hello_json(unsigned int sequence)
 {
 	return hello_json(2U, "workspace-session-v2", sequence);
+}
+
+char *
+nv_protocol_preview_session_hello_json(unsigned int sequence)
+{
+	return hello_json(3U, "preview-session-v3", sequence);
+}
+
+static const char *
+preview_pane_name(nv_preview_pane_t pane)
+{
+	return pane == NV_PREVIEW_PANE_LEFT ? "left" :
+		pane == NV_PREVIEW_PANE_RIGHT ? "right" : NULL;
+}
+
+static const char *
+preview_kind_name(nv_preview_kind_t kind)
+{
+	return kind == NV_PREVIEW_KIND_TEXT ? "text" :
+		kind == NV_PREVIEW_KIND_DIRECTORY ? "directory" : NULL;
+}
+
+static const char *
+preview_state_name(nv_preview_task_state_t state)
+{
+	switch(state)
+	{
+		case NV_PREVIEW_TASK_QUEUED: return "queued";
+		case NV_PREVIEW_TASK_RUNNING: return "running";
+		case NV_PREVIEW_TASK_DONE: return "done";
+		case NV_PREVIEW_TASK_FAILED: return "failed";
+		case NV_PREVIEW_TASK_CANCELLED: return "cancelled";
+	}
+	return NULL;
+}
+
+static JSON_Value *
+preview_task_payload(const nv_preview_event_t *event)
+{
+	if(event == NULL || event->task_id == 0U || event->generation == 0U ||
+			preview_pane_name(event->pane) == NULL ||
+			preview_kind_name(event->kind) == NULL ||
+			preview_state_name(event->state) == NULL ||
+			!hex_string_is_valid(event->cwd_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) ||
+			!hex_string_is_valid(event->path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) ||
+			(event->error_code != NULL &&
+				!string_fits(event->error_code, 128U)))
+	{
+		return NULL;
+	}
+	JSON_Value *const value = json_value_init_object();
+	if(value == NULL) return NULL;
+	JSON_Object *const payload = json_value_get_object(value);
+	if(set_u64_string(payload, "task_id", event->task_id) != JSONSuccess ||
+			set_u64_string(payload, "generation", event->generation) != JSONSuccess ||
+			json_object_set_string(payload, "pane", preview_pane_name(event->pane)) != JSONSuccess ||
+			json_object_set_string(payload, "kind", preview_kind_name(event->kind)) != JSONSuccess ||
+			json_object_set_string(payload, "state", preview_state_name(event->state)) != JSONSuccess ||
+			json_object_set_string(payload, "cwd_bytes_hex", event->cwd_bytes_hex) != JSONSuccess ||
+			json_object_set_string(payload, "path_bytes_hex", event->path_bytes_hex) != JSONSuccess ||
+			(event->error_code != NULL &&
+			 json_object_set_string(payload, "error_code", event->error_code) != JSONSuccess) ||
+			(event->os_error != 0 &&
+			 json_object_set_number(payload, "os_error", event->os_error) != JSONSuccess))
+	{
+		json_value_free(value);
+		return NULL;
+	}
+	return value;
+}
+
+char *
+nv_protocol_preview_task_json(const nv_preview_event_t *event,
+		unsigned int output_sequence)
+{
+	JSON_Value *const payload = preview_task_payload(event);
+	char *json = NULL;
+	return payload != NULL && serialize_payload("task", 3U, output_sequence,
+			payload, &json) == NV_PROTOCOL_JSON_OK ? json : NULL;
+}
+
+char *
+nv_protocol_preview_json(const nv_preview_event_t *event,
+		unsigned int output_sequence)
+{
+	if(event == NULL || (event->state != NV_PREVIEW_TASK_DONE &&
+			event->state != NV_PREVIEW_TASK_FAILED &&
+			event->state != NV_PREVIEW_TASK_CANCELLED) ||
+			(event->state == NV_PREVIEW_TASK_DONE &&
+			 !string_fits(event->content, NV_PREVIEW_MAX_BYTES)))
+	{
+		return NULL;
+	}
+	JSON_Value *const payload_value = preview_task_payload(event);
+	if(payload_value == NULL) return NULL;
+	JSON_Object *const payload = json_value_get_object(payload_value);
+	if(json_object_set_boolean(payload, "truncated", event->truncated) != JSONSuccess ||
+			(event->state == NV_PREVIEW_TASK_DONE &&
+			 json_object_set_string(payload, "content", event->content) != JSONSuccess))
+	{
+		json_value_free(payload_value);
+		return NULL;
+	}
+	char *json = NULL;
+	return serialize_payload("preview", 3U, output_sequence, payload_value,
+			&json) == NV_PROTOCOL_JSON_OK ? json : NULL;
 }
 
 static int
@@ -356,6 +489,16 @@ snapshot_payload(const nv_pane_snapshot_t *snapshot)
 			json_object_set_number(payload, "cursor", snapshot->cursor) != JSONSuccess ||
 			json_object_set_number(payload, "entry_count", snapshot->entry_count) !=
 			JSONSuccess ||
+			json_object_set_number(payload, "selection_count",
+				snapshot->selection_count) != JSONSuccess ||
+			json_object_set_number(payload, "filtered_count",
+				snapshot->filtered_count) != JSONSuccess ||
+			json_object_set_string(payload, "sort_key",
+				sort_key_name(snapshot->sort_key)) != JSONSuccess ||
+			json_object_set_boolean(payload, "sort_descending",
+				snapshot->sort_descending) != JSONSuccess ||
+			json_object_set_boolean(payload, "filter_active",
+				snapshot->filter_active) != JSONSuccess ||
 			json_object_set_value(payload, "entries", entries_value) != JSONSuccess)
 	{
 		if(json_value_get_parent(entries_value) == NULL)
@@ -488,6 +631,35 @@ nv_protocol_session_snapshot_json(const nv_pane_snapshot_t *left,
 			payload_value, json);
 }
 
+nv_protocol_json_result_t
+nv_protocol_preview_session_snapshot_json(const nv_pane_snapshot_t *left,
+		const nv_pane_snapshot_t *right, const char active_pane[],
+		unsigned int output_sequence, unsigned int request_sequence,
+		const char trigger[], char **json)
+{
+	char *v2 = NULL;
+	const nv_protocol_json_result_t result = nv_protocol_session_snapshot_json(left,
+		right, active_pane, output_sequence, request_sequence, trigger, &v2);
+	if(result != NV_PROTOCOL_JSON_OK) return result;
+	JSON_Value *const value = json_parse_string(v2);
+	nv_protocol_json_free(v2);
+	if(value == NULL || json_object_set_number(json_value_get_object(value),
+			"version", 3U) != JSONSuccess)
+	{
+		json_value_free(value);
+		return NV_PROTOCOL_JSON_ERROR;
+	}
+	const size_t size = json_serialization_size(value);
+	if(size == 0U || size - 1U > NV_PROTOCOL_MAX_RECORD_BYTES)
+	{
+		json_value_free(value);
+		return NV_PROTOCOL_JSON_TOO_LARGE;
+	}
+	*json = json_serialize_to_string(value);
+	json_value_free(value);
+	return *json == NULL ? NV_PROTOCOL_JSON_ERROR : NV_PROTOCOL_JSON_OK;
+}
+
 static char *
 error_json(unsigned int version, const nv_snapshot_error_t *error,
 		unsigned int sequence)
@@ -565,6 +737,26 @@ nv_protocol_session_command_error_json(const nv_snapshot_error_t *error,
 	char *serialized = NULL;
 	return serialize_payload("command-error", 2U, output_sequence,
 			payload_value, &serialized) == NV_PROTOCOL_JSON_OK ? serialized : NULL;
+}
+
+char *
+nv_protocol_preview_session_command_error_json(const nv_snapshot_error_t *error,
+		unsigned int output_sequence, unsigned int request_sequence)
+{
+	char *v2 = nv_protocol_session_command_error_json(error, output_sequence,
+		request_sequence);
+	if(v2 == NULL) return NULL;
+	JSON_Value *const value = json_parse_string(v2);
+	nv_protocol_json_free(v2);
+	if(value == NULL || json_object_set_number(json_value_get_object(value),
+			"version", 3U) != JSONSuccess)
+	{
+		json_value_free(value);
+		return NULL;
+	}
+	char *const json = json_serialize_to_string(value);
+	json_value_free(value);
+	return json;
 }
 
 void

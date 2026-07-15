@@ -72,7 +72,9 @@ export type CoreProbeResult = CoreSnapshotProbeResult | CoreWorkspaceProbeResult
 
 export type CoreSessionCommand =
   | Readonly<{ action: "focus"; pane: "left" | "right" }>
+  | Readonly<{ action: "focus-next" }>
   | Readonly<{ action: "move"; delta: -1 | 1 }>
+  | Readonly<{ action: "move-to"; target: "first" | "last" }>
   | Readonly<{ action: "enter" | "parent" | "toggle-selection" | "refresh" }>
 
 export interface CoreSessionRequest {
@@ -542,7 +544,7 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
     completion,
     send(command) {
       if (closed || controller.signal.aborted || commandSequence >= Number.MAX_SAFE_INTEGER) return false
-      const line = JSON.stringify({ protocol: "neovifm-core", version: 2, type: "command", sequence: ++commandSequence, payload: command })
+      const line = JSON.stringify({ protocol: "neovifm-core", version: 3, type: "command", sequence: ++commandSequence, payload: command })
       if (new TextEncoder().encode(line).byteLength > 16 * 1024) return false
       try {
         process.stdin.write(`${line}\n`)

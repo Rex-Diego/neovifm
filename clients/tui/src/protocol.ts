@@ -2,6 +2,7 @@ export const PROTOCOL_NAME = "neovifm-core" as const
 export const PROTOCOL_VERSION = 0 as const
 export const WORKSPACE_PROTOCOL_VERSION = 1 as const
 export const SESSION_PROTOCOL_VERSION = 2 as const
+export const PREVIEW_SESSION_PROTOCOL_VERSION = 3 as const
 
 const DECIMAL_PATTERN = /^-?[0-9]+$/
 const UNSIGNED_DECIMAL_PATTERN = /^[0-9]+$/
@@ -21,6 +22,7 @@ const MAX_DECIMAL_TEXT_BYTES = 32
 const MAX_CAPABILITIES = 64
 const MAX_CAPABILITY_BYTES = 256
 const MAX_ERROR_CODE_BYTES = 128
+const MAX_PREVIEW_TEXT_BYTES = 64 * 1024
 const UTF8_ENCODER = new TextEncoder()
 
 export type EntryKind =
@@ -66,6 +68,11 @@ export interface SnapshotPayload {
   readonly generated_at_unix_ms: string
   readonly cursor: number
   readonly entry_count: number
+  readonly selection_count: number
+  readonly filtered_count: number
+  readonly sort_key: PaneSortKey
+  readonly sort_descending: boolean
+  readonly filter_active: boolean
   readonly entries: readonly SnapshotEntry[]
 }
 
@@ -79,6 +86,7 @@ export interface ErrorPayload {
 }
 
 export type PaneId = "left" | "right"
+export type PaneSortKey = "name" | "extension" | "size" | "mtime" | "type" | "other"
 export type SessionSnapshotTrigger = "initial" | "command" | "watch"
 
 export interface WorkspaceSnapshotPayload {
@@ -94,6 +102,26 @@ export interface SessionWorkspaceSnapshotPayload extends WorkspaceSnapshotPayloa
 
 export interface CommandErrorPayload extends ErrorPayload {
   readonly command_sequence: number
+}
+
+export type PreviewKind = "text" | "directory"
+export type PreviewTaskState = "queued" | "running" | "done" | "failed" | "cancelled"
+
+export interface PreviewTaskPayload {
+  readonly task_id: string
+  readonly generation: string
+  readonly pane: PaneId
+  readonly kind: PreviewKind
+  readonly state: PreviewTaskState
+  readonly cwd_bytes_hex: string
+  readonly path_bytes_hex: string
+  readonly error_code?: string
+  readonly os_error?: number
+}
+
+export interface PreviewPayload extends PreviewTaskPayload {
+  readonly content?: string
+  readonly truncated: boolean
 }
 
 interface Envelope<Type extends string, Payload, Version extends number> {
@@ -122,7 +150,17 @@ export type SessionWorkspaceSnapshotRecord = Envelope<
 >
 export type CommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof SESSION_PROTOCOL_VERSION>
 export type SessionErrorRecord = Envelope<"error", ErrorPayload, typeof SESSION_PROTOCOL_VERSION>
-export type ErrorRecord = V0ErrorRecord | V1ErrorRecord | SessionErrorRecord
+export type PreviewSessionHelloRecord = Envelope<"hello", HelloPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type PreviewSessionWorkspaceSnapshotRecord = Envelope<
+  "workspace-snapshot",
+  SessionWorkspaceSnapshotPayload,
+  typeof PREVIEW_SESSION_PROTOCOL_VERSION
+>
+export type PreviewTaskRecord = Envelope<"task", PreviewTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type PreviewRecord = Envelope<"preview", PreviewPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type PreviewSessionCommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type PreviewSessionErrorRecord = Envelope<"error", ErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type ErrorRecord = V0ErrorRecord | V1ErrorRecord | SessionErrorRecord | PreviewSessionErrorRecord
 export type ProtocolRecord =
   | HelloRecord
   | SnapshotRecord
@@ -134,6 +172,12 @@ export type ProtocolRecord =
   | SessionWorkspaceSnapshotRecord
   | CommandErrorRecord
   | SessionErrorRecord
+  | PreviewSessionHelloRecord
+  | PreviewSessionWorkspaceSnapshotRecord
+  | PreviewTaskRecord
+  | PreviewRecord
+  | PreviewSessionCommandErrorRecord
+  | PreviewSessionErrorRecord
 
 export interface JsonlLimits {
   readonly maximumRecordBytes?: number
@@ -375,6 +419,20 @@ function parseSnapshotPayload(value: unknown, path = "payload"): SnapshotPayload
   ) {
     return invalid(`${path}.cursor`, "must identify an entry or be -1 for an empty snapshot")
   }
+  const selectedEntries = entries.filter((entry) => entry.selected).length
+  const selectionCount = payload.selection_count === undefined
+    ? selectedEntries
+    : integerValue(payload.selection_count, `${path}.selection_count`, 0)
+  if (selectionCount > entryCount || selectionCount !== selectedEntries) {
+    return invalid(`${path}.selection_count`, "must match selected entries")
+  }
+  const filteredCount = payload.filtered_count === undefined
+    ? 0
+    : integerValue(payload.filtered_count, `${path}.filtered_count`, 0)
+  if (filteredCount > MAX_SNAPSHOT_ENTRIES) return invalid(`${path}.filtered_count`, `must not exceed ${MAX_SNAPSHOT_ENTRIES}`)
+  const sortKey = payload.sort_key === undefined ? "name" : parsePaneSortKey(payload.sort_key, `${path}.sort_key`)
+  const sortDescending = payload.sort_descending === undefined ? false : booleanValue(payload.sort_descending, `${path}.sort_descending`)
+  const filterActive = payload.filter_active === undefined ? false : booleanValue(payload.filter_active, `${path}.filter_active`)
 
   return frozen({
     cwd_display: displayString(payload.cwd_display, `${path}.cwd_display`),
@@ -387,6 +445,11 @@ function parseSnapshotPayload(value: unknown, path = "payload"): SnapshotPayload
     ),
     cursor,
     entry_count: entryCount,
+    selection_count: selectionCount,
+    filtered_count: filteredCount,
+    sort_key: sortKey,
+    sort_descending: sortDescending,
+    filter_active: filterActive,
     entries,
   })
 }
@@ -397,6 +460,14 @@ function parsePaneId(value: unknown, path: string): PaneId {
     return invalid(path, "must be left or right")
   }
   return pane
+}
+
+function parsePaneSortKey(value: unknown, path: string): PaneSortKey {
+  const key = stringValue(value, path)
+  if (key !== "name" && key !== "extension" && key !== "size" && key !== "mtime" && key !== "type" && key !== "other") {
+    return invalid(path, "is not a supported sort key")
+  }
+  return key
 }
 
 function parseSessionSnapshotTrigger(value: unknown, path: string): SessionSnapshotTrigger {
@@ -458,12 +529,62 @@ function parseCommandErrorPayload(value: unknown): CommandErrorPayload {
   })
 }
 
+function parsePreviewKind(value: unknown, path: string): PreviewKind {
+  const kind = stringValue(value, path)
+  if (kind !== "text" && kind !== "directory") return invalid(path, "must be text or directory")
+  return kind
+}
+
+function parsePreviewTaskState(value: unknown, path: string): PreviewTaskState {
+  const state = stringValue(value, path)
+  if (state !== "queued" && state !== "running" && state !== "done" && state !== "failed" && state !== "cancelled") {
+    return invalid(path, "is not a supported task state")
+  }
+  return state
+}
+
+function parsePreviewTaskPayload(value: unknown, path = "payload"): PreviewTaskPayload {
+  const payload = objectValue(value, path)
+  const errorCode = payload.error_code === undefined
+    ? undefined
+    : boundedString(payload.error_code, `${path}.error_code`, MAX_ERROR_CODE_BYTES, false)
+  const osError = payload.os_error === undefined ? undefined : integerValue(payload.os_error, `${path}.os_error`)
+  return frozen({
+    task_id: patternString(payload.task_id, `${path}.task_id`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    generation: patternString(payload.generation, `${path}.generation`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    pane: parsePaneId(payload.pane, `${path}.pane`),
+    kind: parsePreviewKind(payload.kind, `${path}.kind`),
+    state: parsePreviewTaskState(payload.state, `${path}.state`),
+    cwd_bytes_hex: patternString(payload.cwd_bytes_hex, `${path}.cwd_bytes_hex`, HEX_PATTERN),
+    path_bytes_hex: patternString(payload.path_bytes_hex, `${path}.path_bytes_hex`, HEX_PATTERN),
+    ...(errorCode === undefined ? {} : { error_code: errorCode }),
+    ...(osError === undefined ? {} : { os_error: osError }),
+  })
+}
+
+function parsePreviewPayload(value: unknown): PreviewPayload {
+  const payload = objectValue(value, "payload")
+  const task = parsePreviewTaskPayload(payload)
+  if (task.state !== "done" && task.state !== "failed" && task.state !== "cancelled") {
+    return invalid("payload.state", "must be a terminal task state for preview")
+  }
+  const content = payload.content === undefined
+    ? undefined
+    : boundedString(payload.content, "payload.content", MAX_PREVIEW_TEXT_BYTES)
+  if (task.state === "done" && content === undefined) return invalid("payload.content", "must be present for completed preview")
+  return frozen({
+    ...task,
+    ...(content === undefined ? {} : { content: sanitizeDisplayText(content) }),
+    truncated: booleanValue(payload.truncated, "payload.truncated"),
+  })
+}
+
 export function parseProtocolRecord(value: unknown): ProtocolRecord {
   const envelope = objectValue(value, "record")
   if (envelope.protocol !== PROTOCOL_NAME) {
     return invalid("record.protocol", `must equal ${PROTOCOL_NAME}`)
   }
-  if (envelope.version !== PROTOCOL_VERSION && envelope.version !== WORKSPACE_PROTOCOL_VERSION && envelope.version !== SESSION_PROTOCOL_VERSION) {
+  if (envelope.version !== PROTOCOL_VERSION && envelope.version !== WORKSPACE_PROTOCOL_VERSION && envelope.version !== SESSION_PROTOCOL_VERSION && envelope.version !== PREVIEW_SESSION_PROTOCOL_VERSION) {
     throw new ProtocolValidationError(
       `Unsupported NeoVifm protocol version: ${String(envelope.version)}`,
     )
@@ -472,6 +593,17 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
   const sequence = integerValue(envelope.sequence, "record.sequence", 0)
   const type = stringValue(envelope.type, "record.type")
   const version = envelope.version
+  if (version === PREVIEW_SESSION_PROTOCOL_VERSION) {
+    switch (type) {
+      case "hello": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseHelloPayload(envelope.payload) })
+      case "workspace-snapshot": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseSessionWorkspaceSnapshotPayload(envelope.payload) })
+      case "task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewTaskPayload(envelope.payload) })
+      case "preview": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewPayload(envelope.payload) })
+      case "command-error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseCommandErrorPayload(envelope.payload) })
+      case "error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseErrorPayload(envelope.payload) })
+      default: return invalid("record.type", `is unsupported for v3: ${type}`)
+    }
+  }
   if (version === SESSION_PROTOCOL_VERSION) {
     switch (type) {
       case "hello": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseHelloPayload(envelope.payload) })

@@ -41,6 +41,23 @@ describe("JSONL protocol", () => {
     })).toThrow("payload.active_pane")
   })
 
+  test("validates immutable pane selection, filter, and sort metadata", () => {
+    const pane = {
+      cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
+      cursor: -1, entry_count: 0, selection_count: 0, filtered_count: 2,
+      sort_key: "mtime", sort_descending: true, filter_active: true, entries: [],
+    }
+    const record = parseProtocolRecord({
+      protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1, payload: pane,
+    })
+    if (record.type !== "snapshot") throw new Error("expected snapshot")
+    expect(record.payload).toMatchObject({ filtered_count: 2, sort_key: "mtime", sort_descending: true, filter_active: true })
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1,
+      payload: { ...pane, selection_count: 1 },
+    })).toThrow("selection_count")
+  })
+
   test("requires an explicit v2 snapshot trigger and preserves watch updates", () => {
     const pane = {
       cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
@@ -56,6 +73,32 @@ describe("JSONL protocol", () => {
       protocol: "neovifm-core", version: 2, type: "workspace-snapshot", sequence: 2,
       payload: { command_sequence: 1, active_pane: "left", left: pane, right: pane },
     })).toThrow("payload.trigger")
+  })
+
+  test("accepts bounded v3 task lifecycle and immutable preview records", () => {
+    const task = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "task", sequence: 2,
+      payload: {
+        task_id: "42", generation: "7", pane: "left", kind: "text", state: "running",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f7465",
+      },
+    })
+    const preview = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
+      payload: {
+        task_id: "42", generation: "7", pane: "left", kind: "text", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f7465",
+        content: "note", truncated: false,
+      },
+    })
+
+    expect(task).toMatchObject({ version: 3, type: "task", payload: { generation: "7", state: "running" } })
+    expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", truncated: false } })
+    expect(Object.isFrozen(preview)).toBe(true)
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
+      payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },
+    })).toThrow("terminal")
   })
 
   test("decodes records split across arbitrary chunks", () => {
@@ -92,7 +135,7 @@ describe("JSONL protocol", () => {
     expect(() =>
       parseProtocolRecord({
         protocol: "neovifm-core",
-        version: 3,
+        version: 4,
         type: "hello",
         sequence: 0,
         payload: { implementation: "probe", capabilities: [] },

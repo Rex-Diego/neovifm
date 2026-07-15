@@ -70,6 +70,11 @@ TEST(snapshot_owns_basic_file_and_directory_metadata)
 	assert_success(nv_pane_snapshot_build(CONTENT_DIR, &snapshot, &error));
 	assert_int_equal(2, snapshot.entry_count);
 	assert_int_equal(0, snapshot.cursor);
+	assert_int_equal(0, snapshot.selection_count);
+	assert_int_equal(0, snapshot.filtered_count);
+	assert_int_equal(NV_SORT_NAME, snapshot.sort_key);
+	assert_false(snapshot.sort_descending);
+	assert_false(snapshot.filter_active);
 
 	const nv_pane_entry_t *file = find_entry(&snapshot, "file.txt");
 	assert_non_null(file);

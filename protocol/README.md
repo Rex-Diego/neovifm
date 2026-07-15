@@ -1,6 +1,6 @@
 # NeoVifm Core Protocol
 
-本目录定义 C core 与客户端之间的实验性本地协议。v0 是单目录 M0 probe；v1 是 M1a 的原子双 pane workspace；v2 是 M1b 的 TUI 持有 session。
+本目录定义 C core 与客户端之间的实验性本地协议。v0 是单目录 M0 probe；v1 是 M1a 的原子双 pane workspace；v2 是 M1b 的 TUI 持有 session；v3 是 M2 的可取消预览 session。
 
 ## Transport
 
@@ -9,13 +9,13 @@
 - stderr 只用于人类可读诊断。
 - M0/v0 core probe 不读取 stdin；一个目标目录通过命令行参数传入，正常顺序为 `hello`，随后 `snapshot` 或 `error`，然后进程退出。
 - M1a/v1 probe 也不读取 stdin；两个目标目录参数产生 `hello`，随后一个原子的 `workspace-snapshot` 或 `error`，然后进程退出。
-- M1b/v2 `neovifm-core-session <left> <right>` 从 stdin 接收受限 JSONL command，stdout 持续发布完整 workspace；stdin EOF 正常结束 session。它是 TUI 的子进程，不是 daemon、socket 或网络服务。
+- M1b/v2 `neovifm-core-session <left> <right>` 从 stdin 接收受限 JSONL command，stdout 持续发布完整 workspace；stdin EOF 正常结束 session。M2/v3 保留该进程模型，并额外发布异步 task 与 preview record；它始终是 TUI 的子进程，不是 daemon、socket 或网络服务。
 - client 遇到 framing、字段、顺序或 reducer 校验失败时会立即终止 probe；该失败之后的 stderr 不保证被保留。
 
 ## Compatibility
 
 - `protocol` 固定为 `neovifm-core`。
-- `version` 目前支持 `0`、`1` 与 `2`，都属于实验协议。
+- `version` 目前支持 `0`、`1`、`2` 与 `3`，都属于实验协议。
 - 客户端必须拒绝不支持的 version。
 - 同一 version 内，接收方必须忽略未知字段。
 - 已存在字段不能改变类型或语义；只能增加可选字段。
@@ -43,6 +43,19 @@
 - v2 每条 stdout record 仍受 4 MiB 与 4096 combined entries 限制；client 对单个 session 设置 64 MiB/1,000,000 record 的硬边界，并不会累积历史 workspace。
 - watcher 仅存在于 TUI 持有的 macOS 子进程：它监听两个 pane 的 cwd，并在目录进入/返回后重开对应 FD。watch 刷新失败只停用该 pane watcher 并写入 stderr，stdin command session 继续运行；后台不会接触 TUI 状态。
 
+## M2 可取消预览 Session v3
+
+- hello capability 为 `preview-session-v3`。v3 保留 v2 完整 `workspace-snapshot` 与 command acknowledgement 语义；每条 task lifecycle event 另发 `task` record，终态另发 `preview` record。
+- task 与 preview 都必须携带 task id、generation、pane、preview kind、cwd/path 原始 hex identity、状态和（适用时）结构化 error。完成 preview 额外携带至多 64 KiB 的文本；过时 generation 的 preview 不得覆盖新 generation。请求在 deadline 前未开始或在受限读取循环中超时，会以 `failed` / `preview-timeout` 终态发布。
+- v3 session 在主线程从当前不可变 pane snapshot 构造 preview request（pane、generation、cwd/path 原始 hex 与 kind），每次 cursor/focus 工作区更新都会替换同 pane 的旧请求。stdin 仍只接受受限导航 command，不接受 shell、任意外部路径或文件操作。
+- v3 导航 command 在 v2 基础上增加 `focus-next` 与 `move-to`（`target` 仅允许 `first`/`last`）。前者由 core 基于当前 workspace 原子切换 pane，避免 TUI 使用陈旧 snapshot 推导目标 pane；后者用于 Vifm 的 `gg`/`G` 首尾移动。`focus` 仍用于 Ctrl-W h/l 的显式定向切栏。
+- worker 只执行受限文本/目录 I/O；stdout 由 session 主循环批量发布，stderr 只留诊断。图片、archive、Git 元数据与文件操作 session 不在 v3。
+
+## Pane 元数据
+
+- 每个 snapshot 可携带由 core 计算的 `selection_count`、`filtered_count`、`sort_key`、`sort_descending` 与 `filter_active`。这些字段描述本次不可变条目集的来源状态；`selection_count` 必须等于 `entries[].selected` 的数量。
+- headless core 的默认值是按名称升序、无过滤；classic bridge 在 classic UI 线程从已加载 `view_t` 深拷贝 selection、可见过滤数量和主排序键。它不调用目录加载、不改变 cwd，也不把 `view_t` 指针传给 session/TUI。
+
 ## Numeric Values
 
 可能超过 JavaScript 安全整数的值使用十进制字符串：
@@ -68,4 +81,4 @@
 {"protocol":"neovifm-core","version":0,"type":"snapshot","sequence":1,"payload":{"cwd_display":"/tmp","cwd_bytes_hex":"2f746d70","generated_at_unix_ms":"0","cursor":0,"entry_count":1,"entries":[{"name_display":"file.txt","name_bytes_hex":"66696c652e747874","path_display":"/tmp/file.txt","path_bytes_hex":"2f746d702f66696c652e747874","kind":"file","size_bytes":"12","mtime_unix_ms":"0","selected":false,"hidden":false}]}}
 ```
 
-正式 schema 见 `neovifm-core-v0.schema.json`、`neovifm-core-v1.schema.json` 和 `neovifm-core-v2.schema.json`。
+正式 schema 见 `neovifm-core-v0.schema.json`、`neovifm-core-v1.schema.json`、`neovifm-core-v2.schema.json` 和 `neovifm-core-v3.schema.json`。

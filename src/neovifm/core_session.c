@@ -37,7 +37,12 @@ static int set_error(nv_snapshot_error_t *error, const char code[],
 		const char message[]);
 static int process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
-		unsigned int *command_sequence, int *directory_changed);
+		unsigned int *command_sequence, int *directory_changed,
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation);
+static int submit_active_preview(const nv_workspace_session_t *session,
+		nv_preview_queue_t *queue, uint64_t *generation);
+static int drain_preview_events(nv_preview_queue_t *queue,
+		unsigned int *output_sequence);
 
 #ifdef __APPLE__
 typedef struct
@@ -91,7 +96,7 @@ write_workspace(const nv_workspace_session_t *session, unsigned int output_seque
 		unsigned int command_sequence, const char trigger[])
 {
 	char *json = NULL;
-	const nv_protocol_json_result_t result = nv_protocol_session_snapshot_json(
+	const nv_protocol_json_result_t result = nv_protocol_preview_session_snapshot_json(
 			&session->left, &session->right, nv_workspace_session_active_name(session),
 			output_sequence, command_sequence, trigger, &json);
 	if(result != NV_PROTOCOL_JSON_OK)
@@ -108,7 +113,7 @@ static int
 write_command_error(const nv_snapshot_error_t *error, unsigned int output_sequence,
 		unsigned int command_sequence)
 {
-	char *const json = nv_protocol_session_command_error_json(error,
+	char *const json = nv_protocol_preview_session_command_error_json(error,
 			output_sequence, command_sequence);
 	if(json == NULL)
 	{
@@ -147,7 +152,7 @@ parse_command(const char line[], unsigned int previous_sequence,
 	const double next_sequence = json_object_get_number(root, "sequence");
 	const char *const action = payload == NULL ? NULL : json_object_get_string(payload, "action");
 	if(protocol == NULL || strcmp(protocol, "neovifm-core") != 0 || type == NULL ||
-			strcmp(type, "command") != 0 || version != 2.0 || next_sequence < 1.0 ||
+			strcmp(type, "command") != 0 || version != 3.0 || next_sequence < 1.0 ||
 			next_sequence > 4294967295.0 || next_sequence != (double)(unsigned int)next_sequence ||
 			(unsigned int)next_sequence <= previous_sequence || action == NULL)
 	{
@@ -164,6 +169,7 @@ parse_command(const char line[], unsigned int previous_sequence,
 			return -1;
 		}
 	}
+	else if(strcmp(action, "focus-next") == 0) command->kind = NV_SESSION_FOCUS_NEXT;
 	else if(strcmp(action, "move") == 0)
 	{
 		const double delta = json_object_get_number(payload, "delta");
@@ -174,6 +180,17 @@ parse_command(const char line[], unsigned int previous_sequence,
 		}
 		command->kind = NV_SESSION_MOVE_CURSOR;
 		command->delta = (int)delta;
+	}
+	else if(strcmp(action, "move-to") == 0)
+	{
+		const char *const target = json_object_get_string(payload, "target");
+		if(target == NULL || (strcmp(target, "first") != 0 && strcmp(target, "last") != 0))
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = strcmp(target, "first") == 0 ?
+			NV_SESSION_MOVE_FIRST : NV_SESSION_MOVE_LAST;
 	}
 	else if(strcmp(action, "enter") == 0) command->kind = NV_SESSION_ENTER;
 	else if(strcmp(action, "parent") == 0) command->kind = NV_SESSION_PARENT;
@@ -200,7 +217,8 @@ discard_command_tail(void)
 static int
 process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
-		unsigned int *command_sequence, int *directory_changed)
+		unsigned int *command_sequence, int *directory_changed,
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
@@ -228,6 +246,11 @@ process_command_line(nv_workspace_session_t *session, char line[],
 			}
 			const int result = write_workspace(session, (*output_sequence)++,
 					*command_sequence, "command");
+			if(result == 0 && submit_active_preview(session, preview_queue,
+					preview_generation) != 0)
+			{
+				fputs("neovifm-core-session: failed to queue preview\n", stderr);
+			}
 			nv_snapshot_error_free(&error);
 			return result;
 		}
@@ -242,6 +265,52 @@ process_command_line(nv_workspace_session_t *session, char line[],
 			next_sequence);
 	nv_snapshot_error_free(&error);
 	return result;
+}
+
+static int
+submit_active_preview(const nv_workspace_session_t *session,
+		nv_preview_queue_t *queue, uint64_t *generation)
+{
+	if(session == NULL || queue == NULL || generation == NULL) return -1;
+	const nv_pane_snapshot_t *const snapshot = nv_workspace_session_active(session);
+	if(snapshot == NULL || snapshot->cursor < 0) return 0;
+	const nv_pane_entry_t *const entry = &snapshot->entries[snapshot->cursor];
+	const nv_preview_request_t request = {
+		.pane = session->active_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
+			NV_PREVIEW_PANE_RIGHT,
+		.generation = ++*generation,
+		.cwd_bytes_hex = snapshot->cwd_bytes_hex,
+		.path_bytes_hex = entry->path_bytes_hex,
+		.kind = entry->kind == NV_ENTRY_DIRECTORY ? NV_PREVIEW_KIND_DIRECTORY :
+			NV_PREVIEW_KIND_TEXT,
+		.max_bytes = NV_PREVIEW_MAX_BYTES,
+		.timeout_ms = 2000U,
+	};
+	return nv_preview_queue_submit(queue, &request, NULL);
+}
+
+static int
+drain_preview_events(nv_preview_queue_t *queue, unsigned int *output_sequence)
+{
+	for(;;)
+	{
+		nv_preview_event_t event = {};
+		const int popped = nv_preview_queue_pop(queue, &event);
+		if(popped < 0) return -1;
+		if(popped == 0) return 0;
+		char *const task = nv_protocol_preview_task_json(&event,
+				(*output_sequence)++);
+		char *const preview = (event.state == NV_PREVIEW_TASK_DONE ||
+			event.state == NV_PREVIEW_TASK_FAILED ||
+			event.state == NV_PREVIEW_TASK_CANCELLED) ?
+			nv_protocol_preview_json(&event, (*output_sequence)++) : NULL;
+		const int result = task == NULL || write_line(task) != 0 ||
+			(preview != NULL && write_line(preview) != 0) ? -1 : 0;
+		nv_protocol_json_free(task);
+		nv_protocol_json_free(preview);
+		nv_preview_event_free(&event);
+		if(result != 0) return result;
+	}
 }
 
 #ifdef __APPLE__
@@ -372,8 +441,9 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 		unsigned int command_sequence, int *stdin_ready)
 {
 	struct kevent events[3];
+	const struct timespec timeout = { .tv_sec = 0, .tv_nsec = 12L*1000L*1000L };
 	const int count = kevent(watcher->queue, NULL, 0, events,
-			sizeof(events)/sizeof(events[0]), NULL);
+			sizeof(events)/sizeof(events[0]), &timeout);
 	if(count < 0)
 	{
 		if(errno == EINTR) return 0;
@@ -427,14 +497,27 @@ main(int argc, char *argv[])
 		nv_snapshot_error_free(&error);
 		return 1;
 	}
-	char *const hello = nv_protocol_session_hello_json(0U);
+	nv_preview_queue_t *const preview_queue = nv_preview_queue_alloc();
+	if(preview_queue == NULL)
+	{
+		fputs("neovifm-core-session: failed to initialize preview queue\n", stderr);
+		nv_workspace_session_free(&session);
+		return 1;
+	}
+	uint64_t preview_generation = 0U;
+	char *const hello = nv_protocol_preview_session_hello_json(0U);
 	if(write_line(hello) != 0 || write_workspace(&session, 1U, 0U, "initial") != 0)
 	{
 		nv_protocol_json_free(hello);
+		nv_preview_queue_free(preview_queue);
 		nv_workspace_session_free(&session);
 		return 1;
 	}
 	nv_protocol_json_free(hello);
+	if(submit_active_preview(&session, preview_queue, &preview_generation) != 0)
+	{
+		fputs("neovifm-core-session: failed to queue initial preview\n", stderr);
+	}
 
 	char line[NV_SESSION_MAX_COMMAND_BYTES + 2U];
 	unsigned int output_sequence = 2U;
@@ -453,11 +536,17 @@ main(int argc, char *argv[])
 				result = 1;
 				break;
 			}
+			if(drain_preview_events(preview_queue, &output_sequence) != 0)
+			{
+				result = 1;
+				break;
+			}
 			if(!stdin_ready) continue;
 			if(fgets(line, sizeof(line), stdin) == NULL) break;
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
-					&command_sequence, &directory_changed) != 0)
+					&command_sequence, &directory_changed, preview_queue,
+					&preview_generation) != 0)
 			{
 				result = 1;
 				break;
@@ -477,13 +566,15 @@ main(int argc, char *argv[])
 	while(fgets(line, sizeof(line), stdin) != NULL)
 	{
 		if(process_command_line(&session, line, sizeof(line), &output_sequence,
-				&command_sequence, NULL) != 0)
+				&command_sequence, NULL, preview_queue, &preview_generation) != 0)
 		{
 			result = 1;
 			break;
 		}
 	}
+	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
 	nv_snapshot_error_free(&error);
+	nv_preview_queue_free(preview_queue);
 	nv_workspace_session_free(&session);
 	return result != 0 || ferror(stdin) ? 1 : 0;
 }

@@ -7,6 +7,7 @@
 #include <test-utils.h>
 
 #include "../../src/neovifm/pane_snapshot.h"
+#include "../../src/neovifm/preview_task.h"
 #include "../../src/neovifm/snapshot_json.h"
 #include "../../src/utils/parson.h"
 
@@ -22,6 +23,41 @@ TEST(hello_record_declares_protocol_version)
 	assert_int_equal(0, json_object_get_number(object, "version"));
 	assert_string_equal("hello", json_object_get_string(object, "type"));
 
+	json_value_free(value);
+	nv_protocol_json_free(line);
+}
+
+TEST(preview_session_records_are_versioned_and_keep_task_identity)
+{
+	char *hello = nv_protocol_preview_session_hello_json(0U);
+	assert_non_null(hello);
+	JSON_Value *value = json_parse_string(hello);
+	assert_non_null(value);
+	JSON_Object *root = json_object(value);
+	assert_int_equal(3, json_object_get_number(root, "version"));
+	assert_string_equal("preview-session-v3", json_array_get_string(
+			json_object_get_array(json_object_get_object(root, "payload"), "capabilities"), 0U));
+	json_value_free(value);
+	nv_protocol_json_free(hello);
+
+	nv_preview_event_t event = {
+		.task_id = 42U, .generation = 7U, .pane = NV_PREVIEW_PANE_RIGHT,
+		.kind = NV_PREVIEW_KIND_TEXT, .state = NV_PREVIEW_TASK_DONE,
+		.cwd_bytes_hex = "2f746d70", .path_bytes_hex = "2f746d702f6e6f7465",
+		.content = "note", .truncated = 0,
+	};
+	char *line = nv_protocol_preview_task_json(&event, 2U);
+	assert_non_null(line);
+	value = json_parse_string(line);
+	assert_non_null(value);
+	root = json_object(value);
+	assert_int_equal(3, json_object_get_number(root, "version"));
+	assert_string_equal("task", json_object_get_string(root, "type"));
+	JSON_Object *payload = json_object_get_object(root, "payload");
+	assert_string_equal("42", json_object_get_string(payload, "task_id"));
+	assert_string_equal("7", json_object_get_string(payload, "generation"));
+	assert_string_equal("right", json_object_get_string(payload, "pane"));
+	assert_string_equal("done", json_object_get_string(payload, "state"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
 }
@@ -121,6 +157,11 @@ TEST(snapshot_record_uses_strings_for_wide_numbers)
 	assert_string_equal("3", json_object_get_string(entry, "size_bytes"));
 	assert_non_null(json_object_get_string(entry, "mtime_unix_ms"));
 	assert_non_null(json_object_get_string(entry, "path_bytes_hex"));
+	assert_int_equal(0, json_object_get_number(payload, "selection_count"));
+	assert_int_equal(0, json_object_get_number(payload, "filtered_count"));
+	assert_string_equal("name", json_object_get_string(payload, "sort_key"));
+	assert_false(json_object_get_boolean(payload, "sort_descending"));
+	assert_false(json_object_get_boolean(payload, "filter_active"));
 
 	json_value_free(value);
 	nv_protocol_json_free(line);

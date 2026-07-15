@@ -67,6 +67,7 @@ neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/preview_task.c neovifm/preview_task.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	utils/parson.c utils/parson.h \
@@ -289,6 +290,8 @@ vifm_SOURCES = \
 	ui/ui.c ui/ui.h \
 	neovifm/classic_pane_adapter.c neovifm/classic_pane_adapter.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/preview_task.c neovifm/preview_task.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	\
 	utils/cancellation.c utils/cancellation.h \

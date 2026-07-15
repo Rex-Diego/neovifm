@@ -23,6 +23,7 @@ static char *join_path(const char dir[], const char name[]);
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		const char message[]);
 static nv_entry_kind_t entry_kind(FileType type);
+static nv_pane_sort_key_t sort_key(signed char key);
 static void free_entry(nv_pane_entry_t *entry);
 
 static char *
@@ -142,6 +143,23 @@ entry_kind(FileType type)
 	return NV_ENTRY_UNKNOWN;
 }
 
+static nv_pane_sort_key_t
+sort_key(signed char key)
+{
+	const int absolute_key = key < 0 ? -key : key;
+	switch(absolute_key)
+	{
+		case SK_BY_NAME:
+		case SK_BY_INAME: return NV_SORT_NAME;
+		case SK_BY_EXTENSION:
+		case SK_BY_FILEEXT: return NV_SORT_EXTENSION;
+		case SK_BY_SIZE: return NV_SORT_SIZE;
+		case SK_BY_TIME_MODIFIED: return NV_SORT_MTIME;
+		case SK_BY_TYPE: return NV_SORT_TYPE;
+	}
+	return NV_SORT_OTHER;
+}
+
 static void
 free_entry(nv_pane_entry_t *entry)
 {
@@ -174,6 +192,11 @@ nv_pane_snapshot_from_classic_view(const view_t *view,
 	}
 	next.entry_count = (size_t)view->list_rows;
 	next.cursor = view->list_pos;
+	next.filtered_count = view->filtered < 0 ? 0U : (size_t)view->filtered;
+	next.sort_key = sort_key(view->sort[0]);
+	next.sort_descending = view->sort[0] < 0;
+	next.filter_active = view->local_filter.filter.raw != NULL &&
+			!filter_is_empty(&view->local_filter.filter);
 	if(next.entry_count != 0U)
 	{
 		next.entries = calloc(next.entry_count, sizeof(*next.entries));
@@ -210,6 +233,7 @@ nv_pane_snapshot_from_classic_view(const view_t *view,
 		entry->has_stat = 1;
 #endif
 		entry->selected = source->selected;
+		next.selection_count += entry->selected != 0;
 		entry->hidden = source->name != NULL && source->name[0] == '.';
 	}
 	struct timeval now;
@@ -256,5 +280,34 @@ nv_classic_workspace_snapshot_from_views(const view_t *left,
 	nv_classic_workspace_snapshot_free(workspace);
 	nv_snapshot_error_free(error);
 	*workspace = next;
+	return 0;
+}
+
+int
+nv_workspace_session_init_from_classic_views(const view_t *left,
+		const view_t *right, nv_classic_pane_t active_pane,
+		nv_workspace_session_t *session, nv_snapshot_error_t *error)
+{
+	if(session == NULL || error == NULL)
+	{
+		return set_error(error, "invalid-classic-workspace",
+				"classic session destination is invalid");
+	}
+	nv_classic_workspace_snapshot_t workspace = {};
+	if(nv_classic_workspace_snapshot_from_views(left, right, active_pane,
+			&workspace, error) != 0)
+	{
+		return -1;
+	}
+	nv_workspace_session_t next = {
+		.left = workspace.left,
+		.right = workspace.right,
+		.active_pane = active_pane == NV_CLASSIC_PANE_LEFT
+			? NV_SESSION_LEFT : NV_SESSION_RIGHT,
+	};
+	memset(&workspace, 0, sizeof(workspace));
+	nv_workspace_session_free(session);
+	nv_snapshot_error_free(error);
+	*session = next;
 	return 0;
 }

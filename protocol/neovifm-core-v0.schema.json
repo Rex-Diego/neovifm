@@ -125,6 +125,11 @@
                 "generated_at_unix_ms": { "$ref": "#/$defs/decimalString", "maxLength": 32 },
                 "cursor": { "type": "integer", "minimum": -1 },
                 "entry_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+                "selection_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+                "filtered_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+                "sort_key": { "enum": ["name", "extension", "size", "mtime", "type", "other"] },
+                "sort_descending": { "type": "boolean" },
+                "filter_active": { "type": "boolean" },
                 "entries": {
                   "type": "array",
                   "maxItems": 4096,

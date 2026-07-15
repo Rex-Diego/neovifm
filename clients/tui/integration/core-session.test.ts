@@ -24,7 +24,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<voi
   }
 }
 
-test("real v2 session makes C core the source of truth for both panes", async () => {
+test("real v3 session publishes cancellable preview lifecycle beside core-owned panes", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
   left = await mkdtemp(resolve(tmpdir(), "neovifm-session-left-"))
@@ -47,6 +47,10 @@ test("real v2 session makes C core the source of truth for both panes", async ()
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
     expect(state.workspace.active_pane).toBe("left")
     expect(state.workspace.right.entries.some((entry) => entry.name_display === "right-a")).toBe(true)
+		await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.content === "a")
+		if (state.phase !== "ready" || !("session" in state)) throw new Error("expected preview session")
+		expect(state.version).toBe(3)
+		expect(state.tasks?.some((task) => task.state === "done" && task.kind === "text")).toBe(true)
 
     expect(session.send({ action: "focus", pane: "right" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "right")

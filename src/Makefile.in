@@ -144,6 +144,7 @@ neovifm_core_probe_LDADD = $(LDADD)
 am_neovifm_core_session_OBJECTS = neovifm/core_session.$(OBJEXT) \
 	neovifm/pane_snapshot.$(OBJEXT) \
 	neovifm/workspace_session.$(OBJEXT) \
+	neovifm/preview_task.$(OBJEXT) \
 	neovifm/snapshot_json.$(OBJEXT) compat/neovifm_fs.$(OBJEXT) \
 	utils/parson.$(OBJEXT) utils/utf8proc.$(OBJEXT)
 neovifm_core_session_OBJECTS = $(am_neovifm_core_session_OBJECTS)
@@ -219,28 +220,30 @@ am_vifm_OBJECTS = cfg/config.$(OBJEXT) cfg/info.$(OBJEXT) \
 	ui/statusbar.$(OBJEXT) ui/statusline.$(OBJEXT) \
 	ui/tabs.$(OBJEXT) ui/ui.$(OBJEXT) \
 	neovifm/classic_pane_adapter.$(OBJEXT) \
-	neovifm/pane_snapshot.$(OBJEXT) compat/neovifm_fs.$(OBJEXT) \
-	utils/cancellation.$(OBJEXT) utils/dynarray.$(OBJEXT) \
-	utils/env.$(OBJEXT) utils/event_nix.$(OBJEXT) \
-	utils/file_streams.$(OBJEXT) utils/filemon.$(OBJEXT) \
-	utils/filter.$(OBJEXT) utils/fs.$(OBJEXT) \
-	utils/fsdata.$(OBJEXT) utils/fsddata.$(OBJEXT) \
-	utils/fswatch_nix.$(OBJEXT) utils/globs.$(OBJEXT) \
-	utils/gmux_nix.$(OBJEXT) utils/hist.$(OBJEXT) \
-	utils/int_stack.$(OBJEXT) utils/log.$(OBJEXT) \
-	utils/matcher.$(OBJEXT) utils/matchers.$(OBJEXT) \
-	utils/mem.$(OBJEXT) utils/parson.$(OBJEXT) \
-	utils/path.$(OBJEXT) utils/regexp.$(OBJEXT) \
-	utils/selector_nix.$(OBJEXT) utils/shmem_nix.$(OBJEXT) \
-	utils/str.$(OBJEXT) utils/string_array.$(OBJEXT) \
-	utils/trie.$(OBJEXT) utils/utf8.$(OBJEXT) \
-	utils/utf8proc.$(OBJEXT) utils/utils.$(OBJEXT) \
-	utils/utils_nix.$(OBJEXT) args.$(OBJEXT) background.$(OBJEXT) \
-	bmarks.$(OBJEXT) bracket_notation.$(OBJEXT) \
-	builtin_functions.$(OBJEXT) cmd_actions.$(OBJEXT) \
-	cmd_completion.$(OBJEXT) cmd_core.$(OBJEXT) \
-	cmd_handlers.$(OBJEXT) compare.$(OBJEXT) dir_stack.$(OBJEXT) \
-	event_loop.$(OBJEXT) filelist.$(OBJEXT) \
+	neovifm/pane_snapshot.$(OBJEXT) \
+	neovifm/workspace_session.$(OBJEXT) \
+	neovifm/preview_task.$(OBJEXT) \
+	compat/neovifm_fs.$(OBJEXT) utils/cancellation.$(OBJEXT) \
+	utils/dynarray.$(OBJEXT) utils/env.$(OBJEXT) \
+	utils/event_nix.$(OBJEXT) utils/file_streams.$(OBJEXT) \
+	utils/filemon.$(OBJEXT) utils/filter.$(OBJEXT) \
+	utils/fs.$(OBJEXT) utils/fsdata.$(OBJEXT) \
+	utils/fsddata.$(OBJEXT) utils/fswatch_nix.$(OBJEXT) \
+	utils/globs.$(OBJEXT) utils/gmux_nix.$(OBJEXT) \
+	utils/hist.$(OBJEXT) utils/int_stack.$(OBJEXT) \
+	utils/log.$(OBJEXT) utils/matcher.$(OBJEXT) \
+	utils/matchers.$(OBJEXT) utils/mem.$(OBJEXT) \
+	utils/parson.$(OBJEXT) utils/path.$(OBJEXT) \
+	utils/regexp.$(OBJEXT) utils/selector_nix.$(OBJEXT) \
+	utils/shmem_nix.$(OBJEXT) utils/str.$(OBJEXT) \
+	utils/string_array.$(OBJEXT) utils/trie.$(OBJEXT) \
+	utils/utf8.$(OBJEXT) utils/utf8proc.$(OBJEXT) \
+	utils/utils.$(OBJEXT) utils/utils_nix.$(OBJEXT) args.$(OBJEXT) \
+	background.$(OBJEXT) bmarks.$(OBJEXT) \
+	bracket_notation.$(OBJEXT) builtin_functions.$(OBJEXT) \
+	cmd_actions.$(OBJEXT) cmd_completion.$(OBJEXT) \
+	cmd_core.$(OBJEXT) cmd_handlers.$(OBJEXT) compare.$(OBJEXT) \
+	dir_stack.$(OBJEXT) event_loop.$(OBJEXT) filelist.$(OBJEXT) \
 	filename_modifiers.$(OBJEXT) fops_common.$(OBJEXT) \
 	fops_cpmv.$(OBJEXT) fops_misc.$(OBJEXT) fops_put.$(OBJEXT) \
 	fops_rename.$(OBJEXT) filetype.$(OBJEXT) filtering.$(OBJEXT) \
@@ -834,6 +837,7 @@ neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/preview_task.c neovifm/preview_task.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	utils/parson.c utils/parson.h \
@@ -1044,6 +1048,8 @@ vifm_SOURCES = \
 	ui/ui.c ui/ui.h \
 	neovifm/classic_pane_adapter.c neovifm/classic_pane_adapter.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
+	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/preview_task.c neovifm/preview_task.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	\
 	utils/cancellation.c utils/cancellation.h \
@@ -1253,6 +1259,8 @@ neovifm/core_probe.$(OBJEXT): neovifm/$(am__dirstamp) \
 neovifm/pane_snapshot.$(OBJEXT): neovifm/$(am__dirstamp) \
 	neovifm/$(DEPDIR)/$(am__dirstamp)
 neovifm/workspace_session.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/preview_task.$(OBJEXT): neovifm/$(am__dirstamp) \
 	neovifm/$(DEPDIR)/$(am__dirstamp)
 neovifm/snapshot_json.$(OBJEXT): neovifm/$(am__dirstamp) \
 	neovifm/$(DEPDIR)/$(am__dirstamp)
@@ -3024,6 +3032,7 @@ distclean: distclean-am
 	-rm -f neovifm/$(DEPDIR)/core_probe.Po
 	-rm -f neovifm/$(DEPDIR)/core_session.Po
 	-rm -f neovifm/$(DEPDIR)/pane_snapshot.Po
+	-rm -f neovifm/$(DEPDIR)/preview_task.Po
 	-rm -f neovifm/$(DEPDIR)/snapshot_json.Po
 	-rm -f neovifm/$(DEPDIR)/workspace_session.Po
 	-rm -f ui/$(DEPDIR)/cancellation.Po

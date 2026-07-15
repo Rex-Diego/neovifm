@@ -2,6 +2,11 @@
 
 ## 2026-07-14
 
+- 完整执行目标恢复审计：已确认 `master` 已推送至 `origin/master`，唯一未跟踪项为本地构建产物 `src/neovifm-core-session`；活动 M1 计划仍有两项 Phase 4 与一项 M2 入口评估未完成。后续仅以当前计划、协议和源码为依据，不把已提交的 watcher/adapter 当作剩余项完成证明。
+- 元数据 DTO 首次 focused build 在 `classic_pane_adapter` 调用 `filter_is_empty()` 时崩溃：手工构造的可测试 `view_t` 未初始化 filter raw 字符串。改为先检查 raw 非空再调用过滤器，保持 adapter 对已加载或最小测试 view 的只读安全性。
+- classic session initializer 使 `vifm` 链接到 workspace session 后首次暴露缺少链接对象；已将 `workspace_session` 纳入 Unix 与 Windows classic binary source closures，再重新生成 Autotools 输出并验证，避免只在 probe/session target 中存在该 module。
+- M1 Phase 4 现已收尾：classic workspace/session bridge、selection/filter/sort metadata、双 pane refresh 都有 focused C/TS 回归；M2 入口评估已落在 `docs/NEOVIFM_M2_ENTRY.md`，明确 preview/task 的首切片与禁止项。下一步运行全量验收并以当前证据审计所有计划项。
+- 完整验收完成：`make check` 通过（src runtests 1/1）；focused C 为 26 tests/8492 checks；TUI unit 为 53 tests/115 assertions，coverage 为 87.85% functions/93.63% lines，typecheck、真实 probe/session integration 4/4、Bun audit、Windows target dry-run 与 `git diff --check` 全部通过。M1 计划所有 checkbox 已勾选并标记 complete。
 - planning-with-files session catchup 已确认上一轮 watcher 交付与验证已写入工作树；`git diff --stat` 显示的是既有 M0/M1 未提交基线及 watcher 变更，未发现额外外部改动。当前继续把两个已加载 classic `view_t` 原子转换为 workspace snapshot 的独立适配层，仍不让 headless session 持有 view 指针。
 - 新增 classic workspace adapter 与原子失败回归：它深拷贝左右已加载 view，并在右 pane 无效时保留上一次完整 workspace。focused `neovifm_snapshot` 通过（26 tests/8472 checks）；用户随后要求提交并推送，将把现有 M0/M1、协议、TUI、测试和计划上下文一并提交。
 - 已发布 `9aad055ea feat: establish neovifm hybrid m1` 至 `origin/master`。生成的 `src/neovifm-core-session` 二进制未纳入版本控制，保留在工作树供本地 integration 使用。

@@ -25,6 +25,7 @@
 # *nix executables
 /src/vifm
 /src/neovifm-core-probe
+/src/neovifm-core-session
 
 # macOS Finder metadata
 .DS_Store

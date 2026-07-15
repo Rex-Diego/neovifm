@@ -99,7 +99,9 @@ vifm_SOURCES := $(cfg) $(compat) $(engine) $(int) $(io) $(lua) $(menus) \
                 flist_pos.c flist_sel.c instance.c ipc.c macros.c marks.c \
                 ops.c opt_handlers.c plugins.c registers.c running.c search.c \
                 signals.c sort.c status.c tags.c trash.c types.c undo.c \
-                vcache.c version.c viewcolumns_parser.c vifmres.o vifm.c
+	vcache.c version.c viewcolumns_parser.c neovifm/classic_pane_adapter.c \
+	neovifm/pane_snapshot.c neovifm/workspace_session.c neovifm/preview_task.c \
+	vifmres.o vifm.c
 
 vifm_OBJECTS := $(vifm_SOURCES:.c=.o)
 vifm_EXECUTABLE := vifm.exe
@@ -111,7 +113,7 @@ neovifm_core_probe_OBJECTS := $(neovifm_core_probe_SOURCES:.c=.o)
 neovifm_core_probe_EXECUTABLE := neovifm-core-probe.exe
 
 neovifm_core_session_SOURCES := neovifm/core_session.c neovifm/pane_snapshot.c \
-	neovifm/workspace_session.c neovifm/snapshot_json.c compat/neovifm_fs.c compat/reallocarray.c \
+	neovifm/workspace_session.c neovifm/preview_task.c neovifm/snapshot_json.c compat/neovifm_fs.c compat/reallocarray.c \
 	utils/parson.c utils/utf8.c utils/utf8proc.c
 neovifm_core_session_OBJECTS := $(neovifm_core_session_SOURCES:.c=.o)
 neovifm_core_session_EXECUTABLE := neovifm-core-session.exe

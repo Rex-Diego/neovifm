@@ -32,6 +32,16 @@ typedef enum
 	NV_ENTRY_UNKNOWN,
 } nv_entry_kind_t;
 
+typedef enum
+{
+	NV_SORT_NAME,
+	NV_SORT_EXTENSION,
+	NV_SORT_SIZE,
+	NV_SORT_MTIME,
+	NV_SORT_TYPE,
+	NV_SORT_OTHER,
+} nv_pane_sort_key_t;
+
 typedef struct
 {
 	char *name_display;
@@ -56,6 +66,11 @@ typedef struct
 	int64_t generated_at_unix_ms;
 	int cursor;
 	size_t entry_count;
+	size_t selection_count;
+	size_t filtered_count;
+	nv_pane_sort_key_t sort_key;
+	int sort_descending;
+	int filter_active;
 	nv_pane_entry_t *entries;
 } nv_pane_snapshot_t;
 

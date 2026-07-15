@@ -604,6 +604,7 @@ nv_pane_snapshot_build(const char path[], nv_pane_snapshot_t *snapshot,
 	}
 	next_snapshot.generated_at_unix_ms = current_time_ms();
 	next_snapshot.cursor = (next_snapshot.entry_count == 0U) ? -1 : 0;
+	next_snapshot.sort_key = NV_SORT_NAME;
 
 	nv_pane_snapshot_free(snapshot);
 	nv_snapshot_error_free(error);

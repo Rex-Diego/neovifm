@@ -109,6 +109,7 @@ replace_active_snapshot(nv_workspace_session_t *session, const char path[],
 					current->entries[j].name_bytes_hex) == 0)
 			{
 				next.entries[i].selected = current->entries[j].selected;
+				next.selection_count += next.entries[i].selected != 0;
 				if(cursor_name != NULL && strcmp(next.entries[i].name_bytes_hex,
 						cursor_name) == 0) next.cursor = (int)i;
 				break;
@@ -240,10 +241,22 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		session->active_pane = command->pane;
 		return 0;
 	}
+	if(command->kind == NV_SESSION_FOCUS_NEXT)
+	{
+		session->active_pane = session->active_pane == NV_SESSION_LEFT ?
+			NV_SESSION_RIGHT : NV_SESSION_LEFT;
+		return 0;
+	}
 
 	nv_pane_snapshot_t *const snapshot = active_snapshot(session);
 	switch(command->kind)
 	{
+		case NV_SESSION_MOVE_FIRST:
+			if(snapshot->entry_count != 0U) snapshot->cursor = 0;
+			return 0;
+		case NV_SESSION_MOVE_LAST:
+			if(snapshot->entry_count != 0U) snapshot->cursor = (int)snapshot->entry_count - 1;
+			return 0;
 		case NV_SESSION_MOVE_CURSOR:
 			if(snapshot->entry_count == 0U) return 0;
 			if(command->delta < 0 && snapshot->cursor > 0) --snapshot->cursor;
@@ -252,6 +265,14 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_TOGGLE_SELECTION:
 			if(snapshot->cursor < 0) return set_error(error, "empty-pane", "cannot select in an empty pane");
 			snapshot->entries[snapshot->cursor].selected = !snapshot->entries[snapshot->cursor].selected;
+			if(snapshot->entries[snapshot->cursor].selected)
+			{
+				++snapshot->selection_count;
+			}
+			else
+			{
+				--snapshot->selection_count;
+			}
 			return 0;
 		case NV_SESSION_ENTER:
 			if(snapshot->cursor < 0 || snapshot->entries[snapshot->cursor].kind != NV_ENTRY_DIRECTORY)
@@ -279,6 +300,7 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_REFRESH:
 			return refresh_snapshot(session, snapshot, error);
 		case NV_SESSION_FOCUS:
+		case NV_SESSION_FOCUS_NEXT:
 			break;
 	}
 	return set_error(error, "invalid-command", "unsupported session command");

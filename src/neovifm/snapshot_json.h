@@ -11,6 +11,7 @@
 #define VIFM__NEOVIFM__SNAPSHOT_JSON_H__
 
 #include "pane_snapshot.h"
+#include "preview_task.h"
 
 typedef enum
 {
@@ -22,6 +23,7 @@ typedef enum
 char *nv_protocol_hello_json(unsigned int sequence);
 char *nv_protocol_workspace_hello_json(unsigned int sequence);
 char *nv_protocol_session_hello_json(unsigned int sequence);
+char *nv_protocol_preview_session_hello_json(unsigned int sequence);
 nv_protocol_json_result_t nv_protocol_snapshot_json(
 		const nv_pane_snapshot_t *snapshot, unsigned int sequence, char **json);
 nv_protocol_json_result_t nv_protocol_workspace_snapshot_json(
@@ -35,8 +37,19 @@ char *nv_protocol_workspace_error_json(const nv_snapshot_error_t *error,
 		const nv_pane_snapshot_t *left, const nv_pane_snapshot_t *right,
 		const char active_pane[], unsigned int output_sequence,
 		unsigned int request_sequence, const char trigger[], char **json);
+nv_protocol_json_result_t nv_protocol_preview_session_snapshot_json(
+		const nv_pane_snapshot_t *left, const nv_pane_snapshot_t *right,
+		const char active_pane[], unsigned int output_sequence,
+		unsigned int request_sequence, const char trigger[], char **json);
 char *nv_protocol_session_command_error_json(const nv_snapshot_error_t *error,
 		unsigned int output_sequence, unsigned int request_sequence);
+char *nv_protocol_preview_session_command_error_json(
+		const nv_snapshot_error_t *error, unsigned int output_sequence,
+		unsigned int request_sequence);
+char *nv_protocol_preview_task_json(const nv_preview_event_t *event,
+		unsigned int output_sequence);
+char *nv_protocol_preview_json(const nv_preview_event_t *event,
+		unsigned int output_sequence);
 
 void nv_protocol_json_free(char *json);
 

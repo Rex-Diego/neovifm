@@ -8,7 +8,7 @@ M0 的单 pane probe 已完成协议与生命周期验证，但不能被当作�
 
 ## 当前阶段
 
-Phase 4：M1b 交互会话、真实 Pane 接入与增量刷新
+Complete：M1 双 Pane 基线及 M2 入口评估已完成
 
 ## 阶段
 
@@ -41,18 +41,18 @@ Phase 4：M1b 交互会话、真实 Pane 接入与增量刷新
 
 - 当前优先级：先交付 macOS；Windows/其他平台 session watcher 暂不作为 M1 完成前置。
 - [x] 新增由 TUI 持有的 `neovifm-core-session` stdio 子进程；保留 M0/M1a probe 的终结记录语义，加入 Tab、移动、进入、返回和 selection，不引入 daemon、socket 或网络协议
-- [ ] 用经典 Vifm 可测试 pane/filelist 能力替代 M0 的孤立扫描路径，记录无法复用的耦合
-- [ ] 为 selection、排序、过滤和双 pane 刷新建立 immutable snapshot adapter
+- [x] 用经典 Vifm 可测试 pane/filelist 能力替代 M0 的孤立扫描路径，记录无法复用的耦合
+- [x] 为 selection、排序、过滤和双 pane 刷新建立 immutable snapshot adapter
 - [x] 在 macOS 接入 watcher/刷新事件，显式携带 pane、cwd、selection 与取消上下文；后台不触碰 TUI 状态
 - [x] 保持 classic ncurses renderer 为默认兼容基线，并验证不回归
-- **状态：** in_progress
+- **状态：** completed
 
 ### Phase 5：验收与 M2 入口
 
 - [x] C focused tests、串行 `make check`、TUI tests/coverage/typecheck/audit、真实双 pane integration 和 `git diff --check`
 - [x] 安全与 C/TypeScript 审查，修复 HIGH/CRITICAL 问题
-- [ ] 评估 M2 的异步预览/任务中心入口；不在未写 ADR 时引入 daemon、socket、Rust/C++ 或网络协议
-- **状态：** pending
+- [x] 评估 M2 的异步预览/任务中心入口；不在未写 ADR 时引入 daemon、socket、Rust/C++ 或网络协议
+- **状态：** completed
 
 ## 架构约束
 

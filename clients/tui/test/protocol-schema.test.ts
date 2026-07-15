@@ -44,6 +44,9 @@ const sessionVariant = objectValue(sessionParts[1])
 const sessionProperties = objectValue(sessionVariant.properties)
 const sessionPayload = objectValue(sessionProperties.payload)
 const sessionPayloadProperties = objectValue(sessionPayload.properties)
+const previewSessionSchemaPath = resolve(import.meta.dir, "../../../protocol/neovifm-core-v3.schema.json")
+const previewSessionSchema = objectValue(JSON.parse(await Bun.file(previewSessionSchemaPath).text()))
+const previewSessionDefinitions = objectValue(previewSessionSchema.$defs)
 
 test("schema resource bounds match the TypeScript protocol boundary", () => {
   expect(objectValue(baseProperties.sequence).maximum).toBe(Number.MAX_SAFE_INTEGER)
@@ -93,4 +96,26 @@ test("v2 schema requires an acknowledged command sequence and refresh trigger", 
   expect(objectValue(sessionPayloadProperties.trigger).enum).toEqual(["initial", "command", "watch"])
   const commandError = objectValue(sessionDefinitions.commandError)
   expect(commandError.allOf).toBeDefined()
+})
+
+test("v3 schema declares task identity and terminal preview boundaries", () => {
+  const taskPayload = objectValue(previewSessionDefinitions.taskPayload)
+  expect(taskPayload.required).toEqual(["task_id", "generation", "pane", "kind", "state", "cwd_bytes_hex", "path_bytes_hex"])
+  const taskProperties = objectValue(taskPayload.properties)
+  expect(objectValue(taskProperties.state).enum).toEqual(["queued", "running", "done", "failed", "cancelled"])
+  const preview = objectValue(previewSessionDefinitions.preview)
+  expect(preview.allOf).toBeDefined()
+})
+
+test("v3 schema exposes core-owned pane toggle and Vifm first/last movement", () => {
+  const command = objectValue(previewSessionDefinitions.command)
+  const commandParts = command.allOf
+  if (!Array.isArray(commandParts)) throw new Error("expected command allOf")
+  const commandVariant = objectValue(commandParts[1])
+  const commandProperties = objectValue(commandVariant.properties)
+  const commandPayload = objectValue(commandProperties.payload)
+  const commandPayloadProperties = objectValue(commandPayload.properties)
+  expect(objectValue(commandPayloadProperties.action).enum).toContain("focus-next")
+  expect(objectValue(commandPayloadProperties.action).enum).toContain("move-to")
+  expect(objectValue(commandPayloadProperties.target).enum).toEqual(["first", "last"])
 })

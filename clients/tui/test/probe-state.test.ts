@@ -47,6 +47,21 @@ describe("probe state reducer", () => {
     expect(refreshedAfterError).toMatchObject({ phase: "ready", workspace: { right: { cwd_display: "/private/var/db" } }, commandSequence: 2 })
   })
 
+  test("retains v3 task state while ignoring stale preview generations", () => {
+    const pane = { cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0", cursor: -1, entry_count: 0, entries: [] }
+    const hello3 = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "hello", sequence: 0, payload: { implementation: "session", capabilities: ["preview-session-v3"] } })
+    const initial = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 1, payload: { command_sequence: 0, trigger: "initial", active_pane: "left", left: pane, right: pane } })
+    const task = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "task", sequence: 2, payload: { task_id: "1", generation: "2", pane: "left", kind: "text", state: "running", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f61" } })
+    const newest = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "preview", sequence: 3, payload: { task_id: "1", generation: "2", pane: "left", kind: "text", state: "done", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f61", content: "new", truncated: false } })
+    const stale = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "preview", sequence: 4, payload: { task_id: "0", generation: "1", pane: "left", kind: "text", state: "done", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6f6c64", content: "old", truncated: false } })
+    const ready = reduceProbeState(reduceProbeState(initialProbeState(), hello3), initial)
+    const running = reduceProbeState(ready, task)
+    const current = reduceProbeState(reduceProbeState(running, newest), stale)
+
+    expect(running).toMatchObject({ version: 3, tasks: [{ task_id: "1", state: "running" }] })
+    expect(current).toMatchObject({ preview: { generation: "2", content: "new" }, sequence: 4 })
+  })
+
   test("requires a v1 workspace atomically after the workspace capability", () => {
     const workspaceHello = parseProtocolRecord({
       protocol: "neovifm-core",

@@ -35,6 +35,7 @@ TEST(session_keeps_panes_independent_while_moving_and_selecting)
 		.kind = NV_SESSION_TOGGLE_SELECTION,
 	}, &error));
 	assert_true(session.left.entries[1].selected);
+	assert_int_equal(1, session.left.selection_count);
 	assert_false(session.right.entries[0].selected);
 	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
 		.kind = NV_SESSION_FOCUS, .pane = NV_SESSION_RIGHT,
@@ -44,6 +45,7 @@ TEST(session_keeps_panes_independent_while_moving_and_selecting)
 		.kind = NV_SESSION_TOGGLE_SELECTION,
 	}, &error));
 	assert_true(session.right.entries[0].selected);
+	assert_int_equal(1, session.right.selection_count);
 	assert_true(session.left.entries[1].selected);
 
 	nv_workspace_session_free(&session);
@@ -81,6 +83,59 @@ TEST(session_refreshes_an_inactive_pane_without_changing_focus)
 	remove_file(SANDBOX_PATH "/refresh-left/first");
 	remove_file(SANDBOX_PATH "/refresh-left/second");
 	remove_file(SANDBOX_PATH "/refresh-right/only");
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(session_focus_next_toggles_from_core_owned_active_pane)
+{
+	const char *const left = SANDBOX_PATH "/focus-next-left";
+	const char *const right = SANDBOX_PATH "/focus-next-right";
+	create_dir(left);
+	create_dir(right);
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	assert_int_equal(NV_SESSION_LEFT, session.active_pane);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_FOCUS_NEXT,
+	}, &error));
+	assert_int_equal(NV_SESSION_RIGHT, session.active_pane);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_FOCUS_NEXT,
+	}, &error));
+	assert_int_equal(NV_SESSION_LEFT, session.active_pane);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(session_moves_to_first_and_last_entries)
+{
+	const char *const left = SANDBOX_PATH "/move-to-left";
+	const char *const right = SANDBOX_PATH "/move-to-right";
+	create_dir(left);
+	create_dir(right);
+	make_file(SANDBOX_PATH "/move-to-left/a", "a");
+	make_file(SANDBOX_PATH "/move-to-left/b", "b");
+	make_file(SANDBOX_PATH "/move-to-left/c", "c");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_MOVE_LAST,
+	}, &error));
+	assert_int_equal(2, session.left.cursor);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_MOVE_FIRST,
+	}, &error));
+	assert_int_equal(0, session.left.cursor);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/move-to-left/a");
+	remove_file(SANDBOX_PATH "/move-to-left/b");
+	remove_file(SANDBOX_PATH "/move-to-left/c");
 	remove_dir(left);
 	remove_dir(right);
 }
@@ -134,6 +189,9 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 	left.dir_entry[0].origin = left.curr_dir;
 	right.dir_entry[0].origin = right.curr_dir;
 	left.dir_entry[0].type = right.dir_entry[0].type = FT_REG;
+	left.filtered = 3;
+	left.sort[0] = -SK_BY_SIZE;
+	left.local_filter.filter.raw = strdup("left-filter");
 	right.dir_entry[0].selected = 1;
 	nv_classic_workspace_snapshot_t workspace = {};
 	nv_snapshot_error_t error = {};
@@ -143,6 +201,16 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 	assert_string_equal("left-file", workspace.left.entries[0].name_display);
 	assert_string_equal("right-file", workspace.right.entries[0].name_display);
 	assert_true(workspace.right.entries[0].selected);
+	assert_int_equal(1, workspace.right.selection_count);
+	assert_int_equal(3, workspace.left.filtered_count);
+	assert_int_equal(NV_SORT_SIZE, workspace.left.sort_key);
+	assert_true(workspace.left.sort_descending);
+	assert_true(workspace.left.filter_active);
+	nv_workspace_session_t session = {};
+	assert_success(nv_workspace_session_init_from_classic_views(&left, &right,
+			NV_CLASSIC_PANE_RIGHT, &session, &error));
+	assert_int_equal(NV_SESSION_RIGHT, session.active_pane);
+	assert_string_equal("left-file", session.left.entries[0].name_display);
 	left.dir_entry[0].name[0] = 'X';
 	assert_string_equal("left-file", workspace.left.entries[0].name_display);
 
@@ -153,9 +221,11 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 	assert_int_equal(NV_CLASSIC_PANE_RIGHT, workspace.active_pane);
 
 	nv_classic_workspace_snapshot_free(&workspace);
+	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	free(left.dir_entry[0].name);
 	free(right.dir_entry[0].name);
+	free(left.local_filter.filter.raw);
 	free(left.dir_entry);
 	free(right.dir_entry);
 }

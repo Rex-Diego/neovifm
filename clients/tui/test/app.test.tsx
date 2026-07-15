@@ -11,6 +11,11 @@ const snapshot: SnapshotPayload = {
   generated_at_unix_ms: "0",
   cursor: 0,
   entry_count: 1,
+  selection_count: 0,
+  filtered_count: 0,
+  sort_key: "name",
+  sort_descending: false,
+  filter_active: false,
   entries: [
     {
       name_display: "file.txt",
@@ -20,6 +25,7 @@ const snapshot: SnapshotPayload = {
       kind: "file",
       size_bytes: "12",
       mtime_unix_ms: "0",
+      mode_octal: "100644",
       selected: false,
       hidden: false,
     },
@@ -46,7 +52,7 @@ afterEach(() => {
 
 test("renders two panes by default and degrades to the active pane when narrow", async () => {
   setup = await testRender(() => <App workspace={workspace} />, {
-    width: 100,
+    width: 140,
     height: 20,
   })
 
@@ -56,8 +62,15 @@ test("renders two panes by default and degrades to the active pane when narrow",
   expect(wideFrame).toContain("right.txt")
   expect(wideFrame).toContain("LEFT ACTIVE")
   expect(wideFrame).toContain("RIGHT /var")
-  expect(wideFrame).toContain("100x20")
-  expect(wideFrame).toContain("[F]")
+  expect(wideFrame).toContain("140x20")
+  expect(wideFrame).toContain("-rw-r--r--")
+  expect(wideFrame).toContain("1970-01-01")
+  expect(wideFrame).toContain("NORMAL")
+  expect(wideFrame).toContain("F3  View")
+  expect(wideFrame).toContain("F4  Edit")
+  expect(wideFrame).toContain("F5  Copy")
+  expect(wideFrame).toContain("F10  Quit")
+  expect(wideFrame).not.toContain("READ ONLY")
 
   setup.resize(60, 20)
   await setup.renderOnce()
@@ -71,7 +84,55 @@ test("renders two panes by default and degrades to the active pane when narrow",
   setup = await testRender(() => <App workspace={workspace} onCommand={(command) => { sent = command }} />, { width: 60, height: 20 })
   await setup.renderOnce()
   setup.mockInput.pressTab()
-  expect(sent).toEqual({ action: "focus", pane: "right" })
+  expect(sent).toEqual({ action: "focus-next" })
+})
+
+test("never allocates a third pane for preview or tasks", async () => {
+  setup = await testRender(() => <App workspace={workspace} preview={{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content: "preview text", truncated: false,
+  }} tasks={[{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+  }]} />, { width: 120, height: 20 })
+
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("preview text")
+  expect(setup.captureCharFrame()).not.toContain("done:text")
+  expect(setup.captureCharFrame()).toContain("file.txt")
+  expect(setup.captureCharFrame()).toContain("right.txt")
+
+  setup.resize(60, 20)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("preview text")
+})
+
+test("opens F3 preview as a full workspace viewer instead of a third pane", async () => {
+  setup = await testRender(() => <App workspace={workspace} preview={{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content: "preview body", truncated: false,
+  }} />, { width: 100, height: 20 })
+
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("preview body")
+  setup.mockInput.pressKey("F3")
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("F3 VIEW")
+  expect(setup.captureCharFrame()).toContain("preview body")
+  setup.mockInput.pressKey("F3")
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("preview body")
+})
+
+test("marks F4 edit as disabled until the action service is connected", async () => {
+  setup = await testRender(() => <App workspace={workspace} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  setup.mockInput.pressKey("F4")
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("edit disabled")
+  expect(setup.captureCharFrame()).toContain("action service not connected")
 })
 
 test("renders a core error without a snapshot", async () => {
