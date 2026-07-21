@@ -30,6 +30,8 @@ test("production PTY accepts Vifm keys and clickable Total Commander actions", a
   await mkdir(right)
   await writeFile(join(left, "a-file"), "a")
   await writeFile(join(left, "b-file"), "b")
+  await mkdir(join(right, "a-dir"))
+  await writeFile(join(right, "a-dir", "inside"), "inside")
   await writeFile(join(right, "right-file"), "right")
   await writeFile(trashHelper, "#!/bin/sh\nexec /bin/rm -rf -- \"$1\"\n")
   await chmod(trashHelper, 0o700)
@@ -57,6 +59,18 @@ expect {
   "RIGHT" {}
   timeout { exit 13 }
   eof { exit 14 }
+}
+send -- "l"
+expect {
+  "inside" {}
+  timeout { exit 20 }
+  eof { exit 21 }
+}
+send -- "h"
+expect {
+  "right-file" {}
+  timeout { exit 22 }
+  eof { exit 23 }
 }
 send -- "\033\[<0;49;23M\033\[<0;49;23m"
 expect {

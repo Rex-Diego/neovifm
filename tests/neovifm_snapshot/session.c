@@ -321,6 +321,10 @@ TEST(session_sorts_by_core_owned_column_and_preserves_cursor_identity)
 	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
 		.kind = NV_SESSION_SORT_CYCLE, .delta = 1,
 	}, &error));
+	assert_int_equal(NV_SORT_CTIME, session.left.sort_key);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SORT_CYCLE, .delta = 1,
+	}, &error));
 	assert_int_equal(NV_SORT_MTIME, session.left.sort_key);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);

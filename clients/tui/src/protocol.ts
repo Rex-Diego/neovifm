@@ -92,7 +92,7 @@ export interface ErrorPayload {
 }
 
 export type PaneId = "left" | "right"
-export type PaneSortKey = "name" | "extension" | "size" | "mtime" | "mode" | "type" | "other"
+export type PaneSortKey = "name" | "extension" | "size" | "ctime" | "mtime" | "mode" | "type" | "other"
 export type SessionSnapshotTrigger = "initial" | "command" | "watch" | "action"
 
 export interface WorkspaceSnapshotPayload {
@@ -504,7 +504,7 @@ function parsePaneId(value: unknown, path: string): PaneId {
 
 function parsePaneSortKey(value: unknown, path: string): PaneSortKey {
   const key = stringValue(value, path)
-  if (key !== "name" && key !== "extension" && key !== "size" && key !== "mtime" && key !== "mode" && key !== "type" && key !== "other") {
+  if (key !== "name" && key !== "extension" && key !== "size" && key !== "ctime" && key !== "mtime" && key !== "mode" && key !== "type" && key !== "other") {
     return invalid(path, "is not a supported sort key")
   }
   return key

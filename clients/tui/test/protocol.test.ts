@@ -45,13 +45,13 @@ describe("JSONL protocol", () => {
     const pane = {
       cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
       cursor: -1, entry_count: 0, selection_count: 0, filtered_count: 2,
-      sort_key: "mtime", sort_descending: true, filter_active: true, entries: [],
+      sort_key: "ctime", sort_descending: true, filter_active: true, entries: [],
     }
     const record = parseProtocolRecord({
       protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1, payload: pane,
     })
     if (record.type !== "snapshot") throw new Error("expected snapshot")
-    expect(record.payload).toMatchObject({ filtered_count: 2, sort_key: "mtime", sort_descending: true, filter_active: true })
+    expect(record.payload).toMatchObject({ filtered_count: 2, sort_key: "ctime", sort_descending: true, filter_active: true })
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1,
       payload: { ...pane, selection_count: 1 },

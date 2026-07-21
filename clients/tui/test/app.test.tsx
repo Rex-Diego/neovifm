@@ -61,7 +61,7 @@ afterEach(() => {
 
 test("renders two panes by default and degrades to the active pane when narrow", async () => {
   setup = await testRender(() => <App workspace={workspace} />, {
-    width: 140,
+    width: 180,
     height: 20,
   })
 
@@ -71,12 +71,13 @@ test("renders two panes by default and degrades to the active pane when narrow",
   expect(wideFrame).toContain("right.txt")
   expect(wideFrame).toContain("LEFT ACTIVE")
   expect(wideFrame).toContain("RIGHT • /var")
-  expect(wideFrame).toContain("140x20")
+  expect(wideFrame).toContain("180x20")
   expect(wideFrame).toContain("-rw-r--r--")
   expect(wideFrame).toContain("1970-01-01")
   expect(wideFrame).toContain("Name ▲")
   expect(wideFrame).toContain("Permissions")
   expect(wideFrame).toContain("Size")
+  expect(wideFrame).toContain("Created")
   expect(wideFrame).toContain("Modified")
   expect(wideFrame).toContain(" file.txt")
   expect(wideFrame).toContain("NORMAL")
@@ -114,13 +115,18 @@ test("column headers and the function bar are clickable mouse targets", async ()
     capabilities={capabilities}
     onCommand={(command) => { sent.push(command) }}
     onCancel={() => { cancelled = true }}
-  />, { width: 140, height: 20 })
+  />, { width: 180, height: 20 })
   await setup.renderOnce()
 
   const sizeHeader = setup.renderer.root.findDescendantById("sort-left-size")
   expect(sizeHeader).toBeDefined()
   await setup.mockMouse.click(sizeHeader!.x, sizeHeader!.y)
   expect(sent.at(-1)).toEqual({ action: "sort-by", pane: "left", key: "size" })
+
+  const createdHeader = setup.renderer.root.findDescendantById("sort-left-ctime")
+  expect(createdHeader).toBeDefined()
+  await setup.mockMouse.click(createdHeader!.x, createdHeader!.y)
+  expect(sent.at(-1)).toEqual({ action: "sort-by", pane: "left", key: "ctime" })
 
   const copyButton = setup.renderer.root.findDescendantById("function-copy")
   expect(copyButton).toBeDefined()
@@ -264,7 +270,21 @@ test("opens F3 preview as a full workspace viewer instead of a third pane", asyn
   expect(setup.captureCharFrame()).not.toContain("preview body")
 })
 
-test("never opens a stale preview from another pane or cursor identity", async () => {
+test("opens a file with l through the same preview path as F3", async () => {
+  setup = await testRender(() => <App workspace={workspace} preview={{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content: "opened with l", truncated: false,
+  }} />, { width: 100, height: 20 })
+
+  await setup.renderOnce()
+  setup.mockInput.pressKey("l")
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("F3 VIEW")
+  expect(setup.captureCharFrame()).toContain("opened with l")
+})
+
+test("opens a loading viewer instead of rendering a stale preview from another pane or cursor identity", async () => {
   const staleWorkspace: WorkspaceSnapshotPayload = {
     ...workspace,
     active_pane: "right",
@@ -279,7 +299,8 @@ test("never opens a stale preview from another pane or cursor identity", async (
   setup.mockInput.pressKey("F3")
   await setup.renderOnce()
   expect(setup.captureCharFrame()).not.toContain("stale preview")
-  expect(setup.captureCharFrame()).toContain("View unavailable")
+  expect(setup.captureCharFrame()).toContain("F3 VIEW")
+  expect(setup.captureCharFrame()).toContain("Loading preview")
 })
 
 test("keeps the C-owned cursor visible after it moves below the first viewport", async () => {

@@ -14,6 +14,13 @@ Phase 7：范围收敛与 Vifm 原生能力复用
 - Yazi 后续只作为多媒体预览能力与视觉美化的参考，不默认引入其异步核心、VFS、并发插件或跨实例事件架构。
 - Phase 7 仍待用户确认：盘点和优先复用 Vifm 原生 C/ncurses、`fileviewer`、`quickview`、`vcache`、Lua 与跨平台 watcher；不在本提交删除或回退 Hybrid/OpenTUI 成果。
 
+## 追加修复（2026-07-15）
+
+- [x] 文件上的 `l` 走 F3 同一预览入口，目录上的 `l` 继续由 core 进入目录；补覆盖两条路径的测试。
+- [x] 在 core、JSON schema 和 TUI DTO 中新增 `ctime` 排序；Right/Left 顺序完整轮换 Size -> Created -> Modified -> Permissions。
+- [x] 宽终端显示 btop 式 Name/Permissions/Size/Created/Modified 标题；空间不足时只显示当前可轮换字段，避免挤掉文件名。
+- [x] 运行真实 PTY、TUI integration、typecheck 与完整回归，确认 `h/l` 和全部排序字段真实生效。
+
 ## 阶段
 
 ### Phase 1：复现问题与定义 UI 契约

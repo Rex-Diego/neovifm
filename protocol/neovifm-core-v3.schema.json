@@ -171,7 +171,7 @@
         { "type": "object", "required": ["action"], "properties": { "action": { "enum": ["focus-next", "enter", "parent", "toggle-selection", "refresh"] } } },
         { "type": "object", "required": ["action", "delta"], "properties": { "action": { "enum": ["move", "sort-cycle"] }, "delta": { "enum": [-1, 1] } } },
         { "type": "object", "required": ["action", "target"], "properties": { "action": { "const": "move-to" }, "target": { "enum": ["first", "last"] } } },
-        { "type": "object", "required": ["action", "pane", "key"], "properties": { "action": { "const": "sort-by" }, "pane": { "enum": ["left", "right"] }, "key": { "enum": ["name", "extension", "size", "mtime", "mode", "type", "other"] } } },
+        { "type": "object", "required": ["action", "pane", "key"], "properties": { "action": { "const": "sort-by" }, "pane": { "enum": ["left", "right"] }, "key": { "enum": ["name", "extension", "size", "ctime", "mtime", "mode", "type", "other"] } } },
         {
           "allOf": [
             { "$ref": "#/$defs/sourceIdentity" },

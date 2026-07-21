@@ -76,3 +76,5 @@
 - Phase 7 已开始：完成原生事件循环、watcher、preview/cache、background 和可配置 UI 表面的代码盘点；下一步据此选择并实现最小的经典 Vifm 多媒体/视觉增强，不扩张 Hybrid runtime。
 - 新增 `data/colors/neovifm-mocha.vifm`：基于 Vifm 原生 highlight/color scheme API 的 256 色 Mocha 主题，覆盖 pane、状态栏段、文件类型与常见媒体扩展；它是 opt-in，不改变经典默认视图。
 - `env -u VIFM -u MYVIFMRC make -C tests commands.colorscheme` 通过（50 checks / 11 tests），确认经典 colorscheme 命令路径仍正常；待全仓串行回归后提交 Phase 7 首项。
+- 用户报告文件/目录都无法打开、`h/l` 无效且 Created 缺失。已确认文件 `l` 原先错误发送 core `enter`，现改走 F3 preview；目录仍保持 core `enter`/`parent`。新增 ctime core sort、协议与 btop header，Right/Left 次序为 Size、Created、Modified、Permissions。
+- 已通过 TUI 全量 83 tests、coverage 84.21% functions / 97.33% lines、C snapshot 48 tests / 8924 checks、串行 `make check`、typecheck、`bun audit` 与真实 integration 6 tests；正式 PTY 已验证 Right pane `l` 进入目录、`h` 返回父目录以及鼠标功能键路径。

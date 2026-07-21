@@ -128,6 +128,7 @@ sort_key_name(nv_pane_sort_key_t key)
 		case NV_SORT_NAME: return "name";
 		case NV_SORT_EXTENSION: return "extension";
 		case NV_SORT_SIZE: return "size";
+		case NV_SORT_CTIME: return "ctime";
 		case NV_SORT_MTIME: return "mtime";
 		case NV_SORT_MODE: return "mode";
 		case NV_SORT_TYPE: return "type";

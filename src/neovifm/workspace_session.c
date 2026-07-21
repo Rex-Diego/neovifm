@@ -494,7 +494,8 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_SORT_CYCLE:
 			{
 				static const nv_pane_sort_key_t keys[] = {
-					NV_SORT_NAME, NV_SORT_SIZE, NV_SORT_MTIME, NV_SORT_MODE,
+					NV_SORT_NAME, NV_SORT_SIZE, NV_SORT_CTIME, NV_SORT_MTIME,
+					NV_SORT_MODE,
 				};
 				size_t index = 0U;
 				while(index + 1U < sizeof(keys)/sizeof(keys[0]) &&

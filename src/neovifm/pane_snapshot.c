@@ -460,6 +460,9 @@ compare_entry_key(const nv_pane_entry_t *left, const nv_pane_entry_t *right,
 		case NV_SORT_SIZE:
 			result = compare_uint64(left->size_bytes, right->size_bytes);
 			break;
+		case NV_SORT_CTIME:
+			result = compare_uint64(left->ctime_unix_ns, right->ctime_unix_ns);
+			break;
 		case NV_SORT_MTIME:
 			result = compare_int64(left->mtime_unix_ms, right->mtime_unix_ms);
 			break;
@@ -489,6 +492,8 @@ DEFINE_ENTRY_COMPARATOR(compare_extension_asc, NV_SORT_EXTENSION, 0)
 DEFINE_ENTRY_COMPARATOR(compare_extension_desc, NV_SORT_EXTENSION, 1)
 DEFINE_ENTRY_COMPARATOR(compare_size_asc, NV_SORT_SIZE, 0)
 DEFINE_ENTRY_COMPARATOR(compare_size_desc, NV_SORT_SIZE, 1)
+DEFINE_ENTRY_COMPARATOR(compare_ctime_asc, NV_SORT_CTIME, 0)
+DEFINE_ENTRY_COMPARATOR(compare_ctime_desc, NV_SORT_CTIME, 1)
 DEFINE_ENTRY_COMPARATOR(compare_mtime_asc, NV_SORT_MTIME, 0)
 DEFINE_ENTRY_COMPARATOR(compare_mtime_desc, NV_SORT_MTIME, 1)
 DEFINE_ENTRY_COMPARATOR(compare_mode_asc, NV_SORT_MODE, 0)
@@ -510,6 +515,7 @@ entry_comparator(nv_pane_sort_key_t key, int descending)
 		case NV_SORT_NAME: return descending ? compare_name_desc : compare_name_asc;
 		case NV_SORT_EXTENSION: return descending ? compare_extension_desc : compare_extension_asc;
 		case NV_SORT_SIZE: return descending ? compare_size_desc : compare_size_asc;
+		case NV_SORT_CTIME: return descending ? compare_ctime_desc : compare_ctime_asc;
 		case NV_SORT_MTIME: return descending ? compare_mtime_desc : compare_mtime_asc;
 		case NV_SORT_MODE: return descending ? compare_mode_desc : compare_mode_asc;
 		case NV_SORT_TYPE: return descending ? compare_type_desc : compare_type_asc;

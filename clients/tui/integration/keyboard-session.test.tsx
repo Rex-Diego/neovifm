@@ -132,10 +132,20 @@ test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", asyn
       const current = state()
       return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "size"
     })
+    setup.mockInput.pressArrow("right")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "ctime"
+    })
+    setup.mockInput.pressArrow("right")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "mtime"
+    })
     await setup.renderOnce()
-    const sizeHeader = setup.renderer.root.findDescendantById("sort-left-size")
-    expect(sizeHeader).toBeDefined()
-    await setup.mockMouse.click(sizeHeader!.x, sizeHeader!.y)
+    const modifiedHeader = setup.renderer.root.findDescendantById("sort-left-mtime")
+    expect(modifiedHeader).toBeDefined()
+    await setup.mockMouse.click(modifiedHeader!.x, modifiedHeader!.y)
     await waitFor(() => {
       const current = state()
       return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_descending

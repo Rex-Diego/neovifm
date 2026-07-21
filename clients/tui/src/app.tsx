@@ -88,17 +88,17 @@ function sortLabel(snapshot: SnapshotPayload, key: PaneSortKey, label: string): 
   return `${label} ${snapshot.sort_descending ? "▼" : "▲"}`
 }
 
-function compactMetadataKey(snapshot: SnapshotPayload): "size" | "mtime" | "mode" {
-  if (snapshot.sort_key === "mtime" || snapshot.sort_key === "mode") return snapshot.sort_key
+function compactMetadataKey(snapshot: SnapshotPayload): "size" | "ctime" | "mtime" | "mode" {
+  if (snapshot.sort_key === "ctime" || snapshot.sort_key === "mtime" || snapshot.sort_key === "mode") return snapshot.sort_key
   return "size"
 }
 
-function metadataLabel(key: "size" | "mtime" | "mode"): string {
-  return key === "size" ? "Size" : key === "mtime" ? "Modified" : "Permissions"
+function metadataLabel(key: "size" | "ctime" | "mtime" | "mode"): string {
+  return key === "size" ? "Size" : key === "ctime" ? "Created" : key === "mtime" ? "Modified" : "Permissions"
 }
 
-function metadataWidth(key: "size" | "mtime" | "mode"): number {
-  return key === "size" ? 10 : key === "mtime" ? 18 : 14
+function metadataWidth(key: "size" | "ctime" | "mtime" | "mode"): number {
+  return key === "size" ? 10 : key === "mode" ? 14 : 18
 }
 
 function ColumnHeader(props: {
@@ -143,6 +143,7 @@ function PaneColumns(props: {
     />}>
       <ColumnHeader id={`sort-${props.pane}-mode`} label={header("mode", "Permissions")} active={props.snapshot.sort_key === "mode"} width={14} onClick={() => props.onSort(props.pane, "mode")} />
       <ColumnHeader id={`sort-${props.pane}-size`} label={header("size", "Size")} active={props.snapshot.sort_key === "size"} width={10} onClick={() => props.onSort(props.pane, "size")} />
+      <ColumnHeader id={`sort-${props.pane}-ctime`} label={header("ctime", "Created")} active={props.snapshot.sort_key === "ctime"} width={18} onClick={() => props.onSort(props.pane, "ctime")} />
       <ColumnHeader id={`sort-${props.pane}-mtime`} label={header("mtime", "Modified")} active={props.snapshot.sort_key === "mtime"} width={18} onClick={() => props.onSort(props.pane, "mtime")} />
     </Show>
   </box>
@@ -177,11 +178,14 @@ function EntryList(props: {
           <text flexGrow={1} fg={entry.hidden ? COLORS.overlay1 : entryColor(entry)} truncate>{entry.name_display}</text>
           <Show when={props.detailed} fallback={<text width={metadataWidth(compactKey())} fg={COLORS.subtext0}> {compactKey() === "size"
             ? formatFileSize(entry.size_bytes)
-            : compactKey() === "mtime"
-              ? formatMtime(entry.mtime_unix_ms)
+            : compactKey() === "ctime"
+              ? formatMtime((BigInt(entry.ctime_unix_ns ?? "0") / 1_000_000n).toString())
+              : compactKey() === "mtime"
+                ? formatMtime(entry.mtime_unix_ms)
               : formatMode(entry.mode_octal, entry.kind)}</text>}>
             <text width={14} fg={COLORS.subtext0}> {formatMode(entry.mode_octal, entry.kind)}</text>
             <text width={10} fg={COLORS.subtext0}> {formatFileSize(entry.size_bytes)}</text>
+            <text width={18} fg={COLORS.subtext0}> {formatMtime((BigInt(entry.ctime_unix_ns ?? "0") / 1_000_000n).toString())}</text>
             <text width={18} fg={COLORS.subtext0}> {formatMtime(entry.mtime_unix_ms)}</text>
           </Show>
         </box>
@@ -246,11 +250,12 @@ function LoadingPanel() {
   </box>
 }
 
-function Viewer(props: { readonly preview: PreviewPayload }) {
+function Viewer(props: { readonly preview?: PreviewPayload }) {
+  const preview = () => props.preview
   return <box flexGrow={1} width="100%" flexDirection="column" border borderStyle="double" borderColor={COLORS.lavender} backgroundColor={COLORS.base} paddingX={1} title="F3 VIEW" titleColor={COLORS.lavender}>
-    <text height={1} fg={COLORS.subtext0}>{props.preview.kind} · {props.preview.state} · generation {props.preview.generation}</text>
+    <text height={1} fg={COLORS.subtext0}>{preview() === undefined ? "loading preview" : `${preview()!.kind} · ${preview()!.state} · generation ${preview()!.generation}`}</text>
     <scrollbox flexGrow={1} width="100%" backgroundColor={COLORS.base}>
-      <text fg={COLORS.text} wrapMode="word">{props.preview.content ?? props.preview.error_code ?? "Preview unavailable"}</text>
+      <text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>
     </scrollbox>
     <text height={1} fg={COLORS.subtext0}>F3 or Esc to close</text>
   </box>
@@ -373,7 +378,7 @@ export function App(props: AppProps) {
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
   const wide = () => dimensions().width >= 80
-  const detailed = () => dimensions().width >= 120
+  const detailed = () => dimensions().width >= 160
   const iconMode = (): IconMode => props.iconMode ?? (process.env.NEOVIFM_ICONS === "ascii" ? "ascii" : "fancy")
   const canSort = () => props.capabilities?.includes("workspace-sort-v1") === true
   const actionBusy = () => props.actionTasks?.some((task) => task.state === "queued" || task.state === "running") === true
@@ -462,12 +467,8 @@ export function App(props: AppProps) {
       return
     }
     if (action === "view") {
-      if (matchingPreview()?.content === undefined) {
-        setNotice("View unavailable")
-      } else {
-        setViewerOpen((open) => !open)
-        setNotice(undefined)
-      }
+      setViewerOpen((open) => !open)
+      setNotice(undefined)
       return
     }
     if (action === "edit") {
@@ -627,6 +628,10 @@ export function App(props: AppProps) {
       dispatchFunction(result.action)
       return
     }
+    if (result.command.action === "enter" && currentEntry()?.kind !== "directory") {
+      dispatchFunction("view")
+      return
+    }
     sendCommand(result.command)
   })
 
@@ -637,8 +642,8 @@ export function App(props: AppProps) {
     </box>
     <Show when={dialog()} fallback={props.error !== undefined
       ? <ErrorPanel message={props.error} />
-      : viewerOpen() && matchingPreview() !== undefined
-        ? <Viewer preview={matchingPreview()!} />
+      : viewerOpen()
+        ? <Viewer preview={matchingPreview()} />
         : props.workspace !== undefined
           ? <Workspace workspace={props.workspace} wide={wide()} detailed={detailed()} iconMode={iconMode()} onSort={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }} />
           : props.loading

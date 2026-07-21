@@ -83,6 +83,9 @@
 - `@opentui/solid` 的 `render()` 只负责创建 renderer 和挂载 Solid root，挂载完成后 Promise 立即 resolve，并不等待 renderer destroy。`main()` 错把它当应用生命周期 Promise，随即执行 `session.close()`；因此画面仍在、F10 本地退出有效，但所有 core command 都被拒绝。这也解释了为何直接持有 session 的 integration test 全绿而正式入口完全失效。
 - 正确生命周期应通过 renderer config 的 `onDestroy` Promise 等待应用退出；必须给 `main()` 增加正式入口生命周期 RED 测试，防止 mount resolve 后提前关闭 session。
 - `render()` 支持 `onDestroy` config，但其返回值只表示 mount 完成；可封装 `renderUntilDestroyed()`，以 onDestroy resolve 的独立 Promise 作为 `main()` 生命周期。
+- `h/l` 的键位映射本身正确；问题在于 core `enter` 只接受目录，文件返回 `not-directory`。客户端必须把文件上的 `l` 统一为 F3 preview，目录仍发 core `enter`。
+- btop 式字段轮换缺少创建时间：snapshot 已有 `ctime_unix_ns`，但 `nv_pane_sort_key_t`、协议 schema、runtime parser 和 UI 标题都没有 `ctime`，因此 Right/Left 不能依次访问 Created。
+- 四个 metadata 列在双 pane 终端不足 160 列时会压缩文件名；完整列只在足够宽时显示，中等宽度显示当前 sort 字段并保持可用的 Left/Right 轮换。
 - OpenTUI test renderer 提供 `mockMouse.click(x,y)`，renderable 支持稳定 `id` 和 `x/y`；功能键与列标题测试应按 renderable id 定位，避免硬编码屏幕坐标。
 - 修复后的正式 PTY 已直接观察到最小重绘：`j` 更新 cursor marker，Tab 更新两 pane border/title 与状态栏 active pane。键盘主故障已由实际入口验证关闭。
 

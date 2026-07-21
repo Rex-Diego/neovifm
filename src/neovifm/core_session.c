@@ -150,6 +150,7 @@ sort_key_from_string(const char key[], nv_pane_sort_key_t *result)
 	if(strcmp(key, "name") == 0) { *result = NV_SORT_NAME; return 0; }
 	if(strcmp(key, "extension") == 0) { *result = NV_SORT_EXTENSION; return 0; }
 	if(strcmp(key, "size") == 0) { *result = NV_SORT_SIZE; return 0; }
+	if(strcmp(key, "ctime") == 0) { *result = NV_SORT_CTIME; return 0; }
 	if(strcmp(key, "mtime") == 0) { *result = NV_SORT_MTIME; return 0; }
 	if(strcmp(key, "mode") == 0) { *result = NV_SORT_MODE; return 0; }
 	if(strcmp(key, "type") == 0) { *result = NV_SORT_TYPE; return 0; }
