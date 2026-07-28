@@ -42,6 +42,10 @@ nv_protocol_json_result_t nv_protocol_preview_session_snapshot_json(
 		const nv_pane_snapshot_t *left, const nv_pane_snapshot_t *right,
 		const char active_pane[], unsigned int output_sequence,
 		unsigned int request_sequence, const char trigger[], char **json);
+nv_protocol_json_result_t
+	nv_protocol_preview_workspace_session_snapshot_json(
+			const nv_workspace_session_t *session, unsigned int output_sequence,
+			unsigned int request_sequence, const char trigger[], char **json);
 char *nv_protocol_session_command_error_json(const nv_snapshot_error_t *error,
 		unsigned int output_sequence, unsigned int request_sequence);
 char *nv_protocol_preview_session_command_error_json(

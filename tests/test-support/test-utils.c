@@ -787,7 +787,8 @@ wait_for_all_bg(void)
 	check_bg_jobs();
 	while(bg_jobs != NULL)
 	{
-		if(++counter > 100)
+		/* Shell startup and error-pipe draining can exceed 500ms on macOS. */
+		if(++counter > 1000)
 		{
 			assert_fail("Waiting for too long.");
 			break;

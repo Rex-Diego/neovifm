@@ -7,6 +7,7 @@ import { App, type AppProps } from "./app.js"
 import { CoreClientError, startCoreSession } from "./core-client.js"
 import { initialProbeState, reduceProbeState, type ProbeState } from "./probe-state.js"
 import { sanitizeDisplayText } from "./protocol.js"
+import { copyTextToClipboard } from "./clipboard.js"
 
 export function defaultCoreProbePath(): string {
 	return resolve(import.meta.dir, "../../../src/neovifm-core-session")
@@ -17,6 +18,7 @@ export interface MainDependencies {
   readonly renderApp: (props: () => AppProps) => Promise<void>
   readonly startCoreSession: typeof startCoreSession
   readonly openEditor?: (path: string) => Promise<void>
+  readonly copyText?: (text: string) => Promise<void> | void
 }
 
 export type RenderMount = (
@@ -37,6 +39,7 @@ const DEFAULT_MAIN_DEPENDENCIES: MainDependencies = {
   defaultCoreProbePath,
   renderApp: renderUntilDestroyed,
   startCoreSession,
+  copyText,
 }
 
 function splitEditorCommand(command: string): readonly string[] {
@@ -69,6 +72,10 @@ export async function openEditor(path: string): Promise<void> {
   })
   const exitCode = await process.exited
   if (exitCode !== 0) throw new Error(`Editor exited with status ${exitCode}`)
+}
+
+export async function copyText(text: string): Promise<void> {
+  await copyTextToClipboard(text)
 }
 
 export function toUiErrorMessage(error: unknown): string {
@@ -146,6 +153,7 @@ export async function main(
           onCancel: () => { session.close() },
           onCommand: (command) => session.send(command),
           onEdit: dependencies.openEditor ?? openEditor,
+          onCopyText: dependencies.copyText ?? copyText,
         }
       )
     })

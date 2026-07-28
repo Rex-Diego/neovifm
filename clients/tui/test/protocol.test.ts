@@ -75,6 +75,59 @@ describe("JSONL protocol", () => {
     })).toThrow("payload.trigger")
   })
 
+  test("accepts bounded per-pane tabs and falls back for older snapshots", () => {
+    const pane = {
+      cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
+      cursor: -1, entry_count: 0, entries: [],
+    }
+    const withTabs = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 2,
+      payload: {
+        command_sequence: 1, trigger: "command", active_pane: "left", left: pane, right: pane,
+        left_tabs: [
+          { id: "1", cwd_display: "/tmp", active: true },
+          { id: "2", cwd_display: "/var", active: false },
+        ],
+        right_tabs: [{ id: "3", cwd_display: "/tmp", active: true }],
+      },
+    })
+    if (withTabs.type !== "workspace-snapshot") throw new Error("expected workspace")
+    expect(withTabs.payload.left_tabs).toEqual([
+      { id: "1", cwd_display: "/tmp", active: true },
+      { id: "2", cwd_display: "/var", active: false },
+    ])
+    expect(Object.isFrozen(withTabs.payload.left_tabs)).toBe(true)
+
+    const legacy = parseProtocolRecord({
+      protocol: "neovifm-core", version: 2, type: "workspace-snapshot", sequence: 2,
+      payload: { command_sequence: 1, trigger: "command", active_pane: "left", left: pane, right: pane },
+    })
+    if (legacy.type !== "workspace-snapshot") throw new Error("expected workspace")
+    expect(legacy.payload.left_tabs).toEqual([{ id: "0", cwd_display: "/tmp", active: true }])
+    expect(legacy.payload.right_tabs).toEqual([{ id: "0", cwd_display: "/tmp", active: true }])
+
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 2,
+      payload: {
+        command_sequence: 1, trigger: "command", active_pane: "left", left: pane, right: pane,
+        left_tabs: [{ id: "0", cwd_display: "/tmp", active: true }],
+        right_tabs: [{ id: "3", cwd_display: "/tmp", active: true }],
+      },
+    })).toThrow("left_tabs")
+
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 2,
+      payload: {
+        command_sequence: 1, trigger: "command", active_pane: "left", left: pane, right: pane,
+        left_tabs: [
+          { id: "1", cwd_display: "/tmp", active: true },
+          { id: "1", cwd_display: "/var", active: false },
+        ],
+        right_tabs: [{ id: "3", cwd_display: "/tmp", active: true }],
+      },
+    })).toThrow("left_tabs")
+  })
+
   test("accepts bounded v3 task lifecycle and immutable preview records", () => {
     const task = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "task", sequence: 2,

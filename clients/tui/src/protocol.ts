@@ -6,6 +6,7 @@ export const PREVIEW_SESSION_PROTOCOL_VERSION = 3 as const
 
 const DECIMAL_PATTERN = /^-?[0-9]+$/
 const UNSIGNED_DECIMAL_PATTERN = /^[0-9]+$/
+const POSITIVE_DECIMAL_PATTERN = /^[1-9][0-9]*$/
 const HEX_PATTERN = /^(?:[0-9a-f]{2})*$/
 const OCTAL_PATTERN = /^[0-7]+$/
 const ATTRIBUTES_PATTERN = /^[0-9a-f]+$/
@@ -15,10 +16,12 @@ export const MAX_PROTOCOL_TOTAL_BYTES = 8 * 1024 * 1024
 export const MAX_PROTOCOL_RECORDS = 2
 export const MAX_SNAPSHOT_ENTRIES = 4096
 export const MAX_WORKSPACE_ENTRIES = 4096
+export const MAX_PANE_TABS = 8
 
 const MAX_DISPLAY_TEXT_BYTES = 16 * 1024
 const MAX_HEX_TEXT_BYTES = 32 * 1024
 const MAX_DECIMAL_TEXT_BYTES = 32
+const MAX_UINT64_TEXT_BYTES = 20
 const MAX_CAPABILITIES = 64
 const MAX_CAPABILITY_BYTES = 256
 const MAX_ERROR_CODE_BYTES = 128
@@ -95,10 +98,18 @@ export type PaneId = "left" | "right"
 export type PaneSortKey = "name" | "extension" | "size" | "ctime" | "mtime" | "mode" | "type" | "other"
 export type SessionSnapshotTrigger = "initial" | "command" | "watch" | "action"
 
+export interface PaneTabPayload {
+  readonly id: string
+  readonly cwd_display: string
+  readonly active: boolean
+}
+
 export interface WorkspaceSnapshotPayload {
   readonly active_pane: PaneId
   readonly left: SnapshotPayload
   readonly right: SnapshotPayload
+  readonly left_tabs?: readonly PaneTabPayload[]
+  readonly right_tabs?: readonly PaneTabPayload[]
 }
 
 export interface SessionWorkspaceSnapshotPayload extends WorkspaceSnapshotPayload {
@@ -518,6 +529,37 @@ function parseSessionSnapshotTrigger(value: unknown, path: string): SessionSnaps
   return trigger
 }
 
+function parsePaneTabs(
+  value: unknown,
+  path: string,
+  snapshot: SnapshotPayload,
+): readonly PaneTabPayload[] {
+  if (value === undefined) {
+    return frozen([frozen({ id: "0", cwd_display: snapshot.cwd_display, active: true })])
+  }
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_PANE_TABS) {
+    return invalid(path, `must contain between 1 and ${MAX_PANE_TABS} tabs`)
+  }
+  const ids = new Set<string>()
+  const tabs = value.map((entry, index) => {
+    const object = objectValue(entry, `${path}[${index}]`)
+    const id = patternString(object.id, `${path}[${index}].id`, POSITIVE_DECIMAL_PATTERN, MAX_UINT64_TEXT_BYTES)
+    if (ids.has(id)) return invalid(path, "must contain unique tab ids")
+    ids.add(id)
+    return frozen({
+      id,
+      cwd_display: displayString(object.cwd_display, `${path}[${index}].cwd_display`),
+      active: booleanValue(object.active, `${path}[${index}].active`),
+    })
+  })
+  const activeTabs = tabs.filter((tab) => tab.active)
+  if (activeTabs.length !== 1) return invalid(path, "must contain exactly one active tab")
+  if (activeTabs[0]!.cwd_display !== snapshot.cwd_display) {
+    return invalid(path, "active tab must match the pane cwd_display")
+  }
+  return frozen(tabs)
+}
+
 function parseWorkspaceSnapshotPayload(value: unknown): WorkspaceSnapshotPayload {
   const payload = objectValue(value, "payload")
   const left = parseSnapshotPayload(payload.left, "payload.left")
@@ -529,6 +571,8 @@ function parseWorkspaceSnapshotPayload(value: unknown): WorkspaceSnapshotPayload
     active_pane: parsePaneId(payload.active_pane, "payload.active_pane"),
     left,
     right,
+    left_tabs: parsePaneTabs(payload.left_tabs, "payload.left_tabs", left),
+    right_tabs: parsePaneTabs(payload.right_tabs, "payload.right_tabs", right),
   })
 }
 

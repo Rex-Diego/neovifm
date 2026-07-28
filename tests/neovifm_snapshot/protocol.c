@@ -41,11 +41,13 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 			capabilities, 0U));
 	assert_string_equal("workspace-sort-v1", json_array_get_string(capabilities,
 			1U));
+	assert_string_equal("pane-tabs-v1", json_array_get_string(capabilities,
+			2U));
 	#ifdef __APPLE__
 	assert_string_equal("file-actions-v1", json_array_get_string(capabilities,
-			2U));
+			3U));
 	#else
-	assert_int_equal(2, json_array_get_count(capabilities));
+	assert_int_equal(3, json_array_get_count(capabilities));
 	#endif
 	json_value_free(value);
 	nv_protocol_json_free(hello);
@@ -91,6 +93,98 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_true(json_object_get_boolean(payload, "partial"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
+}
+
+TEST(preview_workspace_record_publishes_stable_per_pane_tabs)
+{
+	const char *const left_dir = SANDBOX_PATH "/tabs-protocol-left";
+	const char *const right_dir = SANDBOX_PATH "/tabs-protocol-right";
+	create_dir(left_dir);
+	create_dir(right_dir);
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left_dir, right_dir, &session, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+
+	char *line = NULL;
+	assert_success(nv_protocol_preview_workspace_session_snapshot_json(&session,
+			4U, 2U, "command", &line));
+	JSON_Value *value = json_parse_string(line);
+	assert_non_null(value);
+	JSON_Object *const payload = json_object_get_object(json_object(value),
+			"payload");
+	JSON_Array *const left_tabs = json_object_get_array(payload, "left_tabs");
+	JSON_Array *const right_tabs = json_object_get_array(payload, "right_tabs");
+	assert_int_equal(2, json_array_get_count(left_tabs));
+	assert_int_equal(1, json_array_get_count(right_tabs));
+	assert_string_equal(left_dir, json_object_get_string(
+			json_array_get_object(left_tabs, 0U), "cwd_display"));
+	assert_false(json_object_get_boolean(json_array_get_object(left_tabs, 0U),
+			"active"));
+	assert_true(json_object_get_boolean(json_array_get_object(left_tabs, 1U),
+			"active"));
+	assert_non_null(json_object_get_string(json_array_get_object(left_tabs, 0U),
+			"id"));
+	assert_non_null(json_object_get_string(json_array_get_object(left_tabs, 1U),
+			"id"));
+	assert_true(strcmp(json_object_get_string(json_array_get_object(left_tabs, 0U),
+			"id"), json_object_get_string(json_array_get_object(left_tabs, 1U),
+			"id")) != 0);
+
+	json_value_free(value);
+	nv_protocol_json_free(line);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_dir(left_dir);
+	remove_dir(right_dir);
+}
+
+TEST(session_refreshes_an_inactive_tab_by_stable_id_without_switching)
+{
+	const char *const left = SANDBOX_PATH "/refresh-tab-left";
+	const char *const right = SANDBOX_PATH "/refresh-tab-right";
+	create_dir(left);
+	create_dir(right);
+	create_dir(SANDBOX_PATH "/refresh-tab-left/child");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	const uint64_t first_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 0U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	const uint64_t second_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 1U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_ENTER,
+	}, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_ACTIVATE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = first_id,
+	}, &error));
+	make_file(SANDBOX_PATH "/refresh-tab-left/child/new-file", "new");
+
+	assert_success(nv_workspace_session_refresh_tab(&session, NV_SESSION_LEFT,
+			second_id, &error));
+	assert_int_equal(0, nv_workspace_session_active_tab_index(&session,
+			NV_SESSION_LEFT));
+	assert_string_equal(left, session.left.cwd_display);
+	const nv_pane_snapshot_t *const refreshed =
+		nv_workspace_session_tab_snapshot(&session, NV_SESSION_LEFT, 1U);
+	assert_string_equal(SANDBOX_PATH "/refresh-tab-left/child",
+			refreshed->cwd_display);
+	assert_int_equal(1, refreshed->entry_count);
+	assert_string_equal("new-file", refreshed->entries[0].name_display);
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/refresh-tab-left/child/new-file");
+	remove_dir(SANDBOX_PATH "/refresh-tab-left/child");
+	remove_dir(left);
+	remove_dir(right);
 }
 
 TEST(workspace_record_is_atomic_and_uses_v1)

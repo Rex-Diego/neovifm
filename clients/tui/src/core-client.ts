@@ -84,8 +84,12 @@ export type CoreSessionCommand =
   | Readonly<{ action: "focus-next" }>
   | Readonly<{ action: "move"; delta: -1 | 1 }>
   | Readonly<{ action: "move-to"; target: "first" | "last" }>
-  | Readonly<{ action: "sort-cycle"; delta: -1 | 1 }>
+  | Readonly<{ action: "sort-cycle"; pane?: "left" | "right"; delta: -1 | 1 }>
   | Readonly<{ action: "sort-by"; pane: "left" | "right"; key: PaneSortKey }>
+  | Readonly<{ action: "tab-cycle"; delta: number }>
+  | Readonly<{ action: "new-tab"; pane: "left" | "right" }>
+  | Readonly<{ action: "activate-tab" | "close-tab"; pane: "left" | "right"; tab_id: string }>
+  | Readonly<{ action: "select-entry"; pane: "left" | "right"; index: number; toggle: boolean }>
   | Readonly<{
       action: "copy" | "move-files"
       pane: "left" | "right"

@@ -51,8 +51,12 @@ test("renders a real C core workspace in wide and compact layouts", async () => 
 
   setup.resize(60, 20)
   await setup.renderOnce()
-  expect(setup.captureCharFrame()).toContain("60x20")
-  expect(setup.captureCharFrame()).not.toContain("right.txt")
+  const compactFrame = setup.captureCharFrame()
+  expect(compactFrame).toContain("F3 View")
+  expect(compactFrame).toContain("F10 Quit")
+  expect(compactFrame).not.toContain("NeoVifm")
+  expect(compactFrame).not.toContain("60x20")
+  expect(compactFrame).not.toContain("right.txt")
 })
 
 test("surfaces a real core error for a missing directory", async () => {

@@ -141,6 +141,24 @@ test("starts the session before rendering and applies records through the reduce
   expect(calls).toEqual(["/mock/neovifm-core-probe", "/tmp", "/tmp"])
 })
 
+test("injects the clipboard service into the rendered app", async () => {
+  const copied: string[] = []
+  const base = dependencies((request) => {
+    request.onRecord(workspaceHello)
+    request.onRecord(workspace)
+    return { completion: Promise.resolve(), send: async () => true, close: () => undefined }
+  })
+  await main(["/tmp"], {
+    ...base,
+    copyText: async (text) => { copied.push(text) },
+    renderApp: async (props) => {
+      await props().onCopyText?.("~/project")
+    },
+  })
+
+  expect(copied).toEqual(["~/project"])
+})
+
 test("keeps the production renderer lifecycle open until onDestroy", async () => {
   let destroy: (() => void) | undefined
   let finished = false

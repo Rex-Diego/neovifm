@@ -1,6 +1,6 @@
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import type { ScrollBoxRenderable } from "@opentui/core"
+import { MouseButton, type ScrollBoxRenderable } from "@opentui/core"
 
 import type {
   PaneId,
@@ -10,6 +10,7 @@ import type {
   PreviewTaskPayload,
   SnapshotPayload,
   WorkspaceSnapshotPayload,
+  PaneTabPayload,
 } from "./protocol.js"
 import type { CoreActionTarget, CoreSessionCommand } from "./core-client.js"
 import { VifmKeymap, type FunctionAction } from "./keymap.js"
@@ -21,6 +22,7 @@ import {
   iconForEntry,
   type IconMode,
 } from "./file-style.js"
+import { formatStatusPath, type StatusPathMode } from "./status-path.js"
 
 const COLORS = {
   crust: "#11111b",
@@ -56,6 +58,8 @@ export interface AppProps {
   readonly onCancel?: () => void
   readonly onCommand?: (command: CoreSessionCommand) => boolean | Promise<boolean> | void
   readonly onEdit?: (path: string) => Promise<void> | void
+  readonly homeDirectory?: string
+  readonly onCopyText?: (text: string) => Promise<void> | void
 }
 
 type DialogState =
@@ -107,7 +111,8 @@ function ColumnHeader(props: {
   readonly active: boolean
   readonly width?: number
   readonly grow?: boolean
-  readonly onClick: () => void
+  readonly onToggle: () => void
+  readonly onCycle: () => void
 }) {
   return <text
     id={props.id}
@@ -118,7 +123,8 @@ function ColumnHeader(props: {
     onMouseDown={(event) => {
       event.preventDefault()
       event.stopPropagation()
-      props.onClick()
+      if (event.button === MouseButton.RIGHT) props.onCycle()
+      else if (event.button === MouseButton.LEFT) props.onToggle()
     }}
   > {props.label}</text>
 }
@@ -127,24 +133,26 @@ function PaneColumns(props: {
   readonly pane: PaneId
   readonly snapshot: SnapshotPayload
   readonly detailed: boolean
-  readonly onSort: (pane: PaneId, key: PaneSortKey) => void
+  readonly onSortDirection: (pane: PaneId, key: PaneSortKey) => void
+  readonly onSortCycle: (pane: PaneId, delta: -1 | 1) => void
 }) {
   const header = (key: PaneSortKey, label: string) => sortLabel(props.snapshot, key, label)
   const compactKey = () => compactMetadataKey(props.snapshot)
   return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.surface0}>
     <text width={4} bg={COLORS.surface0}> </text>
-    <ColumnHeader id={`sort-${props.pane}-name`} label={header("name", "Name")} active={props.snapshot.sort_key === "name"} grow onClick={() => props.onSort(props.pane, "name")} />
+    <ColumnHeader id={`sort-${props.pane}-name`} label={header("name", "Name")} active={props.snapshot.sort_key === "name"} grow onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
     <Show when={props.detailed} fallback={<ColumnHeader
       id={`sort-${props.pane}-${compactKey()}`}
       label={header(compactKey(), metadataLabel(compactKey()))}
       active={props.snapshot.sort_key === compactKey()}
       width={metadataWidth(compactKey())}
-      onClick={() => props.onSort(props.pane, compactKey())}
+      onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)}
+      onCycle={() => props.onSortCycle(props.pane, 1)}
     />}>
-      <ColumnHeader id={`sort-${props.pane}-mode`} label={header("mode", "Permissions")} active={props.snapshot.sort_key === "mode"} width={14} onClick={() => props.onSort(props.pane, "mode")} />
-      <ColumnHeader id={`sort-${props.pane}-size`} label={header("size", "Size")} active={props.snapshot.sort_key === "size"} width={10} onClick={() => props.onSort(props.pane, "size")} />
-      <ColumnHeader id={`sort-${props.pane}-ctime`} label={header("ctime", "Created")} active={props.snapshot.sort_key === "ctime"} width={18} onClick={() => props.onSort(props.pane, "ctime")} />
-      <ColumnHeader id={`sort-${props.pane}-mtime`} label={header("mtime", "Modified")} active={props.snapshot.sort_key === "mtime"} width={18} onClick={() => props.onSort(props.pane, "mtime")} />
+      <ColumnHeader id={`sort-${props.pane}-mode`} label={header("mode", "Permissions")} active={props.snapshot.sort_key === "mode"} width={14} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-size`} label={header("size", "Size")} active={props.snapshot.sort_key === "size"} width={10} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-ctime`} label={header("ctime", "Created")} active={props.snapshot.sort_key === "ctime"} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-mtime`} label={header("mtime", "Modified")} active={props.snapshot.sort_key === "mtime"} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
     </Show>
   </box>
 }
@@ -154,6 +162,7 @@ function EntryList(props: {
   readonly snapshot: SnapshotPayload
   readonly detailed: boolean
   readonly iconMode: IconMode
+  readonly onSelect: (pane: PaneId, index: number, toggle: boolean) => void
 }) {
   const compactKey = () => compactMetadataKey(props.snapshot)
   let list: ScrollBoxRenderable | undefined
@@ -171,7 +180,19 @@ function EntryList(props: {
     <For each={props.snapshot.entries}>
       {(entry, index) => {
         const current = () => index() === props.snapshot.cursor
-        return <box id={`entry-${props.pane}-${index()}`} height={1} width="100%" flexDirection="row" backgroundColor={entry.selected || current() ? COLORS.selected : COLORS.base}>
+        return <box
+          id={`entry-${props.pane}-${index()}`}
+          height={1}
+          width="100%"
+          flexDirection="row"
+          backgroundColor={entry.selected || current() ? COLORS.selected : COLORS.base}
+          onMouseDown={(event) => {
+            if (event.button !== MouseButton.LEFT && event.button !== MouseButton.RIGHT) return
+            event.preventDefault()
+            event.stopPropagation()
+            props.onSelect(props.pane, index(), event.button === MouseButton.RIGHT)
+          }}
+        >
           <text width={1} fg={current() ? COLORS.lavender : COLORS.overlay1}>{current() ? ">" : " "}</text>
           <text width={1} fg={entry.selected ? COLORS.peach : COLORS.overlay1}>{entry.selected ? "*" : " "}</text>
           <text width={2} fg={entryColor(entry)}>{iconForEntry(entry, props.iconMode)}</text>
@@ -194,15 +215,91 @@ function EntryList(props: {
   </scrollbox>
 }
 
+function tabLabel(path: string): string {
+  const trimmed = path.length > 1 ? path.replace(/[\\/]+$/, "") : path
+  const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
+  const label = trimmed.slice(separator + 1)
+  return label.length === 0 ? trimmed : label
+}
+
+function compactTabLabel(label: string, maximum: number, iconMode: IconMode): string {
+  const characters = Array.from(label)
+  if (characters.length <= maximum) return label
+  return `${characters.slice(0, maximum - 1).join("")}${iconMode === "ascii" ? "~" : "…"}`
+}
+
+function PaneTabs(props: {
+  readonly pane: PaneId
+  readonly tabs: readonly PaneTabPayload[]
+  readonly activePane: boolean
+  readonly iconMode: IconMode
+  readonly enabled: boolean
+  readonly onActivate: (pane: PaneId, tabId: string) => void
+  readonly onClose: (pane: PaneId, tabId: string) => void
+  readonly onNew: (pane: PaneId) => void
+}) {
+  const marker = () => props.activePane ? (props.iconMode === "ascii" ? "*" : "●") : " "
+  return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.crust}>
+    <text width={2} fg={COLORS.lavender}> {marker()}</text>
+    <For each={props.tabs}>
+      {(tab, index) => {
+        const color = () => tab.active ? COLORS.lavender : COLORS.surface1
+        const body = () => {
+          const number = String(index() + 1)
+          if (props.tabs.length >= 3 && !tab.active) return number
+          const maximum = props.tabs.length === 1 ? 20 : props.tabs.length === 2 ? 9 : 6
+          return `${number} ${compactTabLabel(tabLabel(tab.cwd_display), maximum, props.iconMode)}`
+        }
+        return <box
+          id={`tab-${props.pane}-${tab.id}`}
+          height={1}
+          flexDirection="row"
+          onMouseDown={(event) => {
+            if (!props.enabled || (event.button !== MouseButton.LEFT && event.button !== MouseButton.RIGHT)) return
+            event.preventDefault()
+            event.stopPropagation()
+            if (event.button === MouseButton.RIGHT) props.onClose(props.pane, tab.id)
+            else props.onActivate(props.pane, tab.id)
+          }}
+        >
+          <Show when={props.iconMode !== "ascii"} fallback={<text fg={tab.active ? COLORS.crust : COLORS.text} bg={color()}>[{body()}]</text>}>
+            <text fg={color()} bg={COLORS.crust}></text>
+            <text fg={tab.active ? COLORS.crust : COLORS.text} bg={color()}>{body()}</text>
+            <text fg={color()} bg={COLORS.crust}></text>
+          </Show>
+        </box>
+      }}
+    </For>
+    <Show when={props.enabled}>
+      <box id={`tab-${props.pane}-new`} height={1} onMouseDown={(event) => {
+        if (event.button !== MouseButton.LEFT) return
+        event.preventDefault()
+        event.stopPropagation()
+        props.onNew(props.pane)
+      }}>
+        <Show when={props.iconMode !== "ascii"} fallback={<text fg={COLORS.green}>[+]</text>}>
+          <text fg={COLORS.green}></text><text fg={COLORS.crust} bg={COLORS.green}>+</text><text fg={COLORS.green}></text>
+        </Show>
+      </box>
+    </Show>
+  </box>
+}
+
 function Pane(props: {
   readonly pane: PaneId
   readonly snapshot: SnapshotPayload
   readonly active: boolean
   readonly detailed: boolean
   readonly iconMode: IconMode
-  readonly onSort: (pane: PaneId, key: PaneSortKey) => void
+  readonly tabs: readonly PaneTabPayload[]
+  readonly tabsEnabled: boolean
+  readonly onSortDirection: (pane: PaneId, key: PaneSortKey) => void
+  readonly onSortCycle: (pane: PaneId, delta: -1 | 1) => void
+  readonly onSelect: (pane: PaneId, index: number, toggle: boolean) => void
+  readonly onActivateTab: (pane: PaneId, tabId: string) => void
+  readonly onCloseTab: (pane: PaneId, tabId: string) => void
+  readonly onNewTab: (pane: PaneId) => void
 }) {
-  const label = props.pane.toUpperCase()
   return <box
     flexGrow={1}
     height="100%"
@@ -211,11 +308,10 @@ function Pane(props: {
     borderStyle="single"
     borderColor={props.active ? COLORS.lavender : COLORS.surface1}
     backgroundColor={COLORS.base}
-    title={`${label}${props.active ? " ACTIVE" : ""} • ${props.snapshot.cwd_display}`}
-    titleColor={props.active ? COLORS.lavender : COLORS.sapphire}
   >
-    <PaneColumns pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} onSort={props.onSort} />
-    <EntryList pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} iconMode={props.iconMode} />
+    <PaneTabs pane={props.pane} tabs={props.tabs} activePane={props.active} iconMode={props.iconMode} enabled={props.tabsEnabled} onActivate={props.onActivateTab} onClose={props.onCloseTab} onNew={props.onNewTab} />
+    <PaneColumns pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} onSortDirection={props.onSortDirection} onSortCycle={props.onSortCycle} />
+    <EntryList pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} iconMode={props.iconMode} onSelect={props.onSelect} />
   </box>
 }
 
@@ -224,14 +320,39 @@ function Workspace(props: {
   readonly wide: boolean
   readonly detailed: boolean
   readonly iconMode: IconMode
-  readonly onSort: (pane: PaneId, key: PaneSortKey) => void
+  readonly tabsEnabled: boolean
+  readonly onSortDirection: (pane: PaneId, key: PaneSortKey) => void
+  readonly onSortCycle: (pane: PaneId, delta: -1 | 1) => void
+  readonly onSelect: (pane: PaneId, index: number, toggle: boolean) => void
+  readonly onActivateTab: (pane: PaneId, tabId: string) => void
+  readonly onCloseTab: (pane: PaneId, tabId: string) => void
+  readonly onNewTab: (pane: PaneId) => void
 }) {
+  const tabs = (pane: PaneId): readonly PaneTabPayload[] => props.workspace[`${pane}_tabs`] ?? [{
+    id: "0",
+    cwd_display: props.workspace[pane].cwd_display,
+    active: true,
+  }]
+  const paneProps = (pane: PaneId) => ({
+    pane,
+    snapshot: props.workspace[pane],
+    active: props.workspace.active_pane === pane,
+    tabs: tabs(pane),
+    tabsEnabled: props.tabsEnabled,
+    iconMode: props.iconMode,
+    onSortDirection: props.onSortDirection,
+    onSortCycle: props.onSortCycle,
+    onSelect: props.onSelect,
+    onActivateTab: props.onActivateTab,
+    onCloseTab: props.onCloseTab,
+    onNewTab: props.onNewTab,
+  })
   return <box flexGrow={1} width="100%" flexDirection="row" gap={1}>
     <Show when={props.wide} fallback={props.workspace.active_pane === "left"
-      ? <Pane pane="left" snapshot={props.workspace.left} active detailed={false} iconMode={props.iconMode} onSort={props.onSort} />
-      : <Pane pane="right" snapshot={props.workspace.right} active detailed={false} iconMode={props.iconMode} onSort={props.onSort} />}>
-      <Pane pane="left" snapshot={props.workspace.left} active={props.workspace.active_pane === "left"} detailed={props.detailed} iconMode={props.iconMode} onSort={props.onSort} />
-      <Pane pane="right" snapshot={props.workspace.right} active={props.workspace.active_pane === "right"} detailed={props.detailed} iconMode={props.iconMode} onSort={props.onSort} />
+      ? <Pane {...paneProps("left")} detailed={false} />
+      : <Pane {...paneProps("right")} detailed={false} />}>
+      <Pane {...paneProps("left")} detailed={props.detailed} />
+      <Pane {...paneProps("right")} detailed={props.detailed} />
     </Show>
   </box>
 }
@@ -287,21 +408,34 @@ function StatusBar(props: {
   readonly compact: boolean
   readonly notice?: string
   readonly iconMode: IconMode
+  readonly pathMode: StatusPathMode
+  readonly homeDirectory?: string
+  readonly onTogglePath: () => void
+  readonly onCopyPath: (path: string) => void
 }) {
   const active = () => props.workspace?.active_pane ?? "left"
   const snapshot = () => active() === "left" ? props.workspace?.left : props.workspace?.right
+  const displayedPath = () => formatStatusPath(snapshot()?.cwd_display ?? "connecting", props.homeDirectory, props.pathMode)
+  const pathMouseDown = (event: { button: number; preventDefault(): void; stopPropagation(): void }) => {
+    if (event.button !== MouseButton.LEFT && event.button !== MouseButton.RIGHT) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.button === MouseButton.RIGHT) props.onCopyPath(displayedPath())
+    else props.onTogglePath()
+  }
   const latestTask = () => props.tasks?.at(-1)
   const latestAction = () => props.actionTasks?.at(-1)
-  const detail = () => latestAction() !== undefined
+  const detail = () => props.notice ?? (latestAction() !== undefined
     ? `${latestAction()!.action} ${latestAction()!.state} ${latestAction()!.completed_count}/${latestAction()!.total_count}${latestAction()!.partial ? " partial" : ""}${latestAction()!.error_code === undefined ? "" : ` ${latestAction()!.error_code}`}`
-    : props.notice ?? (latestTask() === undefined ? `${snapshot()?.selection_count ?? 0} selected` : `task ${latestTask()!.state}`)
+    : latestTask() === undefined ? `${snapshot()?.selection_count ?? 0} selected` : `task ${latestTask()!.state}`)
+  const showDetail = () => props.notice !== undefined || !props.compact
+    || latestAction()?.state === "failed" || latestAction()?.state === "cancelled" || latestAction()?.partial === true
   if (props.iconMode === "ascii") {
     return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.surface0}>
       <text bg={COLORS.mauve} fg={COLORS.crust}> NORMAL </text>
-      <text bg={COLORS.sapphire} fg={COLORS.crust}> {active().toUpperCase()} </text>
-      <text flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate> {snapshot()?.cwd_display ?? "connecting"} </text>
+      <text id="status-path" flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate onMouseDown={pathMouseDown}> {displayedPath()} </text>
       <text bg={COLORS.green} fg={COLORS.crust}> {snapshot()?.entry_count ?? 0} items </text>
-      <Show when={!props.compact || latestAction()?.state === "failed" || latestAction()?.state === "cancelled" || latestAction()?.partial}>
+      <Show when={showDetail()}>
         <text bg={COLORS.surface1} fg={COLORS.text}> {detail()} </text>
       </Show>
     </box>
@@ -309,18 +443,16 @@ function StatusBar(props: {
   return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.crust}>
     <text fg={COLORS.mauve} bg={COLORS.crust}></text>
     <text bg={COLORS.mauve} fg={COLORS.crust}> NORMAL </text>
-    <text fg={COLORS.mauve} bg={COLORS.sapphire}></text>
-    <text bg={COLORS.sapphire} fg={COLORS.crust}> {active().toUpperCase()} </text>
-    <text fg={COLORS.sapphire} bg={COLORS.surface0}></text>
-    <text flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate> {snapshot()?.cwd_display ?? "connecting"} </text>
+    <text fg={COLORS.mauve} bg={COLORS.surface0}></text>
+    <text id="status-path" flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate onMouseDown={pathMouseDown}> {displayedPath()} </text>
     <text fg={COLORS.surface0} bg={COLORS.green}></text>
     <text bg={COLORS.green} fg={COLORS.crust}> {snapshot()?.entry_count ?? 0} items </text>
-    <Show when={!props.compact || latestAction()?.state === "failed" || latestAction()?.state === "cancelled" || latestAction()?.partial}>
+    <Show when={showDetail()}>
       <text fg={COLORS.green} bg={COLORS.surface1}></text>
       <text bg={COLORS.surface1} fg={COLORS.text}> {detail()} </text>
       <text fg={COLORS.surface1} bg={COLORS.crust}></text>
     </Show>
-    <Show when={props.compact}><text fg={COLORS.green} bg={COLORS.crust}></text></Show>
+    <Show when={props.compact && !showDetail()}><text fg={COLORS.green} bg={COLORS.crust}></text></Show>
   </box>
 }
 
@@ -329,7 +461,7 @@ function FunctionKey(props: {
   readonly keyName: string
   readonly label: string
   readonly enabled?: boolean
-  readonly compact: boolean
+  readonly iconMode: IconMode
   readonly onAction: (action: FunctionAction) => void
 }) {
   const enabled = () => props.enabled !== false
@@ -341,11 +473,41 @@ function FunctionKey(props: {
     onMouseDown={(event) => {
       event.preventDefault()
       event.stopPropagation()
-      if (enabled()) props.onAction(props.action)
+      if (event.button === MouseButton.LEFT && enabled()) props.onAction(props.action)
     }}
   >
-    <text bg={enabled() ? COLORS.sapphire : COLORS.surface1} fg={enabled() ? COLORS.crust : COLORS.overlay1}> {props.keyName} </text>
-    <Show when={!props.compact}><text flexGrow={1} bg={COLORS.base} fg={enabled() ? COLORS.text : COLORS.overlay1}> {props.label} </text></Show>
+    <Show when={props.iconMode !== "ascii"} fallback={<text fg={enabled() ? COLORS.sapphire : COLORS.overlay1}>[{props.keyName} {props.label}]</text>}>
+      <text fg={enabled() ? COLORS.sapphire : COLORS.surface1} bg={COLORS.crust}></text>
+      <text bg={enabled() ? COLORS.sapphire : COLORS.surface1} fg={enabled() ? COLORS.crust : COLORS.overlay1}>{props.keyName} {props.label}</text>
+      <text fg={enabled() ? COLORS.sapphire : COLORS.surface1} bg={COLORS.crust}></text>
+    </Show>
+  </box>
+}
+
+const FUNCTION_KEYS: readonly Readonly<{ action: FunctionAction; keyName: string; label: string }>[] = [
+  { action: "view", keyName: "F3", label: "View" },
+  { action: "edit", keyName: "F4", label: "Edit" },
+  { action: "copy", keyName: "F5", label: "Copy" },
+  { action: "move", keyName: "F6", label: "Move" },
+  { action: "mkdir", keyName: "F7", label: "MkDir" },
+  { action: "delete", keyName: "F8", label: "Delete" },
+  { action: "quit", keyName: "F10", label: "Quit" },
+]
+
+function FunctionRow(props: {
+  readonly keys: typeof FUNCTION_KEYS
+  readonly canView: boolean
+  readonly canFileActions: boolean
+  readonly iconMode: IconMode
+  readonly onAction: (action: FunctionAction) => void
+}) {
+  const enabled = (action: FunctionAction) => action === "view"
+    ? props.canView
+    : action === "copy" || action === "move" || action === "mkdir" || action === "delete"
+      ? props.canFileActions
+      : true
+  return <box width="100%" height={1} flexDirection="row">
+    <For each={props.keys}>{(item) => <FunctionKey {...item} enabled={enabled(item.action)} iconMode={props.iconMode} onAction={props.onAction} />}</For>
   </box>
 }
 
@@ -354,23 +516,23 @@ function BottomBars(props: {
   readonly tasks?: readonly PreviewTaskPayload[]
   readonly actionTasks?: readonly ActionTaskPayload[]
   readonly compact: boolean
+  readonly stacked: boolean
   readonly notice?: string
   readonly canView: boolean
   readonly canFileActions: boolean
   readonly iconMode: IconMode
   readonly onAction: (action: FunctionAction) => void
+  readonly pathMode: StatusPathMode
+  readonly homeDirectory?: string
+  readonly onTogglePath: () => void
+  readonly onCopyPath: (path: string) => void
 }) {
-  return <box width="100%" height={2} flexDirection="column">
-    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} />
-    <box width="100%" height={1} flexDirection="row">
-      <FunctionKey action="view" keyName="F3" label="View" compact={props.compact} enabled={props.canView} onAction={props.onAction} />
-      <FunctionKey action="edit" keyName="F4" label="Edit" compact={props.compact} onAction={props.onAction} />
-      <FunctionKey action="copy" keyName="F5" label="Copy" compact={props.compact} enabled={props.canFileActions} onAction={props.onAction} />
-      <FunctionKey action="move" keyName="F6" label="Move" compact={props.compact} enabled={props.canFileActions} onAction={props.onAction} />
-      <FunctionKey action="mkdir" keyName="F7" label="MkDir" compact={props.compact} enabled={props.canFileActions} onAction={props.onAction} />
-      <FunctionKey action="delete" keyName="F8" label="Delete" compact={props.compact} enabled={props.canFileActions} onAction={props.onAction} />
-      <FunctionKey action="quit" keyName="F10" label="Quit" compact={props.compact} onAction={props.onAction} />
-    </box>
+  return <box width="100%" height={props.stacked ? 3 : 2} flexDirection="column">
+    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} />
+    <Show when={props.stacked} fallback={<FunctionRow keys={FUNCTION_KEYS} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />}>
+      <FunctionRow keys={FUNCTION_KEYS.slice(0, 4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
+      <FunctionRow keys={FUNCTION_KEYS.slice(4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
+    </Show>
   </box>
 }
 
@@ -381,12 +543,14 @@ export function App(props: AppProps) {
   const detailed = () => dimensions().width >= 160
   const iconMode = (): IconMode => props.iconMode ?? (process.env.NEOVIFM_ICONS === "ascii" ? "ascii" : "fancy")
   const canSort = () => props.capabilities?.includes("workspace-sort-v1") === true
+  const canTabs = () => props.capabilities?.includes("pane-tabs-v1") === true
   const actionBusy = () => props.actionTasks?.some((task) => task.state === "queued" || task.state === "running") === true
   const canFileActions = () => props.capabilities?.includes("file-actions-v1") === true && !actionBusy()
   const keymap = new VifmKeymap()
   const [viewerOpen, setViewerOpen] = createSignal(false)
   const [notice, setNotice] = createSignal<string | undefined>()
   const [dialog, setDialog] = createSignal<DialogState | undefined>()
+  const [pathMode, setPathMode] = createSignal<StatusPathMode>("absolute")
 
   const activeSnapshot = () => props.workspace?.active_pane === "right" ? props.workspace.right : props.workspace?.left
   const currentEntry = () => {
@@ -441,6 +605,14 @@ export function App(props: AppProps) {
       setNotice("Core sorting is unavailable")
       return false
     }
+    if ((command.action === "tab-cycle" || command.action === "new-tab" || command.action === "activate-tab" || command.action === "close-tab") && !canTabs()) {
+      setNotice("Core pane tabs are unavailable")
+      return false
+    }
+    if (command.action === "select-entry" && !canTabs()) {
+      setNotice("Core mouse selection is unavailable")
+      return false
+    }
     const sent = props.onCommand?.(command)
     if (sent instanceof Promise) {
       void sent.then((accepted) => {
@@ -459,6 +631,16 @@ export function App(props: AppProps) {
   const quit = () => {
     props.onCancel?.()
     renderer.destroy()
+  }
+  const copyStatusPath = (path: string) => {
+    if (props.onCopyText === undefined) {
+      setNotice("Clipboard is unavailable")
+      return
+    }
+    void Promise.resolve().then(() => props.onCopyText!(path)).then(
+      () => setNotice(`Copied ${path}`),
+      (error) => setNotice(`Copy failed: ${error instanceof Error ? error.message : String(error)}`),
+    )
   }
   const dispatchFunction = (action: FunctionAction) => {
     if (dialog() !== undefined) return
@@ -628,6 +810,22 @@ export function App(props: AppProps) {
       dispatchFunction(result.action)
       return
     }
+    if (result.kind === "tab-index") {
+      const workspace = props.workspace
+      if (workspace === undefined || !canTabs()) {
+        setNotice("Core pane tabs are unavailable")
+        return
+      }
+      const pane = workspace.active_pane
+      const tabs = workspace[`${pane}_tabs`] ?? []
+      const tab = tabs[result.index]
+      if (tab === undefined) {
+        setNotice(`Tab ${result.index + 1} does not exist`)
+        return
+      }
+      sendCommand({ action: "activate-tab", pane, tab_id: tab.id })
+      return
+    }
     if (result.command.action === "enter" && currentEntry()?.kind !== "directory") {
       dispatchFunction("view")
       return
@@ -636,21 +834,29 @@ export function App(props: AppProps) {
   })
 
   return <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.crust} padding={1} gap={1}>
-    <box width="100%" height={1} flexDirection="row">
-      <text flexGrow={1} fg={COLORS.lavender}>NeoVifm</text>
-      <text fg={COLORS.overlay1}>{dimensions().width}x{dimensions().height}</text>
-    </box>
     <Show when={dialog()} fallback={props.error !== undefined
       ? <ErrorPanel message={props.error} />
       : viewerOpen()
         ? <Viewer preview={matchingPreview()} />
         : props.workspace !== undefined
-          ? <Workspace workspace={props.workspace} wide={wide()} detailed={detailed()} iconMode={iconMode()} onSort={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }} />
+          ? <Workspace
+              workspace={props.workspace}
+              wide={wide()}
+              detailed={detailed()}
+              iconMode={iconMode()}
+              tabsEnabled={canTabs()}
+              onSortDirection={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }}
+              onSortCycle={(pane, delta) => { sendCommand({ action: "sort-cycle", pane, delta }) }}
+              onSelect={(pane, index, toggle) => { sendCommand({ action: "select-entry", pane, index, toggle }) }}
+              onActivateTab={(pane, tabId) => { sendCommand({ action: "activate-tab", pane, tab_id: tabId }) }}
+              onCloseTab={(pane, tabId) => { sendCommand({ action: "close-tab", pane, tab_id: tabId }) }}
+              onNewTab={(pane) => { sendCommand({ action: "new-tab", pane }) }}
+            />
           : props.loading
             ? <LoadingPanel />
             : <ErrorPanel message="Core returned no workspace" />}>
       {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
     </Show>
-    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={dimensions().width < 90} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} />
+    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} />
   </box>
 }

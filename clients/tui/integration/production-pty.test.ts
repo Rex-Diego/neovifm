@@ -25,16 +25,22 @@ test("production PTY accepts Vifm keys and clickable Total Commander actions", a
   temporaryRoot = await mkdtemp(join(tmpdir(), "neovifm-production-pty-"))
   const left = join(temporaryRoot, "left")
   const right = join(temporaryRoot, "right")
+  const testBin = join(temporaryRoot, "bin")
+  const clipboardCapture = join(temporaryRoot, "clipboard.txt")
+  const pbcopy = join(testBin, "pbcopy")
   const trashHelper = join(temporaryRoot, "test-trash.sh")
   await mkdir(left)
   await mkdir(right)
+  await mkdir(testBin)
   await writeFile(join(left, "a-file"), "a")
   await writeFile(join(left, "b-file"), "b")
   await mkdir(join(right, "a-dir"))
   await writeFile(join(right, "a-dir", "inside"), "inside")
   await writeFile(join(right, "right-file"), "right")
   await writeFile(trashHelper, "#!/bin/sh\nexec /bin/rm -rf -- \"$1\"\n")
+  await writeFile(pbcopy, "#!/bin/sh\nexec /bin/cat > \"$NEOVIFM_TEST_CLIPBOARD\"\n")
   await chmod(trashHelper, 0o700)
+  await chmod(pbcopy, 0o700)
 
   const tuiRoot = resolve(import.meta.dir, "..")
   const expectProgram = String.raw`
@@ -42,35 +48,37 @@ set timeout 12
 log_user 1
 spawn -noecho $env(NEOVIFM_TEST_BUN) run src/index.tsx $env(NEOVIFM_TEST_LEFT) $env(NEOVIFM_TEST_RIGHT)
 expect {
-  "NeoVifm" {}
+  "F10 Quit" {}
   timeout { exit 11 }
   eof { exit 12 }
-}
-expect {
-  "F10" {}
-  timeout { exit 18 }
-  eof { exit 19 }
 }
 after 300
 send -- "j"
 after 300
 send -- "\t"
-expect {
-  "RIGHT" {}
-  timeout { exit 13 }
-  eof { exit 14 }
-}
+after 600
 send -- "l"
 expect {
   "inside" {}
   timeout { exit 20 }
   eof { exit 21 }
 }
+after 300
 send -- "h"
+after 300
+send -- "j"
+after 500
+send -- "\033\[<0;20;22M\033\[<0;20;22m"
 expect {
-  "right-file" {}
-  timeout { exit 22 }
-  eof { exit 23 }
+  "~/right" {}
+  timeout { exit 24 }
+  eof { exit 25 }
+}
+send -- "\033\[<2;20;22M\033\[<2;20;22m"
+expect {
+  "Copied ~/right" {}
+  timeout { exit 26 }
+  eof { exit 27 }
 }
 send -- "\033\[<0;49;23M\033\[<0;49;23m"
 expect {
@@ -92,11 +100,14 @@ expect {
     env: {
       ...process.env,
       TERM: "xterm-256color",
+      HOME: temporaryRoot,
+      PATH: `${testBin}:${process.env.PATH ?? ""}`,
       NEOVIFM_CORE_PROBE: executable,
       NEOVIFM_ICONS: "ascii",
       NEOVIFM_TEST_BUN: process.execPath,
       NEOVIFM_TEST_LEFT: left,
       NEOVIFM_TEST_RIGHT: right,
+      NEOVIFM_TEST_CLIPBOARD: clipboardCapture,
       NEOVIFM_TRASH_EXECUTABLE: trashHelper,
     },
     stdin: "ignore",
@@ -110,9 +121,12 @@ expect {
   ])
   const plain = plainTerminalOutput(output)
   expect(exitCode, diagnostics || plain.slice(-2000)).toBe(0)
-  expect(plain).toContain("NeoVifm")
+  expect(plain).not.toContain("NeoVifm")
   expect(plain).toContain("> - b-file")
-  expect(plain).toContain("RIGHT")
+  expect(plain).toContain("[F3 View]")
+  expect(plain).toContain("[F10 Quit]")
   expect(plain).toContain("F7 MKDIR")
+  expect(plain).toContain("~/right")
   await access(join(right, "clicked-pty"))
+  expect(await Bun.file(clipboardCapture).text()).toBe("~/right")
 }, 20_000)

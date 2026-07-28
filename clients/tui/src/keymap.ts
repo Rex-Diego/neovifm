@@ -12,6 +12,7 @@ export type FunctionAction = "view" | "edit" | "copy" | "move" | "mkdir" | "dele
 
 export type KeymapResult =
   | Readonly<{ kind: "command"; command: CoreSessionCommand }>
+  | Readonly<{ kind: "tab-index"; index: number }>
   | Readonly<{ kind: "cancel" }>
   | Readonly<{ kind: "function"; action: FunctionAction }>
   | Readonly<{ kind: "pending" }>
@@ -30,6 +31,7 @@ function normalizedName(key: KeyLike): string {
 
 export class VifmKeymap {
   #prefix: Prefix | undefined
+  #count: number | undefined
 
   handle(key: KeyLike): KeymapResult {
     const name = normalizedName(key)
@@ -37,7 +39,17 @@ export class VifmKeymap {
     this.#prefix = undefined
 
     if (prefix === "g") {
+      const count = this.#count
+      this.#count = undefined
+      if (name === "t" && key.shift) {
+        return command({ action: "tab-cycle", delta: -(count ?? 1) })
+      }
       if (key.shift) return { kind: "unhandled" }
+      if (name === "t") {
+        return count === undefined
+          ? command({ action: "tab-cycle", delta: 1 })
+          : { kind: "tab-index", index: count - 1 }
+      }
       if (name === "g") return command({ action: "move-to", target: "first" })
       if (name === "h") return command({ action: "parent" })
       if (name === "j") return command({ action: "move", delta: 1 })
@@ -46,14 +58,19 @@ export class VifmKeymap {
       return { kind: "unhandled" }
     }
 
-    if (prefix === "q") return { kind: "unhandled" }
+    if (prefix === "q") {
+      this.#count = undefined
+      return { kind: "unhandled" }
+    }
 
     if (prefix === "shift-z") {
+      this.#count = undefined
       if (key.shift && (name === "q" || name === "z")) return { kind: "cancel" }
       return { kind: "unhandled" }
     }
 
     if (prefix === "ctrl-w") {
+      this.#count = undefined
       if (key.shift) return { kind: "unhandled" }
       if (name === "w" || name === "p") return command({ action: "focus-next" })
       if (name === "h") return command({ action: "focus", pane: "left" })
@@ -62,14 +79,26 @@ export class VifmKeymap {
     }
 
     if (key.ctrl && name === "w") {
+      this.#count = undefined
       this.#prefix = "ctrl-w"
       return { kind: "pending" }
     }
     if (key.ctrl && name === "l") return command({ action: "refresh" })
     if (key.ctrl && name === "n") return command({ action: "move", delta: 1 })
     if (key.ctrl && name === "p") return command({ action: "move", delta: -1 })
-    if (key.ctrl) return { kind: "unhandled" }
-    if (key.meta) return { kind: "unhandled" }
+    if (key.ctrl || key.meta) {
+      this.#count = undefined
+      return { kind: "unhandled" }
+    }
+
+    if (!key.shift && /^[0-9]$/.test(name)) {
+      if (name === "0" && this.#count === undefined) return { kind: "unhandled" }
+      this.#count = Math.min(999, (this.#count ?? 0) * 10 + Number(name))
+      return { kind: "pending" }
+    }
+    if (this.#count !== undefined && (name !== "g" || key.shift)) {
+      this.#count = undefined
+    }
 
     if (name === "f10") return { kind: "function", action: "quit" }
     if (name === "f3") return { kind: "function", action: "view" }

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { resolve } from "node:path"
 
-import { MAX_SNAPSHOT_ENTRIES, MAX_WORKSPACE_ENTRIES, parseProtocolRecord } from "../src/protocol.js"
+import { MAX_PANE_TABS, MAX_SNAPSHOT_ENTRIES, MAX_WORKSPACE_ENTRIES, parseProtocolRecord } from "../src/protocol.js"
 
 function objectValue(value: unknown): Readonly<Record<string, unknown>> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -114,6 +114,26 @@ test("v3 schema exposes core-owned pane toggle and Vifm first/last movement", ()
   expect(serialized).toContain('"move-to"')
   expect(serialized).toContain('"first"')
   expect(serialized).toContain('"last"')
+})
+
+test("v3 schema bounds pane tabs and exposes core-owned tab and mouse commands", () => {
+  const paneTabs = objectValue(previewSessionDefinitions.paneTabs)
+  expect(paneTabs.minItems).toBe(1)
+  expect(paneTabs.maxItems).toBe(MAX_PANE_TABS)
+  const paneTab = objectValue(previewSessionDefinitions.paneTab)
+  expect(paneTab.required).toEqual(["id", "cwd_display", "active"])
+  const tabId = objectValue(previewSessionDefinitions.tabId)
+  expect(tabId.pattern).toBe("^[1-9][0-9]*$")
+
+  const commandPayload = objectValue(previewSessionDefinitions.commandPayload)
+  const serialized = JSON.stringify(commandPayload)
+  expect(serialized).toContain('"select-entry"')
+  expect(serialized).toContain('"new-tab"')
+  expect(serialized).toContain('"activate-tab"')
+  expect(serialized).toContain('"close-tab"')
+  expect(serialized).toContain('"tab-cycle"')
+  expect(serialized).toContain('"minimum":-999')
+  expect(serialized).toContain('"maximum":999')
 })
 
 test("v3 file actions require snapshot identities instead of display paths", () => {

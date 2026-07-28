@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
+import { MouseButtons } from "@opentui/core/testing"
 
 import { App, type AppProps } from "../src/app.js"
 import type { SnapshotPayload, WorkspaceSnapshotPayload } from "../src/protocol.js"
@@ -39,12 +40,17 @@ const snapshot: SnapshotPayload = {
   ],
 }
 
-const capabilities = ["workspace-sort-v1", "file-actions-v1"] as const
+const capabilities = ["workspace-sort-v1", "file-actions-v1", "pane-tabs-v1"] as const
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
 
 const workspace: WorkspaceSnapshotPayload = {
   active_pane: "left",
+  left_tabs: [
+    { id: "1", cwd_display: "/tmp", active: true },
+    { id: "2", cwd_display: "/Users/rex/project", active: false },
+  ],
+  right_tabs: [{ id: "3", cwd_display: "/var", active: true }],
   left: snapshot,
   right: {
     ...snapshot,
@@ -61,7 +67,7 @@ afterEach(() => {
 
 test("renders two panes by default and degrades to the active pane when narrow", async () => {
   setup = await testRender(() => <App workspace={workspace} />, {
-    width: 180,
+    width: 160,
     height: 20,
   })
 
@@ -69,9 +75,14 @@ test("renders two panes by default and degrades to the active pane when narrow",
   const wideFrame = setup.captureCharFrame()
   expect(wideFrame).toContain("file.txt")
   expect(wideFrame).toContain("right.txt")
-  expect(wideFrame).toContain("LEFT ACTIVE")
-  expect(wideFrame).toContain("RIGHT • /var")
-  expect(wideFrame).toContain("180x20")
+  expect(wideFrame).toContain("●")
+  expect(wideFrame).toContain("tmp")
+  expect(wideFrame).toContain("project")
+  expect(wideFrame).toContain("var")
+  expect(wideFrame).not.toContain("LEFT")
+  expect(wideFrame).not.toContain("RIGHT")
+  expect(wideFrame).not.toContain("ACTIVE")
+  expect(wideFrame).not.toContain("160x20")
   expect(wideFrame).toContain("-rw-r--r--")
   expect(wideFrame).toContain("1970-01-01")
   expect(wideFrame).toContain("Name ▲")
@@ -84,20 +95,26 @@ test("renders two panes by default and degrades to the active pane when narrow",
   expect(wideFrame).toContain("")
   expect(wideFrame).toContain("")
   expect(wideFrame).toContain("")
-  expect(wideFrame).toContain("F3  View")
-  expect(wideFrame).toContain("F4  Edit")
-  expect(wideFrame).toContain("F5  Copy")
-  expect(wideFrame).toContain("F10  Quit")
+  expect(wideFrame).toContain("F3 View")
+  expect(wideFrame).toContain("F4 Edit")
+  expect(wideFrame).toContain("F5 Copy")
+  expect(wideFrame).toContain("F10 Quit")
   expect(wideFrame).not.toContain("READ ONLY")
   expect(wideFrame).not.toContain("| NORMAL |")
 
   setup.resize(60, 20)
   await setup.renderOnce()
   const compactFrame = setup.captureCharFrame()
-  expect(compactFrame).toContain("60x20")
-  expect(compactFrame).toContain("LEFT ACTIVE")
+  expect(compactFrame).not.toContain("60x20")
+  expect(compactFrame).toContain("●")
   expect(compactFrame).not.toContain("right.txt")
-  expect(compactFrame).toContain("F10")
+  expect(compactFrame).toContain("F3 View")
+  expect(compactFrame).toContain("F4 Edit")
+  expect(compactFrame).toContain("F5 Copy")
+  expect(compactFrame).toContain("F6 Move")
+  expect(compactFrame).toContain("F7 MkDir")
+  expect(compactFrame).toContain("F8 Delete")
+  expect(compactFrame).toContain("F10 Quit")
 
   let sent: unknown
   setup?.renderer.destroy()
@@ -118,15 +135,12 @@ test("column headers and the function bar are clickable mouse targets", async ()
   />, { width: 180, height: 20 })
   await setup.renderOnce()
 
-  const sizeHeader = setup.renderer.root.findDescendantById("sort-left-size")
-  expect(sizeHeader).toBeDefined()
-  await setup.mockMouse.click(sizeHeader!.x, sizeHeader!.y)
-  expect(sent.at(-1)).toEqual({ action: "sort-by", pane: "left", key: "size" })
-
-  const createdHeader = setup.renderer.root.findDescendantById("sort-left-ctime")
-  expect(createdHeader).toBeDefined()
-  await setup.mockMouse.click(createdHeader!.x, createdHeader!.y)
-  expect(sent.at(-1)).toEqual({ action: "sort-by", pane: "left", key: "ctime" })
+  const nameHeader = setup.renderer.root.findDescendantById("sort-left-name")
+  expect(nameHeader).toBeDefined()
+  await setup.mockMouse.click(nameHeader!.x, nameHeader!.y)
+  expect(sent.at(-1)).toEqual({ action: "sort-by", pane: "left", key: "name" })
+  await setup.mockMouse.click(nameHeader!.x, nameHeader!.y, MouseButtons.RIGHT)
+  expect(sent.at(-1)).toEqual({ action: "sort-cycle", pane: "left", delta: 1 })
 
   const copyButton = setup.renderer.root.findDescendantById("function-copy")
   expect(copyButton).toBeDefined()
@@ -438,7 +452,9 @@ test("uses a refreshed core workspace as the active-pane source of truth", async
   await setup.renderOnce()
   setProps({ workspace: { ...workspace, active_pane: "right", left: { ...workspace.left }, right: { ...workspace.right } } })
   await setup.renderOnce()
-  expect(setup.captureCharFrame()).toContain("RIGHT ACTIVE")
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("●")
+  expect(frame).not.toContain("RIGHT ACTIVE")
 })
 
 test("cycles the compact metadata column between size, time, and permissions", async () => {
@@ -465,6 +481,141 @@ test("keeps the workspace operable without Nerd Font or powerline glyphs", async
   expect(frame).toContain("NORMAL")
   expect(frame).not.toContain("")
   expect(frame).not.toContain("")
+  expect(frame).not.toContain("")
+  expect(frame).not.toContain("")
+  expect(frame).toContain("[F3 View]")
+})
+
+test("activates, closes, and creates pane tabs with mouse buttons", async () => {
+  const sent: unknown[] = []
+  setup = await testRender(() => <App workspace={workspace} capabilities={capabilities} onCommand={(command) => { sent.push(command) }} />, { width: 120, height: 20 })
+  await setup.renderOnce()
+
+  const secondTab = setup.renderer.root.findDescendantById("tab-left-2")
+  expect(secondTab).toBeDefined()
+  await setup.mockMouse.click(secondTab!.x, secondTab!.y)
+  expect(sent.at(-1)).toEqual({ action: "activate-tab", pane: "left", tab_id: "2" })
+  await setup.mockMouse.click(secondTab!.x, secondTab!.y, MouseButtons.RIGHT)
+  expect(sent.at(-1)).toEqual({ action: "close-tab", pane: "left", tab_id: "2" })
+
+  const newTab = setup.renderer.root.findDescendantById("tab-left-new")
+  expect(newTab).toBeDefined()
+  await setup.mockMouse.click(newTab!.x, newTab!.y)
+  expect(sent.at(-1)).toEqual({ action: "new-tab", pane: "left" })
+})
+
+test("keeps all eight tab targets and the new-tab button inside an 80-column pane", async () => {
+  const leftTabs = Array.from({ length: 8 }, (_, index) => ({
+    id: String(index + 10),
+    cwd_display: `/tmp/project-with-a-long-name-${index + 1}`,
+    active: index === 3,
+  }))
+  const crowdedWorkspace: WorkspaceSnapshotPayload = { ...workspace, left_tabs: leftTabs }
+  setup = await testRender(() => <App workspace={crowdedWorkspace} capabilities={capabilities} />, { width: 80, height: 20 })
+  await setup.renderOnce()
+
+  for (const tab of leftTabs) {
+    expect(setup.renderer.root.findDescendantById(`tab-left-${tab.id}`)).toBeDefined()
+  }
+  const newTab = setup.renderer.root.findDescendantById("tab-left-new")
+  const firstRightTab = setup.renderer.root.findDescendantById("tab-right-3")
+  expect(newTab).toBeDefined()
+  expect(firstRightTab).toBeDefined()
+  expect(newTab!.x + newTab!.width).toBeLessThan(firstRightTab!.x)
+  expect(setup.captureCharFrame()).toContain("4 proje…")
+})
+
+test("selects file rows with left click and toggles batch selection with right click", async () => {
+  const sent: unknown[] = []
+  const entries = [
+    snapshot.entries[0]!,
+    { ...snapshot.entries[0]!, name_display: "second.txt", path_bytes_hex: "2f746d702f7365636f6e642e747874" },
+  ]
+  const selectionWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: { ...workspace.left, entry_count: entries.length, entries },
+  }
+  setup = await testRender(() => <App workspace={selectionWorkspace} capabilities={capabilities} onCommand={(command) => { sent.push(command) }} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+
+  const secondEntry = setup.renderer.root.findDescendantById("entry-left-1")
+  expect(secondEntry).toBeDefined()
+  await setup.mockMouse.click(secondEntry!.x, secondEntry!.y)
+  expect(sent.at(-1)).toEqual({ action: "select-entry", pane: "left", index: 1, toggle: false })
+  await setup.mockMouse.click(secondEntry!.x, secondEntry!.y, MouseButtons.RIGHT)
+  expect(sent.at(-1)).toEqual({ action: "select-entry", pane: "left", index: 1, toggle: true })
+})
+
+test("does not send mouse selection commands to an older core", async () => {
+  const sent: unknown[] = []
+  const entries = [
+    snapshot.entries[0]!,
+    { ...snapshot.entries[0]!, name_display: "second.txt", path_bytes_hex: "2f746d702f7365636f6e642e747874" },
+  ]
+  const selectionWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: { ...workspace.left, entry_count: entries.length, entries },
+  }
+  setup = await testRender(() => <App workspace={selectionWorkspace} onCommand={(command) => { sent.push(command) }} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+
+  const secondEntry = setup.renderer.root.findDescendantById("entry-left-1")
+  expect(secondEntry).toBeDefined()
+  await setup.mockMouse.click(secondEntry!.x, secondEntry!.y)
+  await setup.renderOnce()
+  expect(sent).toEqual([])
+  expect(setup.captureCharFrame()).toContain("Core mouse selection is unavailable")
+})
+
+test("toggles the status path style and copies the full displayed path", async () => {
+  const copied: string[] = []
+  const homeWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: { ...workspace.left, cwd_display: "/Users/rex/project", cwd_bytes_hex: "2f55736572732f7265782f70726f6a656374" },
+  }
+  setup = await testRender(() => <App
+    workspace={homeWorkspace}
+    homeDirectory="/Users/rex"
+    onCopyText={(text: string) => { copied.push(text) }}
+  />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("/Users/rex/project")
+
+  const path = setup.renderer.root.findDescendantById("status-path")
+  expect(path).toBeDefined()
+  await setup.mockMouse.click(path!.x, path!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("~/project")
+  await setup.mockMouse.click(path!.x, path!.y, MouseButtons.RIGHT)
+  expect(copied).toEqual(["~/project"])
+
+  await setup.mockMouse.click(path!.x, path!.y)
+  await setup.mockMouse.click(path!.x, path!.y, MouseButtons.RIGHT)
+  expect(copied).toEqual(["~/project", "/Users/rex/project"])
+})
+
+test("keeps clipboard success and failure feedback visible in a compact terminal", async () => {
+  let shouldFail = false
+  setup = await testRender(() => <App
+    workspace={workspace}
+    onCopyText={() => shouldFail ? Promise.reject(new Error("clipboard denied")) : undefined}
+  />, { width: 80, height: 20 })
+  await setup.renderOnce()
+
+  const path = setup.renderer.root.findDescendantById("status-path")
+  expect(path).toBeDefined()
+  await setup.mockMouse.click(path!.x, path!.y, MouseButtons.RIGHT)
+  await Bun.sleep(0)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("Copied /tmp")
+
+  shouldFail = true
+  await setup.mockMouse.click(path!.x, path!.y, MouseButtons.RIGHT)
+  await Bun.sleep(0)
+  await setup.renderOnce()
+  const failedFrame = setup.captureCharFrame()
+  expect(failedFrame).toContain("Copy failed: clipboard denied")
+  expect(failedFrame).not.toContain("")
 })
 
 test("delete confirmation describes the whole selection instead of only the cursor", async () => {

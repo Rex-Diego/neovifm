@@ -209,6 +209,223 @@ TEST(session_keeps_panes_independent_while_moving_and_selecting)
 	remove_dir(right);
 }
 
+TEST(session_select_entry_focuses_pane_and_toggles_exact_row_atomically)
+{
+	const char *const left = SANDBOX_PATH "/select-entry-left";
+	const char *const right = SANDBOX_PATH "/select-entry-right";
+	create_dir(left);
+	create_dir(right);
+	make_file(SANDBOX_PATH "/select-entry-left/a", "a");
+	make_file(SANDBOX_PATH "/select-entry-right/a", "a");
+	make_file(SANDBOX_PATH "/select-entry-right/b", "b");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SELECT_ENTRY, .pane = NV_SESSION_RIGHT,
+		.entry_index = 1U,
+	}, &error));
+	assert_int_equal(NV_SESSION_RIGHT, session.active_pane);
+	assert_int_equal(1, session.right.cursor);
+	assert_int_equal(0, session.right.selection_count);
+
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SELECT_ENTRY, .pane = NV_SESSION_RIGHT,
+		.entry_index = 0U, .toggle_selection = 1,
+	}, &error));
+	assert_int_equal(0, session.right.cursor);
+	assert_true(session.right.entries[0].selected);
+	assert_int_equal(1, session.right.selection_count);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SELECT_ENTRY, .pane = NV_SESSION_RIGHT,
+		.entry_index = 0U, .toggle_selection = 1,
+	}, &error));
+	assert_false(session.right.entries[0].selected);
+	assert_int_equal(0, session.right.selection_count);
+
+	assert_failure(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SELECT_ENTRY, .pane = NV_SESSION_LEFT,
+		.entry_index = 9U,
+	}, &error));
+	assert_string_equal("invalid-entry", error.code);
+	assert_int_equal(NV_SESSION_RIGHT, session.active_pane);
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/select-entry-left/a");
+	remove_file(SANDBOX_PATH "/select-entry-right/a");
+	remove_file(SANDBOX_PATH "/select-entry-right/b");
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(session_tabs_clone_activate_cycle_and_preserve_independent_state)
+{
+	const char *const left = SANDBOX_PATH "/tabs-left";
+	const char *const right = SANDBOX_PATH "/tabs-right";
+	create_dir(left);
+	create_dir(right);
+	create_dir(SANDBOX_PATH "/tabs-left/directory");
+	make_file(SANDBOX_PATH "/tabs-left/z-file", "z");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	const uint64_t first_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 0U);
+	assert_true(first_id != 0U);
+	assert_int_equal(1, nv_workspace_session_tab_count(&session,
+			NV_SESSION_LEFT));
+
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_TOGGLE_SELECTION,
+	}, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	assert_int_equal(2, nv_workspace_session_tab_count(&session,
+			NV_SESSION_LEFT));
+	assert_int_equal(1, nv_workspace_session_active_tab_index(&session,
+			NV_SESSION_LEFT));
+	const uint64_t second_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 1U);
+	assert_true(second_id != 0U);
+	assert_true(second_id != first_id);
+	assert_true(session.left.entries[session.left.cursor].selected);
+	assert_int_equal(1, session.left.selection_count);
+
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_ENTER,
+	}, &error));
+	assert_string_equal(SANDBOX_PATH "/tabs-left/directory",
+			session.left.cwd_display);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_ACTIVATE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = first_id,
+	}, &error));
+	assert_string_equal(left, session.left.cwd_display);
+	assert_int_equal(1, session.left.selection_count);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_TAB_CYCLE, .delta = -1,
+	}, &error));
+	assert_string_equal(SANDBOX_PATH "/tabs-left/directory",
+			session.left.cwd_display);
+	assert_int_equal(1, nv_workspace_session_active_tab_index(&session,
+			NV_SESSION_LEFT));
+	assert_int_equal(1, nv_workspace_session_tab_count(&session,
+			NV_SESSION_RIGHT));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_TAB_CYCLE, .delta = -999,
+	}, &error));
+	assert_int_equal(first_id, nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, nv_workspace_session_active_tab_index(&session,
+				NV_SESSION_LEFT)));
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/tabs-left/z-file");
+	remove_dir(SANDBOX_PATH "/tabs-left/directory");
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(session_tabs_close_prefers_right_then_left_and_rejects_last_tab)
+{
+	const char *const left = SANDBOX_PATH "/close-tabs-left";
+	const char *const right = SANDBOX_PATH "/close-tabs-right";
+	create_dir(left);
+	create_dir(right);
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	const uint64_t first_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 0U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	const uint64_t second_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 1U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	const uint64_t third_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 2U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_TAB_CYCLE, .delta = -2,
+	}, &error));
+	assert_int_equal(first_id, nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, nv_workspace_session_active_tab_index(&session,
+				NV_SESSION_LEFT)));
+
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_ACTIVATE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = second_id,
+	}, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_CLOSE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = first_id,
+	}, &error));
+	assert_int_equal(second_id, nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, nv_workspace_session_active_tab_index(&session,
+				NV_SESSION_LEFT)));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_CLOSE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = second_id,
+	}, &error));
+	assert_int_equal(third_id, nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 0U));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	const uint64_t fourth_id = nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 1U);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_CLOSE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = fourth_id,
+	}, &error));
+	assert_int_equal(third_id, nv_workspace_session_tab_id(&session,
+			NV_SESSION_LEFT, 0U));
+	assert_failure(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_CLOSE_TAB, .pane = NV_SESSION_LEFT,
+		.tab_id = third_id,
+	}, &error));
+	assert_string_equal("last-tab", error.code);
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(session_tabs_enforce_per_pane_limit)
+{
+	const char *const left = SANDBOX_PATH "/limit-tabs-left";
+	const char *const right = SANDBOX_PATH "/limit-tabs-right";
+	create_dir(left);
+	create_dir(right);
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	for(size_t i = 1U; i < NV_SESSION_MAX_TABS; ++i)
+	{
+		assert_success(nv_workspace_session_apply(&session,
+				&(nv_session_command_t){
+					.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+				}, &error));
+	}
+	assert_int_equal(NV_SESSION_MAX_TABS, nv_workspace_session_tab_count(&session,
+			NV_SESSION_LEFT));
+	assert_failure(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_NEW_TAB, .pane = NV_SESSION_LEFT,
+	}, &error));
+	assert_string_equal("tab-limit", error.code);
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_dir(left);
+	remove_dir(right);
+}
+
 TEST(session_refreshes_an_inactive_pane_without_changing_focus)
 {
 	const char *const left = SANDBOX_PATH "/refresh-left";
@@ -326,6 +543,12 @@ TEST(session_sorts_by_core_owned_column_and_preserves_cursor_identity)
 		.kind = NV_SESSION_SORT_CYCLE, .delta = 1,
 	}, &error));
 	assert_int_equal(NV_SORT_MTIME, session.left.sort_key);
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_SORT_CYCLE, .pane = NV_SESSION_RIGHT,
+		.has_pane = 1, .delta = 1,
+	}, &error));
+	assert_int_equal(NV_SESSION_RIGHT, session.active_pane);
+	assert_int_equal(NV_SORT_SIZE, session.right.sort_key);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	remove_file(SANDBOX_PATH "/sort-left/a-large");

@@ -127,3 +127,39 @@
 - `utils/fswatch_nix.c` 在 Linux 使用 inotify，并保留 polling fallback；`fswatch_win.c` 提供 Windows change notification。原生 watcher 不需要 Hybrid session 才能工作。
 - `ui/quickview.c` + `vcache.c` 已把 previewprg、fileviewer、viewer geometry、缓存、后台读取和取消接入经典 UI；后续图片/视频/音频优先扩展这一条路径。
 - 既有可配置的展示面是 colorscheme/highlight、`classify`、`viewcolumns`、`statusline`、`fillchars` 和 Miller/quickview。Phase 7 最小实现应只增强这些已有契约，不复制 Yazi runtime。
+
+## 2026-07-27 鼠标排序、功能键与 pane tabs
+
+- 用户明确新的鼠标契约：列标题左键只反转当前字段方向，右键才轮换 Size、Created、Modified、Permissions；现有“点击任意列直接选字段”的行为不符合要求。
+- 顶部全局 `NeoVifm` 与终端尺寸行可以删除；省出的单行应成为左右 pane 各自的 tab bar，而不是继续占用文件区域。
+- tab 必须是可点击切换的真实目录状态。客户端不得仅替换标题或本地缓存 entries；激活 tab 后仍需由 C core 发布不可变 workspace snapshot。
+- 终端没有 CSS 圆角，Starship 风格圆角应使用 ``/`` 胶囊边界；ASCII 模式必须用清晰可读的方括号或圆括号降级，并显式设置文字前景色。
+- F3--F10 “只有按钮没有文字”的直接原因不是主题遮挡：`BottomBars` 在终端宽度小于 90 时把 `compact=true`，`FunctionKey` 随即用 `<Show when={!compact}>` 完全删除 label；80 列正好稳定复现。七个短标签在 80 列仍可排下，应改为紧凑胶囊而非隐藏文字。
+- 当前 `ColumnHeader` 的 `onMouseDown` 不区分 mouse button，所有点击都调用 `sort-by(pane,key)`；因此只能在某个列标题上选字段/反转，无法实现“左键方向、右键字段”的二元契约。
+- 顶层 App 确实额外渲染一行 `NeoVifm` + `${width}x${height}`；这正是可删除并让位给 pane tab bar 的空间。
+- 文件行当前没有 mouse handler。左键精确定位和右键累积多选不能靠客户端改颜色：需要单条 core command 同时设置 active pane、cursor index，并按右键意图 toggle selection，避免两条 command 之间被 watcher 或其他输入穿插。
+- 右键批量选择可直接复用 snapshot 现有 `entries[].selected` 与 `selection_count`；已有 F5/F6/F8 的 target 收集逻辑会优先使用 selection，因此不需要另建客户端 Visual 状态。
+- 经典 Vifm 已有真正的 pane-tabs 模式：`cfg.pane_tabs`、`tabs_setup_ptab()`、`tabs_goto()`、`tabs_current()`，并且 normal-mode 鼠标会把 tab-line x 坐标映射到 `tabs_goto()`。OpenTUI 的新交互应沿用“每 pane 独立 tab 集合”语义。
+- 经典 tabs 直接持有 `view_t`，不能跨 Hybrid C/TS 边界复用；headless session 仍应只发布 tab DTO，并在 core 内保留每个 tab 的目录/排序状态，激活后重建不可变 pane snapshot。
+- 当前 `EntryList` 每行已有稳定 `entry-${pane}-${index}` id，适合用 test renderer 与真实 SGR mouse 覆盖左键定位和右键 toggle selection，无需按屏幕文本猜坐标。
+- OpenTUI 0.4.3 的真实 mouse contract 已确认：`MouseButton.LEFT = 0`、`MIDDLE = 1`、`RIGHT = 2`，`MouseEvent.button` 是 number；test renderer 的 `mockMouse.click(x,y,button)` 会发完整 down/up SGR 序列，因此左右键都能做稳定 RED。
+- 经典 pane tab 的新建语义是“在当前 tab 后克隆当前 view 并激活”。Headless session 可保留 `left/right` 作为活动 snapshot，把非活动 tab 存为 owned snapshot；切换时交换 struct，即可保留 cursor、selection、sort 与 cwd 而不复制 entries。
+- 当前 v3 workspace JSON 只含 `active_pane/left/right`。tab DTO 应作为 v3 additive 字段和 `pane-tabs-v1` capability 发布；旧 v0-v2 builder 与旧测试记录继续兼容，TypeScript 对缺失 tabs 回退为每 pane 一个当前 tab。
+
+## 2026-07-27 tab 与状态路径交互定稿
+
+- 用户确认 tab 键盘只先落地 Vifm 正常模式语义：`gt` 下一 tab、`gT` 上一 tab，并保留计数；本轮不为 `:tabnew`/`:tabclose` 新建半套命令行。
+- tab 鼠标右键关闭鼠标指向的 tab，不要求先激活；仅剩一个 tab 时拒绝关闭。左键激活对应 tab 并展示其目录。
+- pane chrome 不再显示 `LEFT`、`RIGHT` 或 `ACTIVE`；活动 pane 使用单宽小圆点表达，ASCII 能力下降时使用 `*`。
+- 状态栏路径模式是 TUI 本地展示状态：默认绝对路径，左键在 `/...` 与 `~/...` 间切换。只有 HOME 本身或其目录边界内的路径才能缩写，不能误把 `/Users/rex-other` 当作 HOME 子目录。
+- 右键复制的是当前展示模式下的完整路径文本，即使画面因宽度截断也复制未截断值。剪贴板属于 host 集成，不应加入 core 协议；实现必须直接 argv + stdin，禁止 shell 拼接。
+- 仓库已有跨平台参考：macOS `pbcopy`、Linux `wl-copy`/`xclip`/`xsel`、Windows clipboard；TUI 当前没有剪贴板依赖，适合通过可注入 `onCopyText` 服务实现和测试。
+- 当前 `app.test.tsx` 与 `production-pty.test.ts` 仍把 `LEFT ACTIVE`、`RIGHT`、`NeoVifm` 和终端尺寸当作成功标志；这些断言与最新视觉契约相反，必须在 RED 阶段改为活动圆点、tab label 和完整功能键文字。
+- 当前 keymap 的 `g` 前缀在任何 shifted 第二键上直接返回 unhandled，因此 `gT` 确定不可用；它也没有 count 状态。实现需避免破坏既有 `gg`/`gh`/`gj`/`gk`/`gl`。
+- 当前正式 PTY 使用固定底栏坐标点击 F7/F10；功能键改为响应式胶囊并在窄屏换行后，应优先保留 renderable 单测，PTY 则重新按最终 80 列文本帧校准坐标。
+
+## 2026-07-27 最终审查结论
+
+- 用户已明确将排序鼠标语义拆开：左键只反转当前字段，右键才轮换字段。因此不采纳“左键点击非当前标题应切换字段”的 reviewer 建议，避免恢复用户刚否定的旧行为。
+- `gt/gT` count 状态不得吞掉下一次普通按键；当前仅为 tab 导航解释 count，其他后续键按原单键语义继续执行。
+- core/schema 的 tab id 都从 1 开始；TypeScript runtime validator 也必须拒绝显式 id `0`。旧 v1/v2 snapshot 的本地兼容占位 id `0` 仅在字段缺失时内部生成，且 capability gate 禁止发送 tab command。

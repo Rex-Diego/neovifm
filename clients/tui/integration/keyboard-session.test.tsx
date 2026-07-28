@@ -3,6 +3,7 @@ import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { createSignal } from "solid-js"
+import { MouseButtons } from "@opentui/core/testing"
 import { testRender } from "@opentui/solid"
 
 import { App } from "../src/app.js"
@@ -265,5 +266,169 @@ test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", asyn
     await session.completion
     if (originalTrash === undefined) delete process.env.NEOVIFM_TRASH_EXECUTABLE
     else process.env.NEOVIFM_TRASH_EXECUTABLE = originalTrash
+  }
+}, 20_000)
+
+test("real pane tabs, mouse selection, and header buttons stay core-owned", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) {
+    throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  }
+  root = await mkdtemp(resolve(tmpdir(), "neovifm-tabs-"))
+  const left = resolve(root, "left")
+  const right = resolve(root, "right")
+  await mkdir(left)
+  await mkdir(right)
+  await writeFile(resolve(left, "a-file"), "a")
+  await writeFile(resolve(left, "b-file"), "larger")
+  await writeFile(resolve(right, "right-file"), "right")
+
+  const [state, setState] = createSignal<ProbeState>(initialProbeState())
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => setState((previous) => reduceProbeState(previous, record)),
+    onError: (error) => errors.push(error),
+  })
+  await waitFor(() => state().phase === "ready" && "session" in state())
+  const appProps = () => {
+    const current = state()
+    return {
+      workspace: current.phase === "ready" && "workspace" in current ? current.workspace : undefined,
+      capabilities: current.phase === "ready" ? current.hello.capabilities : undefined,
+      onCommand: (command: Parameters<typeof session.send>[0]) => session.send(command),
+    }
+  }
+  const setup = await testRender(() => <App {...appProps()} />, { width: 120, height: 20 })
+
+  try {
+    const initial = state()
+    if (!(initial.phase === "ready" && "workspace" in initial)) throw new Error("workspace did not initialize")
+    expect(initial.hello.capabilities).toContain("pane-tabs-v1")
+    expect(initial.workspace.left_tabs).toHaveLength(1)
+    const firstTabId = initial.workspace.left_tabs![0]!.id
+
+    await setup.renderOnce()
+    const newTab = setup.renderer.root.findDescendantById("tab-left-new")
+    expect(newTab).toBeDefined()
+    await setup.mockMouse.click(newTab!.x, newTab!.y)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.length === 2
+        && current.workspace.left_tabs[1]?.active === true
+    })
+    const withClone = state()
+    if (!(withClone.phase === "ready" && "workspace" in withClone)) throw new Error("workspace disappeared after new tab")
+    const secondTabId = withClone.workspace.left_tabs![1]!.id
+    expect(secondTabId).not.toBe(firstTabId)
+    expect(withClone.workspace.left_tabs![1]!.cwd_display).toBe(left)
+
+    setup.mockInput.pressKey("g")
+    setup.mockInput.pressKey("t")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === firstTabId)?.active === true
+    })
+
+    setup.mockInput.pressKey("2")
+    setup.mockInput.pressKey("g")
+    setup.mockInput.pressKey("t")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === secondTabId)?.active === true
+    })
+
+    setup.mockInput.pressKey("9")
+    setup.mockInput.pressKey("g")
+    setup.mockInput.pressKey("T")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === firstTabId)?.active === true
+    })
+    setup.mockInput.pressKey("2")
+    setup.mockInput.pressKey("g")
+    setup.mockInput.pressKey("t")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === secondTabId)?.active === true
+    })
+
+    await setup.renderOnce()
+    const inactiveTab = setup.renderer.root.findDescendantById(`tab-left-${firstTabId}`)
+    expect(inactiveTab).toBeDefined()
+    await setup.mockMouse.click(inactiveTab!.x, inactiveTab!.y, MouseButtons.RIGHT)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.length === 1
+        && current.workspace.left_tabs[0]?.id === secondTabId
+        && current.workspace.left_tabs[0]?.active === true
+    })
+
+    await setup.renderOnce()
+    const secondEntry = setup.renderer.root.findDescendantById("entry-left-1")
+    expect(secondEntry).toBeDefined()
+    await setup.mockMouse.click(secondEntry!.x, secondEntry!.y)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.left.cursor === 1
+    })
+
+    await setup.renderOnce()
+    const firstEntry = setup.renderer.root.findDescendantById("entry-left-0")
+    expect(firstEntry).toBeDefined()
+    await setup.mockMouse.click(firstEntry!.x, firstEntry!.y, MouseButtons.RIGHT)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left.selection_count === 1
+        && current.workspace.left.entries[0]?.selected === true
+    })
+    await setup.renderOnce()
+    const refreshedSecondEntry = setup.renderer.root.findDescendantById("entry-left-1")
+    expect(refreshedSecondEntry).toBeDefined()
+    await setup.mockMouse.click(refreshedSecondEntry!.x, refreshedSecondEntry!.y, MouseButtons.RIGHT)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left.selection_count === 2
+        && current.workspace.left.entries.every((entry) => entry.selected)
+    })
+
+    await setup.renderOnce()
+    const sizeHeader = setup.renderer.root.findDescendantById("sort-left-size")
+    expect(sizeHeader).toBeDefined()
+    await setup.mockMouse.click(sizeHeader!.x, sizeHeader!.y, MouseButtons.RIGHT)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "size"
+    })
+    await setup.renderOnce()
+    const activeSizeHeader = setup.renderer.root.findDescendantById("sort-left-size")
+    expect(activeSizeHeader).toBeDefined()
+    await setup.mockMouse.click(activeSizeHeader!.x, activeSizeHeader!.y)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left.sort_key === "size"
+        && current.workspace.left.sort_descending
+    })
+    await setup.mockMouse.click(activeSizeHeader!.x, activeSizeHeader!.y, MouseButtons.RIGHT)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "ctime"
+    })
+    expect(errors).toEqual([])
+  } finally {
+    setup.renderer.destroy()
+    session.close()
+    await session.completion
   }
 }, 20_000)

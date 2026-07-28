@@ -38,6 +38,47 @@ test("maps Vifm gg/G and Ctrl-W pane sequences", () => {
   expect(map.handle(key("w"))).toEqual({ kind: "command", command: { action: "focus-next" } })
 })
 
+test("maps Vifm gt/gT tab navigation including counts", () => {
+  const map = new VifmKeymap()
+  expect(map.handle(key("g"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("t"))).toEqual({ kind: "command", command: { action: "tab-cycle", delta: 1 } })
+  expect(map.handle(key("g"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("t", { shift: true, sequence: "T" }))).toEqual({
+    kind: "command",
+    command: { action: "tab-cycle", delta: -1 },
+  })
+
+  expect(map.handle(key("2"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("g"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("t"))).toEqual({ kind: "tab-index", index: 1 })
+  expect(map.handle(key("3"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("g"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("t", { shift: true, sequence: "T" }))).toEqual({
+    kind: "command",
+    command: { action: "tab-cycle", delta: -3 },
+  })
+
+  expect(map.handle(key("9"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("9"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("9"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("g"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("t", { shift: true, sequence: "T" }))).toEqual({
+    kind: "command",
+    command: { action: "tab-cycle", delta: -999 },
+  })
+})
+
+test("does not swallow a normal command after an unsupported numeric count", () => {
+  const map = new VifmKeymap()
+  expect(map.handle(key("2"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("j"))).toEqual({
+    kind: "command",
+    command: { action: "move", delta: 1 },
+  })
+  expect(map.handle(key("9"))).toEqual({ kind: "pending" })
+  expect(map.handle(key("f3"))).toEqual({ kind: "function", action: "view" })
+})
+
 test("keeps shifted navigation and quit/refresh keys aligned with Vifm", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("home"))).toEqual({ kind: "command", command: { action: "move-to", target: "first" } })

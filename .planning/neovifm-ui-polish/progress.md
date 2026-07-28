@@ -78,3 +78,35 @@
 - `env -u VIFM -u MYVIFMRC make -C tests commands.colorscheme` 通过（50 checks / 11 tests），确认经典 colorscheme 命令路径仍正常；待全仓串行回归后提交 Phase 7 首项。
 - 用户报告文件/目录都无法打开、`h/l` 无效且 Created 缺失。已确认文件 `l` 原先错误发送 core `enter`，现改走 F3 preview；目录仍保持 core `enter`/`parent`。新增 ctime core sort、协议与 btop header，Right/Left 次序为 Size、Created、Modified、Permissions。
 - 已通过 TUI 全量 83 tests、coverage 84.21% functions / 97.33% lines、C snapshot 48 tests / 8924 checks、串行 `make check`、typecheck、`bun audit` 与真实 integration 6 tests；正式 PTY 已验证 Right pane `l` 进入目录、`h` 返回父目录以及鼠标功能键路径。
+
+## 2026-07-27
+
+- 运行 planning session catchup，确认上一轮 `91be2371a` 已提交推送且当前工作树干净；活动计划仍为 `neovifm-ui-polish`。
+- 记录本轮用户验收失败：F3--F10 只见色块不见文字；左键只能改升降却缺少属性轮换；顶部标题行应替换为左右 pane 的可点击 Starship tab 条。
+- 下一步按 TDD 检查 OpenTUI 鼠标 button 事件、现有 FunctionKey/PaneColumns 渲染和 C workspace session 数据模型，先建立 RED 测试。
+- 首轮定位完成：80 列的 `compact` 分支主动隐藏了所有功能键 label；列标题 mouse handler 未区分左右键；顶层全局标题行可直接释放。继续确认 OpenTUI 右键常量与 core tab 数据模型。
+- 用户追加鼠标文件选择：左键定位单项，右键累积/取消批量 selection。已纳入同一 TDD 边界，计划以一个 core-owned 原子 command 实现。
+- 确认经典 Vifm 本身支持 per-pane tabs 与鼠标切换；Hybrid 路径将保持该语义，但不会把 `view_t` 暴露给 TypeScript。下一步读取精确 mouse button API、snapshot JSON 组装点和 session init/free，再写 RED。
+- 已确认右键常量/测试 API，并确定 core tab 最小模型：活动 snapshot 仍在 `session.left/right`，非活动 tab 保有完整 snapshot，激活时交换，从而保留每 tab 的 cursor/selection/sort。开始编写 C、协议、UI 文本帧和鼠标 RED 测试。
+- 用户锁定 tab 交互：`gt`/`gT` 保持 Vifm 语义；鼠标左键激活、右键关闭所指 tab；删除方向与 ACTIVE 文案并用小圆点标记活动 pane。
+- 用户新增状态路径交互：左键切换绝对路径/家目录缩写，右键复制当前展示文本。已确认该状态无需扩展 core，可由 TUI 展示 helper 与 host clipboard adapter 完成。
+- 本轮继续执行前重新读取 planning-with-files 与 TDD workflow，并运行 session catchup；源码基线仍为 `91be2371a`，现有未提交内容仅为活动计划文档。
+- 已读取当前 App/keymap/protocol/PTY 测试，确认下一步 RED 需要先移除旧 `LEFT ACTIVE`/`RIGHT`/尺寸断言，并新增 tab、路径、左右鼠标与功能键全文断言。
+- TDD RED 8 已建立：聚焦 Bun 测试 37 pass / 9 fail；失败精确覆盖 tab DTO、tab 鼠标、文件行鼠标、排序右键、路径 toggle/copy、ASCII 胶囊、活动圆点和 `gt/gT`。typecheck 同步因新接口尚不存在而失败，未发现无关回归。
+- TUI GREEN 第一阶段完成：协议解析新增最多 8 个 tab、唯一 ID/active 校验与旧 snapshot 回退；keymap 支持 `gt`/`gT`/计数；App 已实现 tab 条、活动圆点、文件行左右键、排序左右键、完整功能键胶囊及路径 toggle/copy callback。
+- 新增纯路径 helper 与跨平台 clipboard adapter；聚焦 58 tests 全通过，TypeScript typecheck 通过。下一步接 `index.tsx` 正式入口并与 C session tab 实现集成。
+- 正式入口 clipboard 注入完成 TDD：`index.test.ts` 先以 callback 未传入失败，随后 `main()` 通过可替换依赖向 App 注入无 shell clipboard service；10 tests 与 typecheck 通过。
+- TUI 全量 unit 101/101 通过；coverage 86.18% functions / 97.72% lines。`bun audit` 新报 transitive `brace-expansion <=5.0.7` 高危 DoS，已记录并待最小依赖 override 修复。
+- 审计阻塞已解除：`package.json` 将 transitive `glob` 约束到 11.1.0，lockfile 现解析为 `minimatch@10.2.5` / `brace-expansion@5.0.8`；`bun audit` 无漏洞，变更后 101 项 TUI 单测与 typecheck 继续通过。
+- 新增真实 renderer + C session 集成链路，覆盖鼠标新建/关闭 tab、`gt`/`2gt`、文件左键定位/右键累积选择，以及标题右键换字段、左键仅换升降序；等待 core 交接后运行。
+- 新增链路已 GREEN：`keyboard-session.test.tsx` 2/2 通过，真实 C session 已验证上述 tab、鼠标批选和排序契约；typecheck 同步通过。
+- 正式 PTY 首跑取得当前 80 列 ASCII 帧：tab 条和完整 `[F3 View]`--`[F10 Quit]` 均可见；旧测试因仍等待已删除的产品名/RIGHT 文案按预期失败。同步发现 compact 状态栏会隐藏 clipboard notice，已先补 RED。
+- compact clipboard feedback 已 GREEN；正式 PTY 随后验证 `j/Tab/l/h`、活动 tab 标题、路径 `~/right` toggle、假 `pbcopy` 捕获、F7 创建与 F10 退出，1/1 通过。
+- core 自审发现 action 执行期间切 tab 会让终态刷新错 tab，正在以提交时稳定 tab ID 定向刷新；同时新增 v3 schema 测试锁住 pane tabs 与 mouse/tab command 边界。
+- TUI 全量复验：103/103 unit 通过，coverage 85.97% functions / 97.72% lines，typecheck 通过，`bun audit` 无漏洞，`git diff --check` 通过。
+- 收口 Vifm count/兼容性：tab-cycle wire 上限从 tab 数 8 解耦为键位 count 999，focused C 9065 checks/54 tests 与真实 keyboard integration 2/2 通过；旧 core 上的 `select-entry` 现由 `pane-tabs-v1` gate 拦截。
+- 补充稳定 tab ID 定向刷新单测，明确非活动目标刷新不会切换当前 tab 或污染其 snapshot。
+- 最终 integration 首轮发现 `core-probe.test.tsx` 仍要求已删除的 `60x20` 顶部文案；实际 60 列 frame 已正确显示单 pane、tab 和两行完整功能键，现按新视觉契约更新回归断言。
+- 最终独立 review 的两项有效问题已按 RED/GREEN 修复：数字前缀不再吞掉后续普通 Vifm 键，显式 v3 tab id `0` 在 runtime 边界被拒绝。reviewer 关于左键点非当前字段应换字段的建议与用户定稿冲突，保持“左键只反转、右键才轮换”。
+- 最终验收完成：TUI 106/106 unit、85.97% functions / 97.73% lines、typecheck、`bun audit` 均通过；真实 C/PTY integration 7/7、focused C 9082 checks / 55 tests、串行 `make check`、schema JSON 与 `git diff --check` 均通过。
+- 复跑完整验收时发现 macOS 外部 shell/error-pipe 调度偶尔超过原测试 500ms 等待窗口，导致 `misc/running.c:selection_multi_run` 假失败；将测试辅助的 `wait_for_all_bg` 上限放宽到 5s（仅测试等待，不改产品后台语义），随后 `make -C tests misc` 与串行 `make check` 均通过。

@@ -43,7 +43,9 @@
                 "trigger": { "enum": ["initial", "command", "watch", "action"] },
                 "active_pane": { "enum": ["left", "right"] },
                 "left": { "$ref": "neovifm-core-v1.schema.json#/$defs/paneSnapshot" },
-                "right": { "$ref": "neovifm-core-v1.schema.json#/$defs/paneSnapshot" }
+                "right": { "$ref": "neovifm-core-v1.schema.json#/$defs/paneSnapshot" },
+                "left_tabs": { "$ref": "#/$defs/paneTabs" },
+                "right_tabs": { "$ref": "#/$defs/paneTabs" }
               }
             }
           }
@@ -155,6 +157,26 @@
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/actionTarget" }
     },
+    "paneTab": {
+      "type": "object",
+      "required": ["id", "cwd_display", "active"],
+      "properties": {
+        "id": { "$ref": "#/$defs/tabId" },
+        "cwd_display": { "type": "string", "maxLength": 16384 },
+        "active": { "type": "boolean" }
+      }
+    },
+    "tabId": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$",
+      "maxLength": 20
+    },
+    "paneTabs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/paneTab" }
+    },
     "sourceIdentity": {
       "properties": {
         "pane": { "enum": ["left", "right"] },
@@ -169,9 +191,14 @@
       "oneOf": [
         { "type": "object", "required": ["action", "pane"], "properties": { "action": { "const": "focus" }, "pane": { "enum": ["left", "right"] } } },
         { "type": "object", "required": ["action"], "properties": { "action": { "enum": ["focus-next", "enter", "parent", "toggle-selection", "refresh"] } } },
-        { "type": "object", "required": ["action", "delta"], "properties": { "action": { "enum": ["move", "sort-cycle"] }, "delta": { "enum": [-1, 1] } } },
+        { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "move" }, "delta": { "enum": [-1, 1] } } },
+        { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "sort-cycle" }, "pane": { "enum": ["left", "right"] }, "delta": { "enum": [-1, 1] } } },
         { "type": "object", "required": ["action", "target"], "properties": { "action": { "const": "move-to" }, "target": { "enum": ["first", "last"] } } },
         { "type": "object", "required": ["action", "pane", "key"], "properties": { "action": { "const": "sort-by" }, "pane": { "enum": ["left", "right"] }, "key": { "enum": ["name", "extension", "size", "ctime", "mtime", "mode", "type", "other"] } } },
+        { "type": "object", "required": ["action", "pane", "index", "toggle"], "properties": { "action": { "const": "select-entry" }, "pane": { "enum": ["left", "right"] }, "index": { "type": "integer", "minimum": 0, "maximum": 4095 }, "toggle": { "type": "boolean" } } },
+        { "type": "object", "required": ["action", "pane"], "properties": { "action": { "const": "new-tab" }, "pane": { "enum": ["left", "right"] } } },
+        { "type": "object", "required": ["action", "pane", "tab_id"], "properties": { "action": { "enum": ["activate-tab", "close-tab"] }, "pane": { "enum": ["left", "right"] }, "tab_id": { "$ref": "#/$defs/tabId" } } },
+        { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "tab-cycle" }, "delta": { "type": "integer", "minimum": -999, "maximum": 999, "not": { "const": 0 } } } },
         {
           "allOf": [
             { "$ref": "#/$defs/sourceIdentity" },

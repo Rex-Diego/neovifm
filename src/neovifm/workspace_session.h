@@ -15,6 +15,8 @@
 
 #define NV_SESSION_MAX_NAME_BYTES 255U
 #define NV_SESSION_MAX_ACTION_PATHS 64U
+#define NV_SESSION_MAX_TABS 8U
+#define NV_SESSION_MAX_TAB_CYCLE 999
 
 typedef enum
 {
@@ -39,6 +41,11 @@ typedef enum
 	NV_SESSION_MOVE_FILES,
 	NV_SESSION_MKDIR,
 	NV_SESSION_DELETE,
+	NV_SESSION_SELECT_ENTRY,
+	NV_SESSION_NEW_TAB,
+	NV_SESSION_ACTIVATE_TAB,
+	NV_SESSION_CLOSE_TAB,
+	NV_SESSION_TAB_CYCLE,
 } nv_session_command_kind_t;
 
 typedef struct
@@ -70,6 +77,10 @@ typedef struct
 	nv_session_action_target_t *action_targets;
 	size_t action_target_count;
 	int owns_action_fields;
+	int has_pane;
+	size_t entry_index;
+	int toggle_selection;
+	uint64_t tab_id;
 } nv_session_command_t;
 
 typedef struct
@@ -95,10 +106,26 @@ typedef struct
 
 typedef struct
 {
+	uint64_t id;
+	nv_pane_snapshot_t snapshot;
+} nv_session_tab_t;
+
+typedef struct
+{
+	nv_session_tab_t items[NV_SESSION_MAX_TABS];
+	size_t count;
+	size_t active;
+} nv_session_tabs_t;
+
+typedef struct
+{
 	nv_pane_snapshot_t left;
 	nv_pane_snapshot_t right;
 	nv_session_pane_t active_pane;
 	uint64_t next_snapshot_revision;
+	nv_session_tabs_t left_tabs;
+	nv_session_tabs_t right_tabs;
+	uint64_t next_tab_id;
 } nv_workspace_session_t;
 
 int nv_workspace_session_init(const char left_path[], const char right_path[],
@@ -111,9 +138,20 @@ int nv_workspace_session_prepare_action(const nv_workspace_session_t *session,
 void nv_session_prepared_action_free(nv_session_prepared_action_t *action);
 int nv_workspace_session_refresh_pane(nv_workspace_session_t *session,
 		nv_session_pane_t pane, nv_snapshot_error_t *error);
+int nv_workspace_session_refresh_tab(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
 const nv_pane_snapshot_t *nv_workspace_session_active(
 		const nv_workspace_session_t *session);
 const char *nv_workspace_session_active_name(const nv_workspace_session_t *session);
+size_t nv_workspace_session_tab_count(const nv_workspace_session_t *session,
+		nv_session_pane_t pane);
+size_t nv_workspace_session_active_tab_index(
+		const nv_workspace_session_t *session, nv_session_pane_t pane);
+uint64_t nv_workspace_session_tab_id(const nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t index);
+const nv_pane_snapshot_t *nv_workspace_session_tab_snapshot(
+		const nv_workspace_session_t *session, nv_session_pane_t pane,
+		size_t index);
 void nv_session_command_free(nv_session_command_t *command);
 void nv_workspace_session_free(nv_workspace_session_t *session);
 

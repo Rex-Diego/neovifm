@@ -23,7 +23,7 @@ static JSON_Value *snapshot_payload(const nv_pane_snapshot_t *snapshot);
 static JSON_Value *entry_value(const nv_pane_entry_t *entry);
 static char *hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
-		unsigned int sequence);
+		const char quaternary_capability[], unsigned int sequence);
 static char *error_json(unsigned int version, const nv_snapshot_error_t *error,
 		unsigned int sequence);
 static int snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot);
@@ -223,7 +223,7 @@ serialize_payload(const char type[], unsigned int version, unsigned int sequence
 static char *
 hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
-		unsigned int sequence)
+		const char quaternary_capability[], unsigned int sequence)
 {
 	JSON_Value *const payload_value = json_value_init_object();
 	JSON_Value *const capabilities_value = json_value_init_array();
@@ -244,6 +244,9 @@ hello_json(unsigned int version, const char capability[],
 			 JSONSuccess) ||
 			(tertiary_capability != NULL &&
 			 json_array_append_string(capabilities, tertiary_capability) !=
+			 JSONSuccess) ||
+			(quaternary_capability != NULL &&
+			 json_array_append_string(capabilities, quaternary_capability) !=
 			 JSONSuccess) ||
 			json_object_set_value(payload, "capabilities",
 					capabilities_value) != JSONSuccess)
@@ -266,19 +269,19 @@ hello_json(unsigned int version, const char capability[],
 char *
 nv_protocol_hello_json(unsigned int sequence)
 {
-	return hello_json(0U, "snapshot-v0", NULL, NULL, sequence);
+	return hello_json(0U, "snapshot-v0", NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_workspace_hello_json(unsigned int sequence)
 {
-	return hello_json(1U, "workspace-v1", NULL, NULL, sequence);
+	return hello_json(1U, "workspace-v1", NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_session_hello_json(unsigned int sequence)
 {
-	return hello_json(2U, "workspace-session-v2", NULL, NULL, sequence);
+	return hello_json(2U, "workspace-session-v2", NULL, NULL, NULL, sequence);
 }
 
 char *
@@ -286,10 +289,10 @@ nv_protocol_preview_session_hello_json(unsigned int sequence)
 {
 	#ifdef __APPLE__
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			"file-actions-v1", sequence);
+			"pane-tabs-v1", "file-actions-v1", sequence);
 	#else
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			NULL, sequence);
+			"pane-tabs-v1", NULL, sequence);
 	#endif
 }
 
@@ -744,6 +747,117 @@ nv_protocol_preview_session_snapshot_json(const nv_pane_snapshot_t *left,
 	nv_protocol_json_free(v2);
 	if(value == NULL || json_object_set_number(json_value_get_object(value),
 			"version", 3U) != JSONSuccess)
+	{
+		json_value_free(value);
+		return NV_PROTOCOL_JSON_ERROR;
+	}
+	const size_t size = json_serialization_size(value);
+	if(size == 0U || size - 1U > NV_PROTOCOL_MAX_RECORD_BYTES)
+	{
+		json_value_free(value);
+		return NV_PROTOCOL_JSON_TOO_LARGE;
+	}
+	*json = json_serialize_to_string(value);
+	json_value_free(value);
+	return *json == NULL ? NV_PROTOCOL_JSON_ERROR : NV_PROTOCOL_JSON_OK;
+}
+
+static int
+session_tabs_are_valid(const nv_workspace_session_t *session)
+{
+	for(nv_session_pane_t pane = NV_SESSION_LEFT; pane <= NV_SESSION_RIGHT; ++pane)
+	{
+		const size_t count = nv_workspace_session_tab_count(session, pane);
+		if(count == 0U || count > NV_SESSION_MAX_TABS ||
+				nv_workspace_session_active_tab_index(session, pane) >= count)
+		{
+			return 0;
+		}
+		for(size_t i = 0U; i < count; ++i)
+		{
+			const uint64_t id = nv_workspace_session_tab_id(session, pane, i);
+			const nv_pane_snapshot_t *const snapshot =
+				nv_workspace_session_tab_snapshot(session, pane, i);
+			if(id == 0U || snapshot == NULL || !string_fits(snapshot->cwd_display,
+					NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES)) return 0;
+			for(nv_session_pane_t other_pane = NV_SESSION_LEFT;
+					other_pane <= NV_SESSION_RIGHT; ++other_pane)
+			{
+				const size_t other_count = nv_workspace_session_tab_count(session,
+						other_pane);
+				for(size_t j = 0U; j < other_count; ++j)
+				{
+					if(other_pane == pane && j == i) continue;
+					if(nv_workspace_session_tab_id(session, other_pane, j) == id)
+						return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+
+static int
+set_session_tabs(JSON_Object *payload, const char field[],
+		const nv_workspace_session_t *session, nv_session_pane_t pane)
+{
+	JSON_Value *const array_value = json_value_init_array();
+	if(array_value == NULL) return JSONFailure;
+	JSON_Array *const array = json_value_get_array(array_value);
+	const size_t count = nv_workspace_session_tab_count(session, pane);
+	const size_t active = nv_workspace_session_active_tab_index(session, pane);
+	for(size_t i = 0U; i < count; ++i)
+	{
+		JSON_Value *const tab_value = json_value_init_object();
+		if(tab_value == NULL)
+		{
+			json_value_free(array_value);
+			return JSONFailure;
+		}
+		JSON_Object *const tab = json_value_get_object(tab_value);
+		const nv_pane_snapshot_t *const snapshot =
+			nv_workspace_session_tab_snapshot(session, pane, i);
+		if(set_u64_string(tab, "id", nv_workspace_session_tab_id(session, pane,
+				i)) != JSONSuccess || json_object_set_string(tab, "cwd_display",
+					snapshot->cwd_display) != JSONSuccess ||
+				json_object_set_boolean(tab, "active", i == active) != JSONSuccess ||
+				json_array_append_value(array, tab_value) != JSONSuccess)
+		{
+			if(json_value_get_parent(tab_value) == NULL) json_value_free(tab_value);
+			json_value_free(array_value);
+			return JSONFailure;
+		}
+	}
+	if(json_object_set_value(payload, field, array_value) != JSONSuccess)
+	{
+		if(json_value_get_parent(array_value) == NULL) json_value_free(array_value);
+		return JSONFailure;
+	}
+	return JSONSuccess;
+}
+
+nv_protocol_json_result_t
+nv_protocol_preview_workspace_session_snapshot_json(
+		const nv_workspace_session_t *session, unsigned int output_sequence,
+		unsigned int request_sequence, const char trigger[], char **json)
+{
+	if(json != NULL) *json = NULL;
+	if(session == NULL || json == NULL || !session_tabs_are_valid(session))
+		return NV_PROTOCOL_JSON_ERROR;
+	char *base = NULL;
+	const nv_protocol_json_result_t result =
+		nv_protocol_preview_session_snapshot_json(&session->left, &session->right,
+				nv_workspace_session_active_name(session), output_sequence,
+				request_sequence, trigger, &base);
+	if(result != NV_PROTOCOL_JSON_OK) return result;
+	JSON_Value *const value = json_parse_string(base);
+	nv_protocol_json_free(base);
+	JSON_Object *const root = value == NULL ? NULL : json_value_get_object(value);
+	JSON_Object *const payload = root == NULL ? NULL :
+		json_object_get_object(root, "payload");
+	if(payload == NULL || set_session_tabs(payload, "left_tabs", session,
+			NV_SESSION_LEFT) != JSONSuccess || set_session_tabs(payload, "right_tabs",
+			session, NV_SESSION_RIGHT) != JSONSuccess)
 	{
 		json_value_free(value);
 		return NV_PROTOCOL_JSON_ERROR;

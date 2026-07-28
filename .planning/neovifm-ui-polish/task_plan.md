@@ -21,6 +21,20 @@ Phase 7：范围收敛与 Vifm 原生能力复用
 - [x] 宽终端显示 btop 式 Name/Permissions/Size/Created/Modified 标题；空间不足时只显示当前可轮换字段，避免挤掉文件名。
 - [x] 运行真实 PTY、TUI integration、typecheck 与完整回归，确认 `h/l` 和全部排序字段真实生效。
 
+## 追加修复（2026-07-27）
+
+- [x] 先用文本帧与鼠标测试复现 F3--F10 文字不可见，固定前景/背景对比，并改为 Starship 圆角胶囊样式。
+- [x] 重定义列标题鼠标契约：左键只切换当前字段升降序；右键在 Size、Created、Modified、Permissions 等重要字段间轮换。
+- [x] 删除顶端 `NeoVifm`/终端尺寸占用行，把高度用于左右 pane 各自的 Starship 风格 tab 条。
+- [x] 实现可新建、可点击激活的真实 pane tab 状态；切换由 core 发布新的不可变 workspace，不在 UI 伪造目录状态。
+- [x] 文件行支持鼠标选择：左键原子设置 pane/cursor；右键原子设置 cursor 并 toggle selection，连续右键形成供 F5/F6/F8 使用的批量集合。
+- [x] pane tab 使用真实 core 状态：鼠标左键激活、右键关闭所指 tab、末尾加号克隆当前 tab；仅剩一个 tab 时按 Vifm 语义拒绝关闭。
+- [x] tab 键盘语义保持 Vifm 一致：`gt`/`gT` 前后切换并支持计数；`Space`/`Tab` 仍只切换 pane，不新增自定义 tab 快捷键。
+- [x] 移除可见 `LEFT`/`RIGHT`/`ACTIVE`，活动 pane 改用 `●`（ASCII 为 `*`）；tab 与功能键统一使用 Starship 胶囊样式。
+- [x] 状态栏路径左键在根目录绝对路径与 `~` 家目录路径间切换，右键复制当前显示模式下的完整路径；复制失败必须显式反馈。
+- [x] 覆盖 60/80/100/160 列、ASCII fallback、左右键鼠标事件、真实 C session 与正式 PTY，完成 coverage/typecheck/audit/full regression。
+- **状态：** completed
+
 ## 阶段
 
 ### Phase 1：复现问题与定义 UI 契约
@@ -122,3 +136,23 @@ Phase 7：范围收敛与 Vifm 原生能力复用
 | C action test 缺少 `NV_SESSION_COPY/MOVE_FILES/MKDIR/DELETE` | RED 7 | 预期失败；接入 core-owned 文件动作与安全的 no-overwrite filesystem adapter |
 | 直接复用完整 `io/ior` 导致最小 core probe 链接缺少 I/O 依赖 | GREEN 细化 | 将 headless 文件动作收敛到已有 `compat/neovifm_fs`，保持 probe/session 的小型依赖闭包 |
 | 真实 PTY 中 Unicode cursor marker 在单列单元内不可见 | 视觉验收 | 改用稳定单宽 `>`/`*` marker，Nerd Font 只用于文件类型图标 |
+| 本轮 TUI RED 共 9 项失败，typecheck 缺少 tabs/path/keymap 接口 | RED 8 | 预期失败；实现 v3 tab DTO、Vifm `gt/gT`、鼠标分流、路径服务和 Starship 胶囊 |
+| `bun audit` 报 `brace-expansion <=5.0.7` 高危 DoS | 验证 8 | 定位到 `babel-plugin-module-resolver -> glob@9 -> minimatch@8`；将 `glob` override 升至 11.1.0，解析到 `brace-expansion@5.0.8`，重跑 audit 无漏洞且 101 项 TUI 单测/typecheck 通过 |
+| 对不存在的 exec cell 调用 `wait` | 验证 9 | 工具调用失误且未影响进程；改用 agent mailbox/status 查询，不再轮询伪造 cell id |
+| integration 导入 `MouseButtons` 主包失败 | RED 9 | 测试 helper 实际由 `@opentui/core/testing` 导出；修正导入后重跑，产品运行时仍使用主包 `MouseButton` 枚举 |
+| 新 integration 连续发出两次右键选择后等待超时 | RED 10 | 前一 command 尚未被 core snapshot 确认就复用旧 renderable；逐次等待 selection_count 并重取下一行，验证真实串行交互 |
+| 合并两文件 patch 时遗漏/写错文件边界 | 编辑 1 | 两次 patch 校验失败且均未修改文件；按合法 `Update File` 边界重试成功 |
+| 多次误用 `wait` 查询 agent，且 reviewer 首次 spawn 参数冲突 | 编排 1 | 均未修改工作树；改用 `list_agents`，reviewer 以无历史 fork 加完整范围说明启动 |
+| 正式 PTY 仍等待已删除的 `NeoVifm`/`RIGHT` 而超时 | RED 11 | 预期契约已过期；以实际 ASCII 帧改断言为 pane tab 活动标志、完整功能键文案与真实路径交互 |
+| 80 列 compact 状态栏隐藏 clipboard notice | RED 12 | 新增成功/失败反馈文本帧测试；让 notice 在紧凑布局也优先可见 |
+| PTY 用 `right-file` 同步 Tab 时误匹配上一帧 | RED 13 | 文件名在非活动栏本就可见；改为等待 Tab 重绘后，以 `l` 成功进入并出现 `inside` 证明激活链路 |
+| PTY 修复 patch 再次漏写第二文件边界 | 编辑 2 | 校验失败且未改文件；补齐 `Update File` 后重试 |
+| PTY 固定断言 `*[1 right]` 未命中 | 验证 10 | PTY 输出使用 ANSI 增量重绘，tab 文本不是稳定同步条件；改为等待稳定路径/复制结果，并由 core session integration 覆盖 tab/cwd 语义 |
+| compact notice 末尾渲染重复 `` | RED 14 | notice 已自行收口，compact 默认收口仅在没有 detail 时渲染；新增文本帧回归 |
+| 并行运行长测试时未保留 yielded session id | 验证 11 | 进程已正常结束但首次截断输出缺退出码；用 pipefail + tail 分别重跑并取得明确 exit 0 |
+| 80 列、8 个长 tab 时 `+` 被布局到 x=245 | RED 15 | 3 个以上仅活动 tab 保留短目录提示，其余用稳定编号胶囊；保证全部 8 个 tab 和 `+` 留在 pane 内 |
+| keymap 支持 `999gT`，但 wire/core 将 delta 错限为 8 | RED 16 | tab 数量上限与 Vifm count 上限分离；以 999 为输入边界并在 core 内按实际 tab 数取模 |
+| 旧 v3 core 缺少新鼠标命令但 UI 仍发送 `select-entry` | RED 17 | 将行选择与同批 `pane-tabs-v1` capability 绑定；旧 core 只显示 unavailable，不污染 command stream |
+| 新 C 回归使 `session.c` 超过 STIC 800 行硬限制 | 验证 12 | 不压缩/删除断言；将定向 tab 刷新测试拆到独立 `session_tabs.c` fixture |
+| 全量 integration 仍断言已删除的 `60x20` 顶部尺寸文案 | 验证 13 | 更新真实 core compact-layout 契约：要求 F3/F10 完整文字、无全局标题/尺寸且只显示活动 pane |
+| 最终 reviewer 发现数字 count 会吞掉后续普通键、runtime 接受 tab id `0` | RED 18 | 先补失败测试；非 `gt/gT` count 不再阻断后续单键，显式 v3 tab ID 改为正十进制且最多 20 位 |

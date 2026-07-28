@@ -25,6 +25,16 @@
 
 #define NV_SESSION_MAX_COMMAND_BYTES (16U*1024U)
 
+typedef struct
+{
+	int active;
+	nv_session_pane_t source_pane;
+	uint64_t source_tab_id;
+	int has_destination;
+	nv_session_pane_t destination_pane;
+	uint64_t destination_tab_id;
+} nv_pending_action_context_t;
+
 static int write_line(const char json[]);
 static int write_workspace(const nv_workspace_session_t *session,
 		unsigned int output_sequence, unsigned int command_sequence,
@@ -40,7 +50,8 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
-		nv_action_queue_t *action_queue);
+		nv_action_queue_t *action_queue,
+		nv_pending_action_context_t *pending_action);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
 static int drain_preview_events(nv_preview_queue_t *queue,
@@ -48,7 +59,8 @@ static int drain_preview_events(nv_preview_queue_t *queue,
 static int drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
-		uint64_t *preview_generation);
+		uint64_t *preview_generation,
+		nv_pending_action_context_t *pending_action);
 static int command_is_action(nv_session_command_kind_t kind);
 
 #ifdef __APPLE__
@@ -105,9 +117,9 @@ write_workspace(const nv_workspace_session_t *session, unsigned int output_seque
 		unsigned int command_sequence, const char trigger[])
 {
 	char *json = NULL;
-	const nv_protocol_json_result_t result = nv_protocol_preview_session_snapshot_json(
-			&session->left, &session->right, nv_workspace_session_active_name(session),
-			output_sequence, command_sequence, trigger, &json);
+	const nv_protocol_json_result_t result =
+		nv_protocol_preview_workspace_session_snapshot_json(session, output_sequence,
+				command_sequence, trigger, &json);
 	if(result != NV_PROTOCOL_JSON_OK)
 	{
 		fputs("neovifm-core-session: failed to serialize workspace\n", stderr);
@@ -344,6 +356,17 @@ parse_command(const char line[], unsigned int previous_sequence,
 		}
 		command->kind = NV_SESSION_SORT_CYCLE;
 		command->delta = (int)delta;
+		JSON_Value *const pane_value = json_object_get_value(payload, "pane");
+		if(pane_value != NULL)
+		{
+			if(json_value_get_type(pane_value) != JSONString || pane_from_string(
+					json_value_get_string(pane_value), &command->pane) != 0)
+			{
+				json_value_free(value);
+				return -1;
+			}
+			command->has_pane = 1;
+		}
 	}
 	else if(strcmp(action, "sort-by") == 0)
 	{
@@ -356,6 +379,61 @@ parse_command(const char line[], unsigned int previous_sequence,
 			json_value_free(value);
 			return -1;
 		}
+	}
+	else if(strcmp(action, "select-entry") == 0)
+	{
+		JSON_Value *const index_value = json_object_get_value(payload, "index");
+		const double index = json_value_get_number(index_value);
+		JSON_Value *const toggle = json_object_get_value(payload, "toggle");
+		if(pane_from_string(json_object_get_string(payload, "pane"),
+				&command->pane) != 0 ||
+				json_value_get_type(index_value) != JSONNumber || index < 0.0 ||
+				index > (double)(NV_PANE_SNAPSHOT_MAX_ENTRIES - 1U) ||
+				index != (double)(size_t)index ||
+				json_value_get_type(toggle) != JSONBoolean)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_SELECT_ENTRY;
+		command->entry_index = (size_t)index;
+		command->toggle_selection = json_value_get_boolean(toggle);
+	}
+	else if(strcmp(action, "new-tab") == 0)
+	{
+		command->kind = NV_SESSION_NEW_TAB;
+		if(pane_from_string(json_object_get_string(payload, "pane"),
+				&command->pane) != 0)
+		{
+			json_value_free(value);
+			return -1;
+		}
+	}
+	else if(strcmp(action, "activate-tab") == 0 ||
+			strcmp(action, "close-tab") == 0)
+	{
+		command->kind = strcmp(action, "activate-tab") == 0 ?
+			NV_SESSION_ACTIVATE_TAB : NV_SESSION_CLOSE_TAB;
+		if(pane_from_string(json_object_get_string(payload, "pane"),
+				&command->pane) != 0 || parse_u64_field(payload, "tab_id",
+					&command->tab_id) != 0 || command->tab_id == 0U)
+		{
+			json_value_free(value);
+			return -1;
+		}
+	}
+	else if(strcmp(action, "tab-cycle") == 0)
+	{
+		const double delta = json_object_get_number(payload, "delta");
+		if(delta == 0.0 || delta < -(double)NV_SESSION_MAX_TAB_CYCLE ||
+				delta > (double)NV_SESSION_MAX_TAB_CYCLE ||
+				delta != (double)(int)delta)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_TAB_CYCLE;
+		command->delta = (int)delta;
 	}
 	else if(strcmp(action, "copy") == 0 || strcmp(action, "move-files") == 0 ||
 			strcmp(action, "delete") == 0)
@@ -410,17 +488,52 @@ command_is_action(nv_session_command_kind_t kind)
 		kind == NV_SESSION_MKDIR || kind == NV_SESSION_DELETE;
 }
 
+static nv_pending_action_context_t
+pending_action_context(const nv_workspace_session_t *session,
+		const nv_session_command_t *command)
+{
+	const size_t source_index = nv_workspace_session_active_tab_index(session,
+			command->pane);
+	nv_pending_action_context_t context = {
+		.active = 1,
+		.source_pane = command->pane,
+		.source_tab_id = nv_workspace_session_tab_id(session, command->pane,
+				source_index),
+	};
+	if(command->kind == NV_SESSION_COPY || command->kind == NV_SESSION_MOVE_FILES)
+	{
+		context.has_destination = 1;
+		context.destination_pane = command->pane == NV_SESSION_LEFT ?
+			NV_SESSION_RIGHT : NV_SESSION_LEFT;
+		const size_t destination_index = nv_workspace_session_active_tab_index(session,
+				context.destination_pane);
+		context.destination_tab_id = nv_workspace_session_tab_id(session,
+				context.destination_pane, destination_index);
+	}
+	return context;
+}
+
 static int
 process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
-		nv_action_queue_t *action_queue)
+		nv_action_queue_t *action_queue,
+		nv_pending_action_context_t *pending_action)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
 	unsigned int next_sequence = *command_sequence + 1U;
 	nv_snapshot_error_t error = {};
+	const int had_cwd_stat[] = {
+		session->left.has_cwd_stat, session->right.has_cwd_stat,
+	};
+	const uint64_t cwd_device[] = {
+		session->left.cwd_device, session->right.cwd_device,
+	};
+	const uint64_t cwd_inode[] = {
+		session->left.cwd_inode, session->right.cwd_inode,
+	};
 	if(directory_changed != NULL) *directory_changed = 0;
 	if(length == line_capacity - 1U && line[length - 1U] != '\n')
 	{
@@ -444,9 +557,12 @@ process_command_line(nv_workspace_session_t *session, char line[],
 			else if(nv_workspace_session_prepare_action(session, &command, &action,
 					&error) == 0)
 			{
+				const nv_pending_action_context_t context =
+					pending_action_context(session, &command);
 				if(nv_action_queue_submit(action_queue, &action, next_sequence,
 						NULL) == 0)
 				{
+					*pending_action = context;
 					*command_sequence = next_sequence;
 					const int result = write_workspace(session,
 							(*output_sequence)++, *command_sequence, "command");
@@ -468,10 +584,21 @@ process_command_line(nv_workspace_session_t *session, char line[],
 		else if(nv_workspace_session_apply(session, &command, &error) == 0)
 		{
 			*command_sequence = next_sequence;
-			if(directory_changed != NULL &&
-					(command.kind == NV_SESSION_ENTER || command.kind == NV_SESSION_PARENT))
+			if(directory_changed != NULL)
 			{
-				*directory_changed = 1;
+				for(nv_session_pane_t pane = NV_SESSION_LEFT;
+						pane <= NV_SESSION_RIGHT; ++pane)
+				{
+					const nv_pane_snapshot_t *const snapshot = pane == NV_SESSION_LEFT ?
+						&session->left : &session->right;
+					if(snapshot->has_cwd_stat != had_cwd_stat[pane] ||
+							(snapshot->has_cwd_stat &&
+							 (snapshot->cwd_device != cwd_device[pane] ||
+							  snapshot->cwd_inode != cwd_inode[pane])))
+					{
+						*directory_changed |= 1 << pane;
+					}
+				}
 			}
 			const int result = write_workspace(session, (*output_sequence)++,
 					*command_sequence, "command");
@@ -552,10 +679,25 @@ action_terminal(nv_action_task_state_t state)
 }
 
 static int
+refresh_action_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
+		uint64_t tab_id, nv_snapshot_error_t *error)
+{
+	if(nv_workspace_session_refresh_tab(session, pane, tab_id, error) == 0)
+		return 0;
+	if(error->code != NULL && strcmp(error->code, "invalid-tab") == 0)
+	{
+		nv_snapshot_error_free(error);
+		return 0;
+	}
+	return -1;
+}
+
+static int
 drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
-		uint64_t *preview_generation)
+		uint64_t *preview_generation,
+		nv_pending_action_context_t *pending_action)
 {
 	if(queue == NULL) return 0;
 	if(nv_action_queue_failed(queue))
@@ -574,11 +716,28 @@ drain_action_events(nv_action_queue_t *queue,
 		if(action_terminal(event.state))
 		{
 			nv_snapshot_error_t error = {};
-			refresh_failed = nv_workspace_session_refresh_pane(session, NV_SESSION_LEFT,
-					&error) != 0 || nv_workspace_session_refresh_pane(session,
-					NV_SESSION_RIGHT, &error) != 0 ||
-					write_workspace(session, (*output_sequence)++, command_sequence,
-						"action") != 0;
+			if(pending_action != NULL && pending_action->active)
+			{
+				refresh_failed = refresh_action_tab(session,
+						pending_action->source_pane, pending_action->source_tab_id,
+						&error) != 0;
+				if(!refresh_failed && pending_action->has_destination)
+				{
+					refresh_failed = refresh_action_tab(session,
+							pending_action->destination_pane,
+							pending_action->destination_tab_id, &error) != 0;
+				}
+				*pending_action = (nv_pending_action_context_t){};
+			}
+			else
+			{
+				refresh_failed = nv_workspace_session_refresh_pane(session,
+						NV_SESSION_LEFT, &error) != 0 ||
+					nv_workspace_session_refresh_pane(session, NV_SESSION_RIGHT,
+							&error) != 0;
+			}
+			if(!refresh_failed && write_workspace(session, (*output_sequence)++,
+					command_sequence, "action") != 0) refresh_failed = 1;
 			if(refresh_failed)
 			{
 				fprintf(stderr, "neovifm-core-session: action refresh failed: %s\n",
@@ -839,6 +998,7 @@ main(int argc, char *argv[])
 	char line[NV_SESSION_MAX_COMMAND_BYTES + 2U];
 	unsigned int output_sequence = 2U;
 	unsigned int command_sequence = 0U;
+	nv_pending_action_context_t pending_action = {};
 	int result = 0;
 #ifdef __APPLE__
 	nv_session_watcher_t watcher = {};
@@ -859,7 +1019,8 @@ main(int argc, char *argv[])
 				break;
 			}
 			if(drain_action_events(action_queue, &session, &output_sequence,
-					command_sequence, preview_queue, &preview_generation) != 0)
+					command_sequence, preview_queue, &preview_generation,
+					&pending_action) != 0)
 			{
 				result = 1;
 				break;
@@ -869,17 +1030,22 @@ main(int argc, char *argv[])
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, &directory_changed, preview_queue,
-					&preview_generation, action_queue) != 0)
+					&preview_generation, action_queue, &pending_action) != 0)
 			{
 				result = 1;
 				break;
 			}
-			if(directory_changed && watcher_open_pane(&watcher, &session,
-					session.active_pane) != 0)
+			for(nv_session_pane_t pane = NV_SESSION_LEFT; directory_changed != 0 &&
+					pane <= NV_SESSION_RIGHT; ++pane)
 			{
-				fprintf(stderr, "neovifm-core-session: %s pane watcher disabled: %s\n",
-						pane_name(session.active_pane), strerror(errno));
-				watcher_stop_pane(&watcher, session.active_pane);
+				if((directory_changed & (1 << pane)) == 0) continue;
+				if(watcher_open_pane(&watcher, &session, pane) != 0)
+				{
+					fprintf(stderr,
+							"neovifm-core-session: %s pane watcher disabled: %s\n",
+							pane_name(pane), strerror(errno));
+					watcher_stop_pane(&watcher, pane);
+				}
 			}
 		}
 		watcher_free(&watcher);
@@ -900,7 +1066,8 @@ main(int argc, char *argv[])
 #endif
 		if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
 				drain_action_events(action_queue, &session, &output_sequence,
-						command_sequence, preview_queue, &preview_generation) != 0)
+						command_sequence, preview_queue, &preview_generation,
+						&pending_action) != 0)
 		{
 			result = 1;
 			break;
@@ -909,7 +1076,7 @@ main(int argc, char *argv[])
 		if(fgets(line, sizeof(line), stdin) == NULL) break;
 		if(process_command_line(&session, line, sizeof(line), &output_sequence,
 				&command_sequence, NULL, preview_queue, &preview_generation,
-				action_queue) != 0)
+				action_queue, &pending_action) != 0)
 		{
 			result = 1;
 			break;
@@ -917,7 +1084,8 @@ main(int argc, char *argv[])
 	}
 	nv_action_queue_cancel_all(action_queue);
 	if(drain_action_events(action_queue, &session, &output_sequence,
-			command_sequence, preview_queue, &preview_generation) != 0) result = 1;
+			command_sequence, preview_queue, &preview_generation,
+			&pending_action) != 0) result = 1;
 	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
 	nv_snapshot_error_free(&error);
 	nv_action_queue_free(action_queue);
