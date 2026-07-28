@@ -380,6 +380,27 @@ test("routes regular-file Enter through the core open resolver when advertised",
   })
 })
 
+test("routes an archive Enter through the core resource command", async () => {
+  let sent: unknown
+  const archiveWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: {
+      ...workspace.left,
+      entries: [{ ...workspace.left.entries[0]!, name_display: "bundle.zip", resource_kind: "archive" }],
+    },
+  }
+  setup = await testRender(() => <App
+    workspace={archiveWorkspace}
+    capabilities={[...capabilities, "open-v1"]}
+    onCommand={(command) => { sent = command }}
+    onOpen={() => { throw new Error("archive must not use the platform opener") }}
+  />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  setup.mockInput.pressKey("l")
+  await setup.renderOnce()
+  expect(sent).toEqual({ action: "enter" })
+})
+
 test("opens a loading viewer instead of rendering a stale preview from another pane or cursor identity", async () => {
   const staleWorkspace: WorkspaceSnapshotPayload = {
     ...workspace,

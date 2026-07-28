@@ -35,6 +35,12 @@ typedef enum
 
 typedef enum
 {
+	NV_ENTRY_RESOURCE_NONE,
+	NV_ENTRY_RESOURCE_ARCHIVE,
+} nv_entry_resource_kind_t;
+
+typedef enum
+{
 	NV_SORT_NAME,
 	NV_SORT_EXTENSION,
 	NV_SORT_SIZE,
@@ -54,6 +60,7 @@ typedef struct
 	char *owner_display;
 	char *group_display;
 	nv_entry_kind_t kind;
+	nv_entry_resource_kind_t resource_kind;
 	uint64_t size_bytes;
 	int64_t mtime_unix_ms;
 	uint64_t device;

@@ -72,6 +72,12 @@ entry_kind_name(nv_entry_kind_t kind)
 	return "unknown";
 }
 
+static const char *
+entry_resource_kind_name(nv_entry_resource_kind_t kind)
+{
+	return kind == NV_ENTRY_RESOURCE_ARCHIVE ? "archive" : NULL;
+}
+
 static int
 string_fits(const char value[], size_t maximum)
 {
@@ -116,6 +122,8 @@ static int
 entry_model_is_valid(const nv_pane_entry_t *entry)
 {
 	return entry != NULL &&
+		(entry->resource_kind == NV_ENTRY_RESOURCE_NONE ||
+		 entry->resource_kind == NV_ENTRY_RESOURCE_ARCHIVE) &&
 		string_fits(entry->name_display, NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES) &&
 		hex_string_is_valid(entry->name_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) &&
 		string_fits(entry->path_display, NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES) &&
@@ -617,13 +625,16 @@ entry_value(const nv_pane_entry_t *entry)
 			json_object_set_string(object, "path_bytes_hex",
 					entry->path_bytes_hex) != JSONSuccess ||
 			json_object_set_string(object, "kind", entry_kind_name(entry->kind)) !=
-			JSONSuccess ||
+				JSONSuccess ||
 			set_u64_string(object, "size_bytes", entry->size_bytes) != JSONSuccess ||
 			set_i64_string(object, "mtime_unix_ms", entry->mtime_unix_ms) !=
 			JSONSuccess ||
 			json_object_set_boolean(object, "selected", entry->selected) !=
 			JSONSuccess ||
 			json_object_set_boolean(object, "hidden", entry->hidden) != JSONSuccess ||
+			(entry->resource_kind != NV_ENTRY_RESOURCE_NONE &&
+			 json_object_set_string(object, "resource_kind",
+					entry_resource_kind_name(entry->resource_kind)) != JSONSuccess) ||
 			set_optional_stat(object, entry) != JSONSuccess)
 	{
 		json_value_free(value);

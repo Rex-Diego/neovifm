@@ -85,6 +85,7 @@
             "unknown"
           ]
         },
+        "resource_kind": { "enum": ["archive"] },
         "size_bytes": { "$ref": "#/$defs/unsignedDecimalString", "maxLength": 32 },
         "mtime_unix_ms": { "$ref": "#/$defs/decimalString", "maxLength": 32 },
         "device": { "$ref": "#/$defs/unsignedDecimalString", "maxLength": 32 },

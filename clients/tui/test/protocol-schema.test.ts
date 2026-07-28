@@ -54,6 +54,11 @@ test("schema resource bounds match the TypeScript protocol boundary", () => {
   expect(objectValue(payloadProperties.entries).maxItems).toBe(MAX_SNAPSHOT_ENTRIES)
 })
 
+test("schema exposes the additive archive resource marker", () => {
+  const entry = objectValue(objectValue(definitions.entry))
+  expect(objectValue(entry.properties).resource_kind).toEqual({ enum: ["archive"] })
+})
+
 test("schema declares the cursor invariant enforced at the runtime boundary", () => {
   expect(snapshot.$comment).toBe(
     "cursor is -1 exactly when entry_count is 0; otherwise 0 <= cursor < entry_count",

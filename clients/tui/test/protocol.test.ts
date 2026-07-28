@@ -87,6 +87,22 @@ describe("JSONL protocol", () => {
     })).toThrow("owner_display")
   })
 
+  test("accepts an additive archive resource marker", () => {
+    const record = parseProtocolRecord({
+      protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1,
+      payload: {
+        cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
+        cursor: 0, entry_count: 1, entries: [{
+          name_display: "bundle.zip", name_bytes_hex: "62756e646c652e7a6970", path_display: "/tmp/bundle.zip", path_bytes_hex: "2f746d702f62756e646c652e7a6970",
+          kind: "file", resource_kind: "archive", size_bytes: "1", mtime_unix_ms: "0",
+          selected: false, hidden: false,
+        }],
+      },
+    })
+    if (record.type !== "snapshot") throw new Error("expected snapshot")
+    expect(record.payload.entries[0]).toMatchObject({ resource_kind: "archive" })
+  })
+
   test("requires an explicit v2 snapshot trigger and preserves watch updates", () => {
     const pane = {
       cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",

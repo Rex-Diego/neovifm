@@ -860,7 +860,16 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 			}
 			return 0;
 		case NV_SESSION_ENTER:
-			if(snapshot->cursor < 0 || snapshot->entries[snapshot->cursor].kind != NV_ENTRY_DIRECTORY)
+			if(snapshot->cursor < 0)
+			{
+				return set_error(error, "empty-pane", "cannot enter an empty pane");
+			}
+			if(snapshot->entries[snapshot->cursor].resource_kind == NV_ENTRY_RESOURCE_ARCHIVE)
+			{
+				return set_error(error, "archive-mount-unavailable",
+						"archive resource mounting is unavailable");
+			}
+			if(snapshot->entries[snapshot->cursor].kind != NV_ENTRY_DIRECTORY)
 			{
 				return set_error(error, "not-directory", "current entry is not a directory");
 			}

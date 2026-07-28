@@ -78,7 +78,7 @@
 - [x] 增加 bounded caller-supplied `filetype/filextype/fileviewer` rule resolver：有序 glob、argv tokenizer、`%f/%c/%%` 宏和 shell-syntax 拒绝；并在无显式 association 时有界读取 `MYVIFMRC`，显式 argv 仍优先。
 - [ ] 复用 Vifm running/background 的 cwd、前后台、终端暂停/恢复、退出码和错误处理语义；GUI opener 不阻塞 UI，terminal program 必须有显式 suspend/restore 生命周期，失败在状态栏/任务事件中可见。
 - [ ] 所有目标、宏和外部程序在 core 边界校验：open target identity、NUL、记录大小、结构化 argv 和有界 `MYVIFMRC` 读取已完成；仍需补齐完整 MIME/宏集合、配置语义、终端生命周期和敏感远程参数审查。
-- [x] 先写 resolver/argv RED tests，覆盖显式规则优先、macOS fallback、未知文件、空格/引号、shell syntax、宏边界、open target stale identity 和真实 core session；archive 优先进入、缺失 opener 和 helper 生命周期仍待补齐。
+- [x] 先写 resolver/argv RED tests，覆盖显式规则优先、macOS fallback、未知文件、空格/引号、shell syntax、宏边界、open target stale identity 和真实 core session；archive 已通过 additive resource marker 进入 core `enter` intent，缺失 mounter 的结构化错误和 helper 生命周期仍待补齐。
 - **阶段验收：** 同一份 Vifm 配置在 classic 与 OpenTUI 中得到可解释的一致关联；macOS 普通未知文件默认交给系统应用，F3/Space/F4/目录/archive 不被误路由；形成一个独立提交。
 - **状态：** in_progress（已完成结构化平台 opener、bounded rule resolver、`MYVIFMRC` 有界加载、App `l`/Enter 注入和 stale target identity；完整 MIME/宏/候选语义、running/background 生命周期、archive/remote capability 和完整阶段验收仍待完成）。
 

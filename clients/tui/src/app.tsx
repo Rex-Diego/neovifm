@@ -1199,7 +1199,7 @@ export function App(props: AppProps) {
     if (result.kind === "command" && result.command.action === "focus-next") {
       setQuickPreviewOpen(false)
     }
-    if (result.command.action === "enter" && currentEntry()?.kind !== "directory") {
+    if (result.command.action === "enter" && currentEntry()?.kind !== "directory" && currentEntry()?.resource_kind !== "archive") {
       if (props.onOpen !== undefined) openCurrentFile()
       else dispatchFunction("view")
       return

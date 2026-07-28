@@ -132,6 +132,12 @@
 - This is intentionally a listing preview, not a mounted directory. It does not write archives, change pane cwd/tabs, or expose helper shell syntax; Phase 4 still needs the Vifm FUSE/sshfs-compatible enter/mount lifecycle.
 - RED/GREEN evidence: the protocol archive fixture failed before the new kind was implemented; after implementation the protocol suite/typecheck passed, core snapshot passed 9364 checks / 72 tests, real integration passed 12 tests / 79 expects, full TUI coverage passed 129 tests / 464 expects at 86.72% functions and 97.18% lines, audit passed, serial `env -u VIFM -u MYVIFMRC make check` passed, and schema/diff checks passed.
 
+## 2026-07-28 Archive enter intent boundary
+
+- Added additive `resource_kind: "archive"` to immutable C snapshots for regular archive files. OpenTUI no longer sends an archive to the platform opener on `l`/Enter; it sends the core-owned `enter` command.
+- Until a validated mounter lifecycle is available, core acknowledges that command with `archive-mount-unavailable`. This is an explicit safe boundary, not a claim that ZIP is already mounted; F3/Space listing preview remains available.
+- RED/GREEN evidence: protocol and app tests first failed to preserve the marker and route `l`; after implementation focused protocol/schema/UI tests passed, the real ZIP session verified the marker and structured error, and C snapshot tests passed 9364 checks / 72 tests.
+
 ## 2026-07-28 Narrow Space viewer fallback
 
 - RED/GREEN evidence: a new 60-column app test first observed `SPACE QUICK VIEW`; the narrow Space path now renders the same full-screen `F3 VIEW` component while retaining the opposite-pane preview identity and close behavior. Focused test and typecheck pass.

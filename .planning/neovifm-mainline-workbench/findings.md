@@ -117,3 +117,9 @@
 - Archive listing is a safe intermediate capability before mounting: the core classifies common archive suffixes and the preview lane returns member names without changing the pane's directory model.
 - Helper execution is shell-free and bounded. ZIP uses `unzip -Z1` when available; tar-family formats use `bsdtar -tf` or `tar -tf`. Missing helpers and non-zero exits remain structured preview failures.
 - The listing deliberately does not claim Phase 4 completion. ZIP/SSH enter, mount ownership, copy-out from a mounted resource, unmount cleanup, and helper capability reporting still require a separate resource lifecycle.
+
+## 2026-07-28 Archive enter intent boundary
+
+- Snapshot entries now carry an additive `resource_kind: "archive"` marker so the client does not infer archive behavior from display names or duplicate the extension map.
+- `l`/Enter routes that marker to the core resource command. Until a mounter is installed and lifecycle code exists, the core returns `archive-mount-unavailable`; platform `open` is intentionally not used for archives.
+- This narrows the safety boundary but leaves actual ZIP mounting, tab/history integration and cleanup in Phase 4.

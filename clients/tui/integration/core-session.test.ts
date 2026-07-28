@@ -198,11 +198,17 @@ test("real v3 session previews a ZIP archive as a bounded listing", async () => 
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
     const archiveIndex = state.workspace.left.entries.findIndex((entry) => entry.name_display === "bundle.zip")
     expect(archiveIndex).toBeGreaterThanOrEqual(0)
+    expect(state.workspace.left.entries[archiveIndex]).toMatchObject({ resource_kind: "archive" })
     expect(await session.send({ action: "select-entry", pane: "left", index: archiveIndex, toggle: false })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.kind === "archive" && state.preview.content?.includes("note.txt") === true)
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive preview")
     expect(state.preview).toMatchObject({ kind: "archive", state: "done", truncated: false })
     expect(state.preview?.content).toContain("note.txt")
+    const enterCommandSequence = state.commandSequence + 1
+    expect(await session.send({ action: "enter" })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandError?.code === "archive-mount-unavailable" && state.commandSequence === enterCommandSequence)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive enter acknowledgement")
+    expect(state.workspace.left.cwd_display).toBe(left)
     expect(errors).toEqual([])
   } finally {
     session.close()

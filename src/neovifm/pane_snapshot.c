@@ -9,6 +9,7 @@
 
 #include "pane_snapshot.h"
 
+#include <ctype.h> /* tolower() */
 #include <sys/stat.h> /* S_* struct stat */
 
 #include <errno.h> /* E* errno */
@@ -43,6 +44,8 @@ static void entry_free(nv_pane_entry_t *entry);
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		int os_error, const char path[]);
 static char *identity_display(uint64_t id, int group);
+static nv_entry_resource_kind_t entry_resource_kind(const char name[],
+		nv_entry_kind_t kind);
 
 enum
 {
@@ -307,6 +310,37 @@ entry_kind(const struct stat *st)
 	return NV_ENTRY_UNKNOWN;
 }
 
+static int
+has_suffix_ci(const char name[], const char suffix[])
+{
+	const size_t name_length = strlen(name);
+	const size_t suffix_length = strlen(suffix);
+	if(name_length < suffix_length) return 0;
+	for(size_t i = 0U; i < suffix_length; ++i)
+	{
+		if(tolower((unsigned char)name[name_length - suffix_length + i]) !=
+				tolower((unsigned char)suffix[i])) return 0;
+	}
+	return 1;
+}
+
+static nv_entry_resource_kind_t
+entry_resource_kind(const char name[], nv_entry_kind_t kind)
+{
+	if(kind != NV_ENTRY_FILE && kind != NV_ENTRY_EXECUTABLE)
+		return NV_ENTRY_RESOURCE_NONE;
+	static const char *const archive_suffixes[] = {
+		".zip", ".tar", ".tgz", ".tar.gz", ".tbz", ".tbz2",
+		".tar.bz2", ".txz", ".tar.xz", ".7z", ".rar", ".jar",
+	};
+	for(size_t i = 0U; i < sizeof(archive_suffixes)/sizeof(archive_suffixes[0]); ++i)
+	{
+		if(has_suffix_ci(name, archive_suffixes[i]))
+			return NV_ENTRY_RESOURCE_ARCHIVE;
+	}
+	return NV_ENTRY_RESOURCE_NONE;
+}
+
 static char *
 identity_display(uint64_t id, int group)
 {
@@ -417,6 +451,7 @@ build_entry(nv_dir_t *dir, const char directory[], const char name[],
 	if(nv_dir_lstat(dir, name, &st, &is_symlink) == 0)
 	{
 		set_stat(entry, &st, is_symlink);
+		entry->resource_kind = entry_resource_kind(name, entry->kind);
 		if(entry->owner_display == NULL || entry->group_display == NULL)
 		{
 			free(raw_path);

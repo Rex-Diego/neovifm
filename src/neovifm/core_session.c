@@ -1178,6 +1178,10 @@ validate_open_identity(const nv_workspace_session_t *session,
 		{
 			return set_error(error, "stale-open", "open entry changed");
 		}
+		if(entry->resource_kind == NV_ENTRY_RESOURCE_ARCHIVE)
+		{
+			return set_error(error, "enter-required", "archive resources must be entered");
+		}
 		if(entry->kind == NV_ENTRY_DIRECTORY)
 		{
 			return set_error(error, "enter-required", "directories must be entered");

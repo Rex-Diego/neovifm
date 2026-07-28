@@ -42,6 +42,8 @@ export type EntryKind =
   | "block-device"
   | "unknown"
 
+export type EntryResourceKind = "archive"
+
 export interface StatError {
   readonly code: number
   readonly message: string
@@ -53,6 +55,7 @@ export interface SnapshotEntry {
   readonly path_display: string
   readonly path_bytes_hex: string
   readonly kind: EntryKind
+  readonly resource_kind?: EntryResourceKind
   readonly size_bytes: string
   readonly mtime_unix_ms: string
   readonly device?: string
@@ -396,6 +399,13 @@ function parseEntryKind(value: unknown, path: string): EntryKind {
   return kind as EntryKind
 }
 
+function parseEntryResourceKind(value: unknown, path: string): EntryResourceKind | undefined {
+  if (value === undefined) return undefined
+  const resource = stringValue(value, path)
+  if (resource !== "archive") return invalid(path, "is not a supported resource kind")
+  return resource
+}
+
 function parseStatError(value: unknown, path: string): StatError | undefined {
   if (value === undefined) {
     return undefined
@@ -416,6 +426,7 @@ function parseEntry(value: unknown, path: string): SnapshotEntry {
   const attributes = optionalPatternString(object, "attributes_hex", path, ATTRIBUTES_PATTERN)
   const owner = optionalDisplayString(object, "owner_display", path, MAX_OWNER_GROUP_BYTES)
   const group = optionalDisplayString(object, "group_display", path, MAX_OWNER_GROUP_BYTES)
+  const resourceKind = parseEntryResourceKind(object.resource_kind, `${path}.resource_kind`)
   const statError = parseStatError(object.stat_error, `${path}.stat_error`)
 
   return frozen({
@@ -424,6 +435,7 @@ function parseEntry(value: unknown, path: string): SnapshotEntry {
     path_display: displayString(object.path_display, `${path}.path_display`),
     path_bytes_hex: patternString(object.path_bytes_hex, `${path}.path_bytes_hex`, HEX_PATTERN),
     kind: parseEntryKind(object.kind, `${path}.kind`),
+    ...(resourceKind === undefined ? {} : { resource_kind: resourceKind }),
     size_bytes: patternString(
       object.size_bytes,
       `${path}.size_bytes`,
