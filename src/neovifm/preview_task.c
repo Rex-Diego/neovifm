@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -84,6 +85,8 @@ static int preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static void sanitize_preview_text(char content[], size_t length);
@@ -154,7 +157,8 @@ request_valid(const nv_preview_request_t *request)
 			 request->kind == NV_PREVIEW_KIND_MARKDOWN ||
 			 request->kind == NV_PREVIEW_KIND_PDF ||
 			 request->kind == NV_PREVIEW_KIND_DIRECTORY ||
-			 request->kind == NV_PREVIEW_KIND_ARCHIVE) &&
+			 request->kind == NV_PREVIEW_KIND_ARCHIVE ||
+			 request->kind == NV_PREVIEW_KIND_BINARY) &&
 			request->max_bytes != 0U && request->max_bytes <= NV_PREVIEW_MAX_BYTES &&
 			request->timeout_ms != 0U && request->timeout_ms <= NV_PREVIEW_MAX_TIMEOUT_MS &&
 			hex_decode(request->cwd_bytes_hex, &cwd) == 0 &&
@@ -524,6 +528,115 @@ preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 	return 0;
 }
 
+static int
+preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const int fd = open(task->path, O_RDONLY | O_NONBLOCK);
+	if(fd < 0)
+	{
+		*error_code = "preview-open-failed";
+		*os_error = errno;
+		return -1;
+	}
+	struct stat st;
+	if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode))
+	{
+		*error_code = "preview-not-regular-file";
+		*os_error = errno;
+		close(fd);
+		return -1;
+	}
+	char *const result = malloc(task->request.max_bytes + 1U);
+	if(result == NULL)
+	{
+		*error_code = "preview-out-of-memory";
+		close(fd);
+		return -1;
+	}
+	size_t used = 0U;
+	size_t offset = 0U;
+	for(;;)
+	{
+		if(task_cancelled(queue, task))
+		{
+			free(result);
+			close(fd);
+			return 1;
+		}
+		if(task_expired(task))
+		{
+			*error_code = "preview-timeout";
+			free(result);
+			close(fd);
+			return -1;
+		}
+		unsigned char bytes[16];
+		const ssize_t read_count = read(fd, bytes, sizeof(bytes));
+		if(read_count < 0)
+		{
+			if(errno == EINTR) continue;
+			*error_code = "preview-read-failed";
+			*os_error = errno;
+			free(result);
+			close(fd);
+			return -1;
+		}
+		if(read_count == 0) break;
+		char line[128];
+		size_t line_length = (size_t)snprintf(line, sizeof(line), "%08zx  ", offset);
+		if(line_length >= sizeof(line))
+		{
+			*error_code = "preview-format-failed";
+			free(result);
+			close(fd);
+			return -1;
+		}
+		for(size_t i = 0U; i < 16U; ++i)
+		{
+			const int written = snprintf(line + line_length, sizeof(line) - line_length,
+					i < (size_t)read_count ? "%02x " : "   ",
+				i < (size_t)read_count ? bytes[i] : 0U);
+			if(written < 0 || (size_t)written >= sizeof(line) - line_length)
+			{
+				*error_code = "preview-format-failed";
+				free(result);
+				close(fd);
+				return -1;
+			}
+			line_length += (size_t)written;
+		}
+		if(line_length + 2U >= sizeof(line))
+		{
+			*error_code = "preview-format-failed";
+			free(result);
+			close(fd);
+			return -1;
+		}
+		line[line_length++] = ' ';
+		line[line_length++] = '|';
+		for(size_t i = 0U; i < (size_t)read_count; ++i)
+		{
+			const unsigned char value = bytes[i];
+			line[line_length++] = value >= 0x20U && value <= 0x7eU ? (char)value : '.';
+		}
+		line[line_length++] = '|';
+		line[line_length++] = '\n';
+		if(line_length > task->request.max_bytes - used)
+		{
+			*truncated = 1;
+			break;
+		}
+		memcpy(result + used, line, line_length);
+		used += line_length;
+		offset += (size_t)read_count;
+	}
+	close(fd);
+	result[used] = '\0';
+	*content = result;
+	return 0;
+}
+
 #ifndef _WIN32
 extern char **environ;
 
@@ -790,6 +903,8 @@ preview_worker(void *data)
 				preview_directory(queue, task, &content, &truncated, &error_code, &os_error) :
 			 task->request.kind == NV_PREVIEW_KIND_ARCHIVE ?
 				preview_archive(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_BINARY ?
+				preview_binary(queue, task, &content, &truncated, &error_code, &os_error) :
 			 task->request.kind == NV_PREVIEW_KIND_PDF ?
 				preview_pdf(queue, task, &content, &truncated, &error_code, &os_error) :
 				preview_text(queue, task, &content, &truncated, &error_code, &os_error));

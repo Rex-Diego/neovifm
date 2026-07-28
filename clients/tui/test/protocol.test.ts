@@ -213,6 +213,14 @@ describe("JSONL protocol", () => {
         content: "note.txt\n", truncated: false,
       },
     })
+    const binary = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 8,
+      payload: {
+        task_id: "46", generation: "11", pane: "left", target_pane: "left", kind: "binary", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f7061796c6f61642e62696e",
+        content: "00000000  00 01 02 0f  |....|\n", truncated: false,
+      },
+    })
     const actionTask = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "action-task", sequence: 4,
       payload: {
@@ -229,6 +237,7 @@ describe("JSONL protocol", () => {
     expect(archive).toMatchObject({ type: "preview", payload: { kind: "archive" } })
     if (archive.type !== "preview") throw new Error("expected archive preview")
     expect(archive.payload.content).toContain("note.txt")
+    expect(binary).toMatchObject({ type: "preview", payload: { kind: "binary", content: expect.stringContaining("00000000") } })
     expect(Object.isFrozen(preview)).toBe(true)
     expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true } })
     expect(() => parseProtocolRecord({

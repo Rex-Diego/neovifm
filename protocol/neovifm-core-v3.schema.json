@@ -61,7 +61,7 @@
         "generation": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
         "pane": { "enum": ["left", "right"] },
         "target_pane": { "enum": ["left", "right"] },
-        "kind": { "enum": ["text", "markdown", "pdf", "directory", "archive"] },
+        "kind": { "enum": ["text", "markdown", "pdf", "directory", "archive", "binary"] },
         "state": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
         "cwd_bytes_hex": { "$ref": "neovifm-core-v0.schema.json#/$defs/hexBytes" },
         "path_bytes_hex": { "$ref": "neovifm-core-v0.schema.json#/$defs/hexBytes" },

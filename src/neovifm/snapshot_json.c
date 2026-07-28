@@ -328,7 +328,8 @@ preview_kind_name(nv_preview_kind_t kind)
 		kind == NV_PREVIEW_KIND_MARKDOWN ? "markdown" :
 		kind == NV_PREVIEW_KIND_PDF ? "pdf" :
 		kind == NV_PREVIEW_KIND_DIRECTORY ? "directory" :
-		kind == NV_PREVIEW_KIND_ARCHIVE ? "archive" : NULL;
+		kind == NV_PREVIEW_KIND_ARCHIVE ? "archive" :
+		kind == NV_PREVIEW_KIND_BINARY ? "binary" : NULL;
 }
 
 static const char *

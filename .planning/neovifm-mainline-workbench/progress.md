@@ -138,6 +138,12 @@
 - Until a validated mounter lifecycle is available, core acknowledges that command with `archive-mount-unavailable`. This is an explicit safe boundary, not a claim that ZIP is already mounted; F3/Space listing preview remains available.
 - RED/GREEN evidence: protocol and app tests first failed to preserve the marker and route `l`; after implementation focused protocol/schema/UI tests passed, the real ZIP session verified the marker and structured error, and C snapshot tests passed 9364 checks / 72 tests.
 
+## 2026-07-28 Binary hex preview fallback
+
+- Added additive preview kind `binary`. Core classifies a bounded list of common binary suffixes and renders fixed-width 16-byte hex/ascii rows in the existing preview worker.
+- The fallback uses direct bounded reads with cancellation/deadline checks; it does not invoke a shell or external viewer, and truncation remains explicit in the preview event.
+- RED/GREEN evidence: the real binary session first timed out because core emitted no binary preview; after implementation the protocol/schema fixture, C build, and real binary integration passed.
+
 ## 2026-07-28 Narrow Space viewer fallback
 
 - RED/GREEN evidence: a new 60-column app test first observed `SPACE QUICK VIEW`; the narrow Space path now renders the same full-screen `F3 VIEW` component while retaining the opposite-pane preview identity and close behavior. Focused test and typecheck pass.

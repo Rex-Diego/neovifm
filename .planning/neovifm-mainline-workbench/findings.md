@@ -123,3 +123,8 @@
 - Snapshot entries now carry an additive `resource_kind: "archive"` marker so the client does not infer archive behavior from display names or duplicate the extension map.
 - `l`/Enter routes that marker to the core resource command. Until a mounter is installed and lifecycle code exists, the core returns `archive-mount-unavailable`; platform `open` is intentionally not used for archives.
 - This narrows the safety boundary but leaves actual ZIP mounting, tab/history integration and cleanup in Phase 4.
+
+## 2026-07-28 Binary hex preview fallback
+
+- Common binary suffixes now have a core-owned `binary` preview kind and a readable bounded hex/ascii representation. Unknown extensions still use the existing text path until content sniffing is introduced deliberately.
+- Generated output is ASCII-only and bounded by the normal preview byte cap, so NULs and invalid UTF-8 never reach the terminal renderer as raw file content.

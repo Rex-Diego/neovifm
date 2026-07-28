@@ -181,4 +181,5 @@ test("v3 preview schema exposes bounded archive listings", () => {
   const taskPayload = objectValue(previewSessionDefinitions.taskPayload)
   const kind = objectValue(objectValue(taskPayload.properties).kind)
   expect(kind.enum).toContain("archive")
+  expect(kind.enum).toContain("binary")
 })

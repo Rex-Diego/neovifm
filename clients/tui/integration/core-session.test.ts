@@ -216,6 +216,35 @@ test("real v3 session previews a ZIP archive as a bounded listing", async () => 
   }
 }, { timeout: 30000 })
 
+test("real v3 session renders a binary file as a bounded hex listing", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-binary-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-binary-right-"))
+  const binaryPath = resolve(left, "payload.bin")
+  await writeFile(binaryPath, Uint8Array.from([0, 1, 2, 15, 16, 31, 32, 65, 127, 255]))
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.kind === "binary" && state.preview.content?.includes("00000000") === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected binary preview")
+    expect(state.preview).toMatchObject({ kind: "binary", state: "done", truncated: false })
+    expect(state.preview?.content).toContain("00 01 02 0f 10 1f 20 41 7f ff")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
 test("real v3 session resolves a core-owned open command into a structured result", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")

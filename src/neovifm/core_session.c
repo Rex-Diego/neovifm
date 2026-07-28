@@ -1245,6 +1245,14 @@ preview_kind_for_entry(nv_entry_kind_t kind, const char name[])
 		{
 			if(has_suffix_ci(name, archive_suffixes[i])) return NV_PREVIEW_KIND_ARCHIVE;
 		}
+		static const char *const binary_suffixes[] = {
+			".bin", ".dat", ".o", ".a", ".so", ".dylib", ".dll", ".exe",
+			".class", ".wasm", ".pyc", ".pyo",
+		};
+		for(size_t i = 0U; i < sizeof(binary_suffixes)/sizeof(binary_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, binary_suffixes[i])) return NV_PREVIEW_KIND_BINARY;
+		}
 		static const char *const markdown_suffixes[] = {
 			".md", ".markdown", ".mdown", ".mkdn", ".mdwn",
 		};

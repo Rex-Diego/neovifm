@@ -129,7 +129,7 @@ export interface CommandErrorPayload extends ErrorPayload {
   readonly command_sequence: number
 }
 
-export type PreviewKind = "text" | "markdown" | "pdf" | "directory" | "archive"
+export type PreviewKind = "text" | "markdown" | "pdf" | "directory" | "archive" | "binary"
 export type PreviewTaskState = "queued" | "running" | "done" | "failed" | "cancelled"
 
 export interface PreviewTaskPayload {
@@ -651,7 +651,7 @@ function parseCommandErrorPayload(value: unknown): CommandErrorPayload {
 
 function parsePreviewKind(value: unknown, path: string): PreviewKind {
   const kind = stringValue(value, path)
-  if (kind !== "text" && kind !== "markdown" && kind !== "pdf" && kind !== "directory" && kind !== "archive") return invalid(path, "must be text, markdown, pdf, directory, or archive")
+  if (kind !== "text" && kind !== "markdown" && kind !== "pdf" && kind !== "directory" && kind !== "archive" && kind !== "binary") return invalid(path, "must be text, markdown, pdf, directory, archive, or binary")
   return kind
 }
 

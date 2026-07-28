@@ -30,6 +30,7 @@ typedef enum
 	NV_PREVIEW_KIND_PDF,
 	NV_PREVIEW_KIND_DIRECTORY,
 	NV_PREVIEW_KIND_ARCHIVE,
+	NV_PREVIEW_KIND_BINARY,
 } nv_preview_kind_t;
 
 typedef enum
