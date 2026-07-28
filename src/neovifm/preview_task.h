@@ -29,6 +29,7 @@ typedef enum
 	NV_PREVIEW_KIND_MARKDOWN,
 	NV_PREVIEW_KIND_PDF,
 	NV_PREVIEW_KIND_DIRECTORY,
+	NV_PREVIEW_KIND_ARCHIVE,
 } nv_preview_kind_t;
 
 typedef enum

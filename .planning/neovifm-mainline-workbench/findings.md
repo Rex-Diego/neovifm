@@ -111,3 +111,9 @@
 - `retry-action` submits that retained prepared action to the same bounded FIFO worker. The worker repeats directory and target validation, so a stale or replaced source fails safely and an existing destination remains a visible `destination-exists` failure rather than being overwritten.
 - Only copy, move and delete terminal failures/cancellations are retryable in this slice. `mkdir` is excluded because its undo/redo semantics are separately bridged and a blind retry would create a different name/resource.
 - Retained actions are capped at 64 per core session. The UI can clear its current history view, but core owns the retry retention and frees evicted identities; no cross-restart persistence or daemon is introduced.
+
+## 2026-07-28 Archive listing preview
+
+- Archive listing is a safe intermediate capability before mounting: the core classifies common archive suffixes and the preview lane returns member names without changing the pane's directory model.
+- Helper execution is shell-free and bounded. ZIP uses `unzip -Z1` when available; tar-family formats use `bsdtar -tf` or `tar -tf`. Missing helpers and non-zero exits remain structured preview failures.
+- The listing deliberately does not claim Phase 4 completion. ZIP/SSH enter, mount ownership, copy-out from a mounted resource, unmount cleanup, and helper capability reporting still require a separate resource lifecycle.

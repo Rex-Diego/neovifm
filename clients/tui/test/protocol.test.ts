@@ -189,6 +189,14 @@ describe("JSONL protocol", () => {
         content: "PDF page", truncated: false,
       },
     })
+    const archive = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 7,
+      payload: {
+        task_id: "45", generation: "10", pane: "left", target_pane: "left", kind: "archive", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f62756e646c652e7a6970",
+        content: "note.txt\n", truncated: false,
+      },
+    })
     const actionTask = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "action-task", sequence: 4,
       payload: {
@@ -202,6 +210,9 @@ describe("JSONL protocol", () => {
     expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", target_pane: "right", truncated: false } })
     expect(markdown).toMatchObject({ type: "preview", payload: { kind: "markdown", content: "# heading" } })
     expect(pdf).toMatchObject({ type: "preview", payload: { kind: "pdf", content: "PDF page" } })
+    expect(archive).toMatchObject({ type: "preview", payload: { kind: "archive" } })
+    if (archive.type !== "preview") throw new Error("expected archive preview")
+    expect(archive.payload.content).toContain("note.txt")
     expect(Object.isFrozen(preview)).toBe(true)
     expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true } })
     expect(() => parseProtocolRecord({

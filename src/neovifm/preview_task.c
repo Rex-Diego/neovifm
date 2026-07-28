@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -81,6 +82,8 @@ static int preview_text(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static void sanitize_preview_text(char content[], size_t length);
@@ -150,7 +153,8 @@ request_valid(const nv_preview_request_t *request)
 			(request->kind == NV_PREVIEW_KIND_TEXT ||
 			 request->kind == NV_PREVIEW_KIND_MARKDOWN ||
 			 request->kind == NV_PREVIEW_KIND_PDF ||
-			 request->kind == NV_PREVIEW_KIND_DIRECTORY) &&
+			 request->kind == NV_PREVIEW_KIND_DIRECTORY ||
+			 request->kind == NV_PREVIEW_KIND_ARCHIVE) &&
 			request->max_bytes != 0U && request->max_bytes <= NV_PREVIEW_MAX_BYTES &&
 			request->timeout_ms != 0U && request->timeout_ms <= NV_PREVIEW_MAX_TIMEOUT_MS &&
 			hex_decode(request->cwd_bytes_hex, &cwd) == 0 &&
@@ -524,24 +528,10 @@ preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 extern char **environ;
 
 static int
-preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		const char helper[], char *const argv[], char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
-	const char *helper = NULL;
-	static const char *const candidates[] = {
-		"/usr/local/bin/pdftotext", "/opt/homebrew/bin/pdftotext",
-		"/usr/bin/pdftotext",
-	};
-	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
-	{
-		if(access(candidates[i], X_OK) == 0) { helper = candidates[i]; break; }
-	}
-	if(helper == NULL)
-	{
-		*error_code = "preview-helper-unavailable";
-		*os_error = ENOENT;
-		return -1;
-	}
 	int output_pipe[2];
 	if(pipe(output_pipe) != 0)
 	{
@@ -560,9 +550,6 @@ preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		*os_error = errno;
 		return -1;
 	}
-	char *const argv[] = {
-		(char *)helper, "-f", "1", "-l", "1", task->path, "-", NULL,
-	};
 	pid_t child = 0;
 	const int spawned = posix_spawn(&child, helper, &actions, NULL, argv, environ);
 	(void)posix_spawn_file_actions_destroy(&actions);
@@ -662,9 +649,105 @@ preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 	*content = result;
 	return 0;
 }
+
+static int
+preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const char *helper = NULL;
+	static const char *const candidates[] = {
+		"/usr/local/bin/pdftotext", "/opt/homebrew/bin/pdftotext",
+		"/usr/bin/pdftotext",
+	};
+	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
+	{
+		if(access(candidates[i], X_OK) == 0) { helper = candidates[i]; break; }
+	}
+	if(helper == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	char *const argv[] = {
+		(char *)helper, "-f", "1", "-l", "1", task->path, "-", NULL,
+	};
+	return preview_external(queue, task, helper, argv, content, truncated,
+			error_code, os_error);
+}
+
+static int
+archive_path_is_zip(const char path[])
+{
+	const size_t length = path == NULL ? 0U : strlen(path);
+	if(length < 4U) return 0;
+	const char *const suffix = path + length - 4U;
+	return tolower((unsigned char)suffix[0]) == '.' &&
+		tolower((unsigned char)suffix[1]) == 'z' &&
+		tolower((unsigned char)suffix[2]) == 'i' &&
+		tolower((unsigned char)suffix[3]) == 'p';
+}
+
+static int
+preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const char *helper = NULL;
+	const char *first = NULL;
+	const char *second = NULL;
+	const char *const *common = NULL;
+	if(archive_path_is_zip(task->path))
+	{
+		first = "/usr/local/bin/unzip";
+		second = "/opt/homebrew/bin/unzip";
+		static const char *const zip_common[] = {
+			"/usr/bin/unzip", "/bin/unzip", "/usr/bin/bsdtar", "/bin/bsdtar",
+		};
+		common = zip_common;
+	}
+	else
+	{
+		first = "/usr/local/bin/bsdtar";
+		second = "/opt/homebrew/bin/bsdtar";
+		static const char *const tar_common[] = {
+			"/usr/bin/bsdtar", "/usr/bin/tar", "/bin/bsdtar", "/bin/tar",
+		};
+		common = tar_common;
+	}
+	const char *const candidates[] = { first, second, common[0], common[1], common[2], common[3] };
+	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
+	{
+		if(access(candidates[i], X_OK) == 0)
+		{
+			helper = candidates[i];
+			break;
+		}
+	}
+	if(helper == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	char *argv[4] = { (char *)helper, NULL, task->path, NULL };
+	argv[1] = archive_path_is_zip(task->path) && strstr(helper, "unzip") != NULL
+		? "-Z1" : "-tf";
+	return preview_external(queue, task, helper, argv, content, truncated,
+			error_code, os_error);
+}
 #else
 static int
 preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	(void)queue; (void)task; (void)content; (void)truncated;
+	*error_code = "preview-helper-unavailable";
+	*os_error = ENOSYS;
+	return -1;
+}
+
+static int
+preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
 	(void)queue; (void)task; (void)content; (void)truncated;
@@ -705,6 +788,8 @@ preview_worker(void *data)
 		int outcome = task->cancelled ? 1 :
 			(task->request.kind == NV_PREVIEW_KIND_DIRECTORY ?
 				preview_directory(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_ARCHIVE ?
+				preview_archive(queue, task, &content, &truncated, &error_code, &os_error) :
 			 task->request.kind == NV_PREVIEW_KIND_PDF ?
 				preview_pdf(queue, task, &content, &truncated, &error_code, &os_error) :
 				preview_text(queue, task, &content, &truncated, &error_code, &os_error));

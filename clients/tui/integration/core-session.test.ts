@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -165,6 +165,50 @@ test("real v3 session routes an explicit source preview into the opposite render
     await session.completion
   }
 }, { timeout: 15000 })
+
+test("real v3 session previews a ZIP archive as a bounded listing", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  if (process.platform !== "darwin") return
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-archive-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-archive-right-"))
+  const archiveSource = resolve(left, "archive-source")
+  const archivePath = resolve(left, "bundle.zip")
+  await mkdir(archiveSource)
+  await writeFile(resolve(archiveSource, "note.txt"), "archive content")
+  const zip = Bun.spawn({
+    cmd: ["/usr/bin/zip", "-q", archivePath, "note.txt"],
+    cwd: archiveSource,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  expect(await zip.exited).toBe(0)
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "bundle.zip"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
+    const archiveIndex = state.workspace.left.entries.findIndex((entry) => entry.name_display === "bundle.zip")
+    expect(archiveIndex).toBeGreaterThanOrEqual(0)
+    expect(await session.send({ action: "select-entry", pane: "left", index: archiveIndex, toggle: false })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.kind === "archive" && state.preview.content?.includes("note.txt") === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive preview")
+    expect(state.preview).toMatchObject({ kind: "archive", state: "done", truncated: false })
+    expect(state.preview?.content).toContain("note.txt")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
 
 test("real v3 session resolves a core-owned open command into a structured result", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION

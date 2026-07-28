@@ -138,7 +138,8 @@
 - [ ] 明确主线语义：F3 是全屏“查看”，Space 是双栏快速查看；`l` 对普通文件进入查看路径，对目录/archive/remote 则执行 enter；不得把 classic quickview 的第三栏布局与 OpenTUI 临时渲染层混为一套 UI。
 - [x] 第一批切片：纯文本、Markdown 终端渲染、PDF 首页文本抽取；当前仍未接入 Vifm fileviewer 优先级。
 - [ ] 第一批剩余：代码高亮、PDF 图形/首页渲染、图片。
-- [ ] 第二批：视频首帧、音频 metadata/封面、archive listing、二进制/hex fallback。
+- [x] 第二批首个切片：archive listing 通过受限 `unzip -Z1`/`bsdtar -tf` 以结构化 argv 输出有界只读清单；仍不写回 archive、不改变 pane cwd。
+- [ ] 第二批剩余：视频首帧、音频 metadata/封面、二进制/hex fallback。
 - [ ] 图片能力顺序由终端 capability 决定：可用协议渲染、`chafa` 降级、纯文本 metadata 最终降级；无 Nerd Font/低色彩仍可读。
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
 - [ ] 所有外部 viewer 使用结构化 argv、明确 cwd、超时、输出上限、取消和清理，不执行 display path，不拼接未验证 shell 输入。

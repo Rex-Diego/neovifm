@@ -1233,6 +1233,14 @@ preview_kind_for_entry(nv_entry_kind_t kind, const char name[])
 	if(kind == NV_ENTRY_DIRECTORY) return NV_PREVIEW_KIND_DIRECTORY;
 	if(kind == NV_ENTRY_FILE || kind == NV_ENTRY_EXECUTABLE)
 	{
+		static const char *const archive_suffixes[] = {
+			".zip", ".tar", ".tgz", ".tar.gz", ".tbz", ".tbz2",
+			".tar.bz2", ".txz", ".tar.xz", ".7z", ".rar", ".jar",
+		};
+		for(size_t i = 0U; i < sizeof(archive_suffixes)/sizeof(archive_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, archive_suffixes[i])) return NV_PREVIEW_KIND_ARCHIVE;
+		}
 		static const char *const markdown_suffixes[] = {
 			".md", ".markdown", ".mdown", ".mkdn", ".mdwn",
 		};

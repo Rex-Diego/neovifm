@@ -171,3 +171,9 @@ test("v3 file actions require snapshot identities instead of display paths", () 
   const actionTask = objectValue(previewSessionDefinitions.actionTaskPayload)
   expect(actionTask.required).toEqual(["task_id", "command_sequence", "pane", "action", "state", "completed_count", "total_count", "partial"])
 })
+
+test("v3 preview schema exposes bounded archive listings", () => {
+  const taskPayload = objectValue(previewSessionDefinitions.taskPayload)
+  const kind = objectValue(objectValue(taskPayload.properties).kind)
+  expect(kind.enum).toContain("archive")
+})
