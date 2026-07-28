@@ -40,6 +40,7 @@ typedef struct nv_pending_action_context_t
 	uint64_t destination_tab_id;
 	char *undo_path;
 	nv_fs_identity_t undo_parent_identity;
+	nv_session_prepared_action_t undo_action;
 	nv_session_prepared_action_t retry_action;
 	int retry_available;
 	struct nv_pending_action_context_t *next;
@@ -135,6 +136,10 @@ static nv_pending_action_context_t *find_retry_context(
 		nv_pending_action_context_t *contexts, uint64_t task_id);
 static void trim_retry_history(nv_pending_action_context_t **contexts,
 		size_t *retry_history_count);
+static int clone_prepared_action(const nv_session_prepared_action_t *source,
+		nv_session_prepared_action_t *destination);
+static int record_action_undo(const nv_pending_action_context_t *context,
+		nv_action_task_state_t state);
 
 #ifdef __APPLE__
 typedef struct
@@ -760,14 +765,60 @@ join_action_path(const char directory[], const char name[])
 	return path;
 }
 
-static nv_pending_action_context_t
-pending_action_context(const nv_workspace_session_t *session,
+static int
+clone_prepared_action(const nv_session_prepared_action_t *source,
+		nv_session_prepared_action_t *destination)
+{
+	if(source == NULL || destination == NULL) return -1;
+	*destination = (nv_session_prepared_action_t){
+		.kind = source->kind,
+		.pane = source->pane,
+		.source_directory_identity = source->source_directory_identity,
+		.destination_directory_identity = source->destination_directory_identity,
+		.target_count = source->target_count,
+	};
+	destination->source_directory = source->source_directory == NULL ? NULL :
+		strdup(source->source_directory);
+	destination->destination_directory = source->destination_directory == NULL ? NULL :
+		strdup(source->destination_directory);
+	destination->name = source->name == NULL ? NULL : strdup(source->name);
+	if((source->source_directory != NULL && destination->source_directory == NULL) ||
+			(source->destination_directory != NULL && destination->destination_directory == NULL) ||
+			(source->name != NULL && destination->name == NULL))
+		goto failed;
+	if(source->target_count != 0U)
+	{
+		destination->targets = calloc(source->target_count, sizeof(*destination->targets));
+		if(destination->targets == NULL) goto failed;
+		for(size_t i = 0U; i < source->target_count; ++i)
+		{
+			destination->targets[i].identity = source->targets[i].identity;
+			destination->targets[i].kind = source->targets[i].kind;
+			destination->targets[i].path = source->targets[i].path == NULL ? NULL :
+				strdup(source->targets[i].path);
+			destination->targets[i].name = source->targets[i].name == NULL ? NULL :
+				strdup(source->targets[i].name);
+			if((source->targets[i].path != NULL && destination->targets[i].path == NULL) ||
+					(source->targets[i].name != NULL && destination->targets[i].name == NULL))
+				goto failed;
+		}
+	}
+	return 0;
+
+failed:
+	nv_session_prepared_action_free(destination);
+	return -1;
+}
+
+static int
+pending_action_context_prepare(nv_pending_action_context_t *context,
+		const nv_workspace_session_t *session,
 		const nv_session_command_t *command,
 		const nv_session_prepared_action_t *action)
 {
 	const size_t source_index = nv_workspace_session_active_tab_index(session,
 			command->pane);
-	nv_pending_action_context_t context = {
+	*context = (nv_pending_action_context_t){
 		.active = 1,
 		.source_pane = command->pane,
 		.source_tab_id = nv_workspace_session_tab_id(session, command->pane,
@@ -775,21 +826,25 @@ pending_action_context(const nv_workspace_session_t *session,
 	};
 	if(command->kind == NV_SESSION_COPY || command->kind == NV_SESSION_MOVE_FILES)
 	{
-		context.has_destination = 1;
-		context.destination_pane = command->pane == NV_SESSION_LEFT ?
+		context->has_destination = 1;
+		context->destination_pane = command->pane == NV_SESSION_LEFT ?
 			NV_SESSION_RIGHT : NV_SESSION_LEFT;
 		const size_t destination_index = nv_workspace_session_active_tab_index(session,
-				context.destination_pane);
-		context.destination_tab_id = nv_workspace_session_tab_id(session,
-				context.destination_pane, destination_index);
+			context->destination_pane);
+		context->destination_tab_id = nv_workspace_session_tab_id(session,
+				context->destination_pane, destination_index);
 	}
 	if(action != NULL && action->kind == NV_SESSION_MKDIR)
 	{
-		context.undo_path = join_action_path(action->source_directory,
+		context->undo_path = join_action_path(action->source_directory,
 				action->name);
-		context.undo_parent_identity = action->source_directory_identity;
+		context->undo_parent_identity = action->source_directory_identity;
 	}
-	return context;
+	if(action != NULL && (action->kind == NV_SESSION_COPY ||
+			action->kind == NV_SESSION_MOVE_FILES) &&
+			clone_prepared_action(action, &context->undo_action) != 0)
+		return -1;
+	return 0;
 }
 
 static void
@@ -797,8 +852,72 @@ pending_action_context_free(nv_pending_action_context_t *context)
 {
 	if(context == NULL) return;
 	free(context->undo_path);
+	nv_session_prepared_action_free(&context->undo_action);
 	nv_session_prepared_action_free(&context->retry_action);
 	free(context);
+}
+
+static int
+record_action_undo(const nv_pending_action_context_t *context,
+		nv_action_task_state_t state)
+{
+	if(context == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(state != NV_ACTION_TASK_DONE) return 0;
+	if((context->undo_action.kind != NV_SESSION_COPY &&
+			context->undo_action.kind != NV_SESSION_MOVE_FILES) ||
+			context->undo_action.target_count == 0U ||
+			context->undo_action.destination_directory == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	const size_t count = context->undo_action.target_count;
+	nv_undo_bridge_transfer_t *const transfers = calloc(count, sizeof(*transfers));
+	char **const destinations = calloc(count, sizeof(*destinations));
+	if(transfers == NULL || destinations == NULL)
+	{
+		free(transfers);
+		free(destinations);
+		errno = ENOMEM;
+		return -1;
+	}
+	int result = 0;
+	for(size_t i = 0U; i < count; ++i)
+	{
+		destinations[i] = join_action_path(context->undo_action.destination_directory,
+				context->undo_action.targets[i].name);
+		if(destinations[i] == NULL)
+		{
+			result = -1;
+			break;
+		}
+		transfers[i] = (nv_undo_bridge_transfer_t){
+			.source_path = context->undo_action.targets[i].path,
+			.destination_path = destinations[i],
+			.source_identity = context->undo_action.targets[i].identity,
+		};
+	}
+	if(result == 0)
+	{
+		const nv_undo_bridge_location_t location = {
+			.pane = (unsigned int)context->source_pane,
+			.tab_id = context->source_tab_id,
+		};
+		result = context->undo_action.kind == NV_SESSION_COPY ?
+			nv_undo_bridge_record_copy_group(transfers, count,
+				context->undo_action.destination_directory_identity, location) :
+			nv_undo_bridge_record_move_group(transfers, count,
+				context->undo_action.source_directory_identity,
+				context->undo_action.destination_directory_identity, location);
+	}
+	for(size_t i = 0U; i < count; ++i) free(destinations[i]);
+	free(destinations);
+	free(transfers);
+	return result;
 }
 
 static void
@@ -1396,12 +1515,12 @@ process_command_line(nv_workspace_session_t *session, char line[],
 					error.os_error = ENOMEM;
 					error.retryable = 1;
 				}
-				else if((*context = pending_action_context(session, &command,
-						&action)).undo_path == NULL && command.kind == NV_SESSION_MKDIR)
+				else if(pending_action_context_prepare(context, session, &command,
+					&action) != 0)
 				{
 					pending_action_context_free(context);
 					set_error(&error, "action-queue-failed",
-							"failed to prepare mkdir undo context");
+							"failed to prepare action undo context");
 					error.os_error = ENOMEM;
 					error.retryable = 1;
 				}
@@ -1688,6 +1807,27 @@ preview_kind_for_entry(nv_entry_kind_t kind, const char name[])
 		{
 			if(has_suffix_ci(name, binary_suffixes[i])) return NV_PREVIEW_KIND_BINARY;
 		}
+		static const char *const image_suffixes[] = {
+			".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg",
+		};
+		for(size_t i = 0U; i < sizeof(image_suffixes)/sizeof(image_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, image_suffixes[i])) return NV_PREVIEW_KIND_IMAGE;
+		}
+		static const char *const audio_suffixes[] = {
+			".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg", ".opus", ".aiff", ".ape",
+		};
+		for(size_t i = 0U; i < sizeof(audio_suffixes)/sizeof(audio_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, audio_suffixes[i])) return NV_PREVIEW_KIND_AUDIO;
+		}
+		static const char *const video_suffixes[] = {
+			".mp4", ".m4v", ".mkv", ".mov", ".webm", ".avi", ".ts", ".mpeg", ".mpg",
+		};
+		for(size_t i = 0U; i < sizeof(video_suffixes)/sizeof(video_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, video_suffixes[i])) return NV_PREVIEW_KIND_VIDEO;
+		}
 		static const char *const markdown_suffixes[] = {
 			".md", ".markdown", ".mdown", ".mkdn", ".mdwn",
 		};
@@ -1770,6 +1910,7 @@ drain_action_events(nv_action_queue_t *queue,
 		if(action_terminal(event.state))
 		{
 			nv_snapshot_error_t error = {};
+			int undo_recorded = 0;
 			nv_session_prepared_action_t retry_action = {};
 			nv_pending_action_context_t *previous = NULL;
 			nv_pending_action_context_t *context = pending_actions == NULL ? NULL :
@@ -1798,18 +1939,32 @@ drain_action_events(nv_action_queue_t *queue,
 				{
 					event.retryable = 0;
 				}
-				if(event.state == NV_ACTION_TASK_DONE &&
-					 event.kind == NV_SESSION_MKDIR && context->undo_path != NULL &&
-					 nv_undo_bridge_record_mkdir(context->undo_path,
-							context->undo_parent_identity, (nv_undo_bridge_location_t){
+				if(event.state == NV_ACTION_TASK_DONE && event.kind == NV_SESSION_MKDIR)
+				{
+					if(context->undo_path != NULL && nv_undo_bridge_record_mkdir(
+							context->undo_path, context->undo_parent_identity,
+							(nv_undo_bridge_location_t){
 								.pane = (unsigned int)context->source_pane,
 								.tab_id = context->source_tab_id,
-							}) != 0)
-				{
-					fprintf(stderr,
+							}) == 0)
+						undo_recorded = 1;
+					else
+						fprintf(stderr,
 							"neovifm-core-session: mkdir undo record failed: %s\n",
-							strerror(errno));
+							strerror(errno == 0 ? ENOMEM : errno));
 				}
+				if(event.state == NV_ACTION_TASK_DONE &&
+						(event.kind == NV_SESSION_COPY ||
+						 event.kind == NV_SESSION_MOVE_FILES))
+				{
+					if(record_action_undo(context, event.state) == 0)
+						undo_recorded = 1;
+					else
+						fprintf(stderr,
+							"neovifm-core-session: transfer undo record failed: %s\n",
+							strerror(errno == 0 ? EINVAL : errno));
+				}
+				event.undo_available = undo_recorded;
 				refresh_failed = refresh_action_tab(session,
 						context->source_pane, context->source_tab_id,
 						&error) != 0;
@@ -1904,13 +2059,16 @@ drain_resource_events(nv_resource_task_queue_t *queue,
 					const nv_session_resource_kind_t kind = context->kind ==
 						NV_RESOURCE_TASK_MOUNT_ARCHIVE ? NV_SESSION_RESOURCE_ARCHIVE :
 						NV_SESSION_RESOURCE_SSH;
-					if(event.mount_point == NULL || event.unmount_path == NULL ||
+					if(event.mount_point != NULL && event.unmount_path != NULL &&
 							nv_workspace_session_attach_resource(session, context->pane,
-							context->tab_id, kind, context->origin_directory,
-							context->origin_cwd_bytes_hex,
-							context->origin_entry_path_bytes_hex, context->remote,
-							event.mount_point, event.unmount_path, &error) == 0)
+								context->tab_id, kind, context->origin_directory,
+								context->origin_cwd_bytes_hex,
+								context->origin_entry_path_bytes_hex, context->remote,
+								event.mount_point, event.unmount_path, &error) == 0)
 						state_changed = 1;
+					else if(error.code == NULL)
+						set_error(&error, "resource-mount-result-invalid",
+							"resource task completed without mount ownership");
 				}
 				if(!state_changed)
 				{

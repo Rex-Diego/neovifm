@@ -62,7 +62,7 @@
         "generation": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
         "pane": { "enum": ["left", "right"] },
         "target_pane": { "enum": ["left", "right"] },
-        "kind": { "enum": ["text", "markdown", "pdf", "directory", "archive", "binary"] },
+        "kind": { "enum": ["text", "markdown", "pdf", "directory", "archive", "binary", "image", "audio", "video"] },
         "state": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
         "cwd_bytes_hex": { "$ref": "neovifm-core-v0.schema.json#/$defs/hexBytes" },
         "path_bytes_hex": { "$ref": "neovifm-core-v0.schema.json#/$defs/hexBytes" },
@@ -113,6 +113,7 @@
         "failed_index": { "type": "integer", "minimum": 0, "maximum": 63 },
         "partial": { "type": "boolean" },
         "retryable": { "type": "boolean" },
+        "undo_available": { "type": "boolean" },
         "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
         "os_error": { "type": "integer" }
       }

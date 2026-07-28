@@ -90,6 +90,7 @@ type DialogState =
       cwd_inode: string
       cwd_ctime_unix_ns: string
     }>
+  | Readonly<{ kind: "mount-ssh"; pane: PaneId }>
   | Readonly<{ kind: "delete"; target: string; command: CoreSessionCommand }>
 
 function entryColor(entry: SnapshotPayload["entries"][number]): string {
@@ -509,11 +510,15 @@ function ActionDialog(props: {
   readonly onCancel: () => void
 }) {
   return <box flexGrow={1} width="100%" flexDirection="column" justifyContent="center" alignItems="center" backgroundColor={COLORS.mantle}>
-    <box width="70%" flexDirection="column" border borderStyle="double" borderColor={props.state.kind === "delete" ? COLORS.red : COLORS.lavender} backgroundColor={COLORS.base} padding={1} title={props.state.kind === "mkdir" ? "F7 MKDIR" : "F8 DELETE"}>
-      <Show when={props.state.kind === "mkdir"} fallback={<>
+    <box width="70%" flexDirection="column" border borderStyle="double" borderColor={props.state.kind === "delete" ? COLORS.red : COLORS.lavender} backgroundColor={COLORS.base} padding={1} title={props.state.kind === "mkdir" ? "F7 MKDIR" : props.state.kind === "mount-ssh" ? "F9 SSH" : "F8 DELETE"}>
+      <Show when={props.state.kind === "mkdir"} fallback={<Show when={props.state.kind === "mount-ssh"} fallback={<>
         <text fg={COLORS.text}>Delete {props.state.kind === "delete" ? props.state.target : ""}?</text>
         <text fg={COLORS.subtext0}>Enter/Y confirms · Esc/N cancels</text>
       </>}>
+        <text fg={COLORS.text}>Remote</text>
+        <input id="mount-ssh-input" focused placeholder="user@host:/path" maxLength={16384} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
+        <text fg={COLORS.subtext0}>Enter mounts read-only · Esc cancels</text>
+      </Show>}>
         <text fg={COLORS.text}>Directory name</text>
         <input id="mkdir-input" focused placeholder="new-directory" maxLength={255} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
         <text fg={COLORS.subtext0}>Enter creates · Esc cancels</text>
@@ -580,6 +585,9 @@ function TaskCenter(props: {
     <text fg={COLORS.text}>Task {task.task_id} · command {task.command_sequence}</text>
     <text fg={COLORS.text}>{task.action} · {task.state} · {task.pane}</text>
     <text fg={COLORS.subtext0}>Progress {task.completed_count}/{task.total_count}{task.partial ? " · partial" : ""}</text>
+    <Show when={task.undo_available === true}>
+      <text fg={COLORS.green}>Undo available</text>
+    </Show>
     <Show when={task.failed_index !== undefined}>
       <text fg={COLORS.red}>Failed item {task.failed_index! + 1}</text>
     </Show>
@@ -785,6 +793,7 @@ const FUNCTION_KEYS: readonly Readonly<{ action: FunctionAction; keyName: string
   { action: "move", keyName: "F6", label: "Move" },
   { action: "mkdir", keyName: "F7", label: "MkDir" },
   { action: "delete", keyName: "F8", label: "Delete" },
+  { action: "mount-ssh", keyName: "F9", label: "SSH" },
   { action: "quit", keyName: "F10", label: "Quit" },
 ]
 
@@ -792,6 +801,7 @@ function FunctionRow(props: {
   readonly keys: typeof FUNCTION_KEYS
   readonly canView: boolean
   readonly canFileActions: boolean
+  readonly canResourceTasks: boolean
   readonly iconMode: IconMode
   readonly compact?: boolean
   readonly onAction: (action: FunctionAction) => void
@@ -800,6 +810,8 @@ function FunctionRow(props: {
     ? props.canView
     : action === "copy" || action === "move" || action === "mkdir" || action === "delete"
       ? props.canFileActions
+      : action === "mount-ssh"
+        ? props.canResourceTasks
       : true
   return <box width="100%" height={1} flexDirection="row">
     <For each={props.keys}>{(item) => <FunctionKey {...item} compact={props.compact} enabled={enabled(item.action)} iconMode={props.iconMode} onAction={props.onAction} />}</For>
@@ -816,6 +828,7 @@ function BottomBars(props: {
   readonly notice?: string
   readonly canView: boolean
   readonly canFileActions: boolean
+  readonly canResourceTasks: boolean
   readonly iconMode: IconMode
   readonly onAction: (action: FunctionAction) => void
   readonly pathMode: StatusPathMode
@@ -827,7 +840,7 @@ function BottomBars(props: {
   return <box width="100%" height={3} flexDirection="column">
     <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} onOpenTasks={props.onOpenTasks} />
     <box id="bottom-divider" width="100%" height={1} border={["top"]} borderStyle="single" borderColor={COLORS.divider} />
-    <FunctionRow keys={FUNCTION_KEYS} compact={props.stacked} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
+    <FunctionRow keys={FUNCTION_KEYS} compact={props.stacked} canView={props.canView} canFileActions={props.canFileActions} canResourceTasks={props.canResourceTasks} iconMode={props.iconMode} onAction={props.onAction} />
   </box>
 }
 
@@ -840,6 +853,7 @@ export function App(props: AppProps) {
   const canSort = () => props.capabilities?.includes("workspace-sort-v1") === true
   const canTabs = () => props.capabilities?.includes("pane-tabs-v1") === true
   const canFileActions = () => props.capabilities?.includes("file-actions-v1") === true
+  const canResourceTasks = () => props.capabilities?.includes("resource-tasks-v1") === true
   // Keep multi-key Vifm prefixes alive while task/preview records cause rerenders.
   const keymap = createMemo(() => new VifmKeymap())
   const [viewerOpen, setViewerOpen] = createSignal(false)
@@ -1012,6 +1026,19 @@ export function App(props: AppProps) {
       }
       return
     }
+    if (action === "mount-ssh") {
+      if (!canResourceTasks()) {
+        setNotice("SSH mount is unavailable")
+        return
+      }
+      const workspace = props.workspace
+      if (workspace === undefined) {
+        setNotice("SSH mount requires a workspace")
+        return
+      }
+      setDialog({ kind: "mount-ssh", pane: workspace.active_pane })
+      return
+    }
     if (!canFileActions()) {
       setNotice("Core file actions are unavailable")
       return
@@ -1165,6 +1192,14 @@ export function App(props: AppProps) {
         cwd_ctime_unix_ns: state.cwd_ctime_unix_ns,
         name,
       }, `Create ${name} requested`)
+    } else if (state?.kind === "mount-ssh") {
+      const remote = value?.trim() ?? ""
+      if (remote.length === 0 || remote.length > 16384 || remote.includes("\0") ||
+        remote.includes("\n") || remote.includes("\r") || remote.startsWith("-")) {
+        setNotice("Invalid remote")
+        return
+      }
+      sendCommand({ action: "mount-ssh", pane: state.pane, remote }, "SSH mount requested")
     } else if (state?.kind === "delete") {
       sendCommand(state.command, `Delete ${state.target} requested`)
     }
@@ -1280,6 +1315,6 @@ export function App(props: AppProps) {
     }>
       {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
     </Show>
-    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
+    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} canResourceTasks={canResourceTasks()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
   </box>
 }

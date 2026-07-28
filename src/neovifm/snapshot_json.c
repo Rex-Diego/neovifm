@@ -345,7 +345,10 @@ preview_kind_name(nv_preview_kind_t kind)
 		kind == NV_PREVIEW_KIND_PDF ? "pdf" :
 		kind == NV_PREVIEW_KIND_DIRECTORY ? "directory" :
 		kind == NV_PREVIEW_KIND_ARCHIVE ? "archive" :
-		kind == NV_PREVIEW_KIND_BINARY ? "binary" : NULL;
+		kind == NV_PREVIEW_KIND_BINARY ? "binary" :
+		kind == NV_PREVIEW_KIND_IMAGE ? "image" :
+		kind == NV_PREVIEW_KIND_AUDIO ? "audio" :
+		kind == NV_PREVIEW_KIND_VIDEO ? "video" : NULL;
 }
 
 static const char *
@@ -516,6 +519,7 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 				event->total_count) != JSONSuccess ||
 			json_object_set_boolean(payload, "partial", event->partial) != JSONSuccess ||
 			json_object_set_boolean(payload, "retryable", event->retryable) != JSONSuccess ||
+			json_object_set_boolean(payload, "undo_available", event->undo_available) != JSONSuccess ||
 			(event->has_failed_index && json_object_set_number(payload,
 				"failed_index", event->failed_index) != JSONSuccess) ||
 			(event->error_code != NULL && json_object_set_string(payload,

@@ -87,6 +87,12 @@ static int preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_image(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_audio(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_video(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static void sanitize_preview_text(char content[], size_t length);
@@ -158,7 +164,10 @@ request_valid(const nv_preview_request_t *request)
 			 request->kind == NV_PREVIEW_KIND_PDF ||
 			 request->kind == NV_PREVIEW_KIND_DIRECTORY ||
 			 request->kind == NV_PREVIEW_KIND_ARCHIVE ||
-			 request->kind == NV_PREVIEW_KIND_BINARY) &&
+			 request->kind == NV_PREVIEW_KIND_BINARY ||
+			 request->kind == NV_PREVIEW_KIND_IMAGE ||
+			 request->kind == NV_PREVIEW_KIND_AUDIO ||
+			 request->kind == NV_PREVIEW_KIND_VIDEO) &&
 			request->max_bytes != 0U && request->max_bytes <= NV_PREVIEW_MAX_BYTES &&
 			request->timeout_ms != 0U && request->timeout_ms <= NV_PREVIEW_MAX_TIMEOUT_MS &&
 			hex_decode(request->cwd_bytes_hex, &cwd) == 0 &&
@@ -637,6 +646,215 @@ preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task, char **conten
 	return 0;
 }
 
+static uint32_t
+read_u32_be(const unsigned char bytes[])
+{
+	return ((uint32_t)bytes[0] << 24U) | ((uint32_t)bytes[1] << 16U) |
+		((uint32_t)bytes[2] << 8U) | (uint32_t)bytes[3];
+}
+
+static uint32_t
+read_u32_le(const unsigned char bytes[])
+{
+	return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8U) |
+		((uint32_t)bytes[2] << 16U) | ((uint32_t)bytes[3] << 24U);
+}
+
+static int
+preview_header(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		unsigned char header[], size_t header_size, size_t *header_length,
+		struct stat *stat_value, const char **error_code, int *os_error)
+{
+	const int fd = open(task->path, O_RDONLY | O_NONBLOCK);
+	if(fd < 0)
+	{
+		*error_code = "preview-open-failed";
+		*os_error = errno;
+		return -1;
+	}
+	if(fstat(fd, stat_value) != 0 || !S_ISREG(stat_value->st_mode))
+	{
+		*error_code = "preview-not-regular-file";
+		*os_error = errno;
+		close(fd);
+		return -1;
+	}
+	size_t used = 0U;
+	while(used < header_size)
+	{
+		if(task_cancelled(queue, task))
+		{
+			close(fd);
+			return 1;
+		}
+		if(task_expired(task))
+		{
+			*error_code = "preview-timeout";
+			close(fd);
+			return -1;
+		}
+		const ssize_t count = read(fd, header + used, header_size - used);
+		if(count < 0)
+		{
+			if(errno == EINTR) continue;
+			*error_code = "preview-read-failed";
+			*os_error = errno;
+			close(fd);
+			return -1;
+		}
+		if(count == 0) break;
+		used += (size_t)count;
+	}
+	close(fd);
+	*header_length = used;
+	return 0;
+}
+
+static const char *
+image_format(const unsigned char header[], size_t length)
+{
+	if(length >= 8U && memcmp(header, "\x89PNG\r\n\x1a\n", 8U) == 0) return "PNG";
+	if(length >= 6U && (memcmp(header, "GIF87a", 6U) == 0 ||
+			memcmp(header, "GIF89a", 6U) == 0)) return "GIF";
+	if(length >= 2U && header[0] == 0xffU && header[1] == 0xd8U) return "JPEG";
+	if(length >= 12U && memcmp(header, "RIFF", 4U) == 0 &&
+			memcmp(header + 8U, "WEBP", 4U) == 0) return "WebP";
+	if(length >= 2U && memcmp(header, "BM", 2U) == 0) return "BMP";
+	if(length >= 4U && ((header[0] == 'I' && header[1] == 'I' && header[2] == 42U && header[3] == 0U) ||
+			(header[0] == 'M' && header[1] == 'M' && header[2] == 0U && header[3] == 42U))) return "TIFF";
+	for(size_t i = 0U; i + 4U <= length; ++i)
+	{
+		if(memcmp(header + i, "<svg", 4U) == 0 || memcmp(header + i, "<SVG", 4U) == 0)
+			return "SVG";
+	}
+	return "image";
+}
+
+static const char *
+audio_format(const unsigned char header[], size_t length)
+{
+	if(length >= 12U && memcmp(header, "RIFF", 4U) == 0 &&
+			memcmp(header + 8U, "WAVE", 4U) == 0) return "WAV";
+	if(length >= 4U && memcmp(header, "fLaC", 4U) == 0) return "FLAC";
+	if(length >= 3U && memcmp(header, "ID3", 3U) == 0) return "MP3";
+	if(length >= 4U && memcmp(header, "OggS", 4U) == 0) return "Ogg";
+	if(length >= 12U && memcmp(header, "FORM", 4U) == 0 &&
+			(memcmp(header + 8U, "AIFF", 4U) == 0 || memcmp(header + 8U, "AIFC", 4U) == 0)) return "AIFF";
+	return "audio";
+}
+
+static const char *
+video_format(const unsigned char header[], size_t length)
+{
+	if(length >= 12U && memcmp(header + 4U, "ftyp", 4U) == 0) return "MP4/MOV";
+	if(length >= 4U && memcmp(header, "\x1a\x45\xdf\xa3", 4U) == 0) return "WebM/Matroska";
+	if(length >= 12U && memcmp(header, "RIFF", 4U) == 0 &&
+			memcmp(header + 8U, "AVI ", 4U) == 0) return "AVI";
+	if(length >= 4U && memcmp(header, "OggS", 4U) == 0) return "Ogg";
+	return "video";
+}
+
+static int
+preview_media_metadata(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		nv_preview_kind_t kind, char **content, int *truncated,
+		const char **error_code, int *os_error)
+{
+	unsigned char header[256] = {};
+	size_t header_length = 0U;
+	struct stat stat_value = {};
+	const int header_result = preview_header(queue, task, header, sizeof(header),
+			&header_length, &stat_value, error_code, os_error);
+	if(header_result != 0) return header_result;
+	const char *format = kind == NV_PREVIEW_KIND_IMAGE ? image_format(header, header_length) :
+		kind == NV_PREVIEW_KIND_AUDIO ? audio_format(header, header_length) :
+		video_format(header, header_length);
+	char metadata[512];
+	int written = snprintf(metadata, sizeof(metadata),
+			"%s metadata\nformat: %s\nbytes: %lld\n",
+			kind == NV_PREVIEW_KIND_IMAGE ? "image" :
+			kind == NV_PREVIEW_KIND_AUDIO ? "audio" : "video", format,
+			(long long)stat_value.st_size);
+	if(kind == NV_PREVIEW_KIND_IMAGE && written >= 0 && (size_t)written < sizeof(metadata))
+	{
+		uint32_t width = 0U, height = 0U;
+		if(strcmp(format, "PNG") == 0 && header_length >= 24U)
+		{
+			width = read_u32_be(header + 16U);
+			height = read_u32_be(header + 20U);
+		}
+		else if(strcmp(format, "GIF") == 0 && header_length >= 10U)
+		{
+			width = (uint32_t)header[6] | ((uint32_t)header[7] << 8U);
+			height = (uint32_t)header[8] | ((uint32_t)header[9] << 8U);
+		}
+		else if(strcmp(format, "BMP") == 0 && header_length >= 26U)
+		{
+			width = read_u32_le(header + 18U);
+			height = read_u32_le(header + 22U);
+		}
+		else if(strcmp(format, "WebP") == 0 && header_length >= 30U &&
+				memcmp(header + 12U, "VP8X", 4U) == 0)
+		{
+			width = 1U + (uint32_t)header[24] + ((uint32_t)header[25] << 8U) +
+				((uint32_t)header[26] << 16U);
+			height = 1U + (uint32_t)header[27] + ((uint32_t)header[28] << 8U) +
+				((uint32_t)header[29] << 16U);
+		}
+		if(width != 0U && height != 0U)
+			written += snprintf(metadata + written, sizeof(metadata) - (size_t)written,
+					"size: %ux%u\n", width, height);
+	}
+	if(written < 0 || (size_t)written >= sizeof(metadata))
+	{
+		*error_code = "preview-format-failed";
+		return -1;
+	}
+	written += snprintf(metadata + written, sizeof(metadata) - (size_t)written,
+			"mode: metadata-only; use an external viewer for full media rendering\n");
+	if(written < 0)
+	{
+		*error_code = "preview-format-failed";
+		return -1;
+	}
+	const size_t available = task->request.max_bytes;
+	const size_t length = (size_t)written < available ? (size_t)written : available;
+	char *const result = malloc(length + 1U);
+	if(result == NULL)
+	{
+		*error_code = "preview-out-of-memory";
+		return -1;
+	}
+	memcpy(result, metadata, length);
+	result[length] = '\0';
+	*truncated = (size_t)written > length;
+	*content = result;
+	return 0;
+}
+
+static int
+preview_image(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_IMAGE, content,
+			truncated, error_code, os_error);
+}
+
+static int
+preview_audio(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_AUDIO, content,
+			truncated, error_code, os_error);
+}
+
+static int
+preview_video(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_VIDEO, content,
+			truncated, error_code, os_error);
+}
+
 #ifndef _WIN32
 extern char **environ;
 
@@ -905,6 +1123,12 @@ preview_worker(void *data)
 				preview_archive(queue, task, &content, &truncated, &error_code, &os_error) :
 			 task->request.kind == NV_PREVIEW_KIND_BINARY ?
 				preview_binary(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_IMAGE ?
+				preview_image(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_AUDIO ?
+				preview_audio(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_VIDEO ?
+				preview_video(queue, task, &content, &truncated, &error_code, &os_error) :
 			 task->request.kind == NV_PREVIEW_KIND_PDF ?
 				preview_pdf(queue, task, &content, &truncated, &error_code, &os_error) :
 				preview_text(queue, task, &content, &truncated, &error_code, &os_error));

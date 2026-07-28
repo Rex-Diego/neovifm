@@ -130,7 +130,7 @@ export interface CommandErrorPayload extends ErrorPayload {
   readonly command_sequence: number
 }
 
-export type PreviewKind = "text" | "markdown" | "pdf" | "directory" | "archive" | "binary"
+export type PreviewKind = "text" | "markdown" | "pdf" | "directory" | "archive" | "binary" | "image" | "audio" | "video"
 export type PreviewTaskState = "queued" | "running" | "done" | "failed" | "cancelled"
 
 export interface PreviewTaskPayload {
@@ -164,6 +164,7 @@ export interface ActionTaskPayload {
   readonly failed_index?: number
   readonly partial: boolean
   readonly retryable: boolean
+  readonly undo_available?: boolean
   readonly error_code?: string
   readonly os_error?: number
 }
@@ -678,7 +679,7 @@ function parseCommandErrorPayload(value: unknown): CommandErrorPayload {
 
 function parsePreviewKind(value: unknown, path: string): PreviewKind {
   const kind = stringValue(value, path)
-  if (kind !== "text" && kind !== "markdown" && kind !== "pdf" && kind !== "directory" && kind !== "archive" && kind !== "binary") return invalid(path, "must be text, markdown, pdf, directory, archive, or binary")
+  if (kind !== "text" && kind !== "markdown" && kind !== "pdf" && kind !== "directory" && kind !== "archive" && kind !== "binary" && kind !== "image" && kind !== "audio" && kind !== "video") return invalid(path, "must be text, markdown, pdf, directory, archive, binary, image, audio, or video")
   return kind
 }
 
@@ -749,6 +750,9 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
   const retryable = payload.retryable === undefined
     ? false
     : booleanValue(payload.retryable, "payload.retryable")
+  const undoAvailable = payload.undo_available === undefined
+    ? false
+    : booleanValue(payload.undo_available, "payload.undo_available")
   if (state === "done" && partial) return invalid("payload.partial", "must be false for a completed action")
   if (state === "done" && completed !== total) return invalid("payload.completed_count", "must equal total_count for done")
   if ((state === "queued" || state === "running") && completed !== 0) return invalid("payload.completed_count", "must be zero before completion")
@@ -769,6 +773,7 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
     ...(failedIndex === undefined ? {} : { failed_index: failedIndex }),
     partial,
     retryable,
+    undo_available: undoAvailable,
     ...(errorCode === undefined ? {} : { error_code: errorCode }),
     ...(osError === undefined ? {} : { os_error: osError }),
   })

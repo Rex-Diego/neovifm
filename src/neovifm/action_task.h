@@ -37,6 +37,7 @@ typedef struct
 	int has_failed_index;
 	int partial;
 	int retryable;
+	int undo_available;
 	char *error_code;
 	int os_error;
 } nv_action_event_t;

@@ -256,6 +256,110 @@ test("real v3 session renders a binary file as a bounded hex listing", async () 
   }
 }, { timeout: 30000 })
 
+test("real v3 session renders image media metadata with dimensions", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-image-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-image-right-"))
+  const imagePath = resolve(left, "photo.png")
+  await writeFile(imagePath, Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xc8,
+  ]))
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.kind === "image" && state.preview.content?.includes("size: 256x200") === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected image preview")
+    expect(state.preview).toMatchObject({ kind: "image", state: "done", truncated: false })
+    expect(state.preview?.content).toContain("format: PNG")
+    expect(state.preview?.content).toContain("metadata-only")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-right-"))
+  const sourcePath = resolve(left, "note.txt")
+  const destinationPath = resolve(right, "note.txt")
+  await writeFile(sourcePath, "source")
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  const actionCommand = (action: "copy" | "move-files") => {
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready action session")
+    const source = state.workspace.left
+    const entry = source.entries.find((candidate) => candidate.name_display === "note.txt")
+    if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+      throw new Error("expected source action identity")
+    }
+    return {
+      action,
+      pane: "left" as const,
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: source.snapshot_revision,
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      destination_cwd_bytes_hex: state.workspace.right.cwd_bytes_hex,
+      destination_snapshot_revision: state.workspace.right.snapshot_revision,
+      destination_cwd_device: state.workspace.right.cwd_device!,
+      destination_cwd_inode: state.workspace.right.cwd_inode!,
+      destination_cwd_ctime_unix_ns: state.workspace.right.cwd_ctime_unix_ns!,
+      targets: [{ path_bytes_hex: entry.path_bytes_hex, device: entry.device, inode: entry.inode, ctime_unix_ns: entry.ctime_unix_ns, kind: entry.kind }],
+    } as const
+  }
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "note.txt"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready copy session")
+    const copySequence = state.commandSequence + 1
+    expect(await session.send(actionCommand("copy"))).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === copySequence && state.workspace.right.entries.some((entry) => entry.name_display === "note.txt") && state.actionTasks?.some((task) => task.state === "done" && task.undo_available) === true)
+    expect(await Bun.file(destinationPath).text()).toBe("source")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected copied session")
+    const undoCopySequence = state.commandSequence + 1
+    expect(await session.send({ action: "undo" })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === undoCopySequence && !state.workspace.right.entries.some((entry) => entry.name_display === "note.txt"))
+    expect(await Bun.file(sourcePath).text()).toBe("source")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected copy undo session")
+
+    const moveSequence = state.commandSequence + 1
+    expect(await session.send(actionCommand("move-files"))).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === moveSequence && !state.workspace.left.entries.some((entry) => entry.name_display === "note.txt") && state.workspace.right.entries.some((entry) => entry.name_display === "note.txt") && state.actionTasks?.some((task) => task.state === "done" && task.undo_available) === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected moved session")
+    const undoMoveSequence = state.commandSequence + 1
+    expect(await session.send({ action: "undo" })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === undoMoveSequence && state.workspace.left.entries.some((entry) => entry.name_display === "note.txt") && !state.workspace.right.entries.some((entry) => entry.name_display === "note.txt"))
+    expect(await Bun.file(sourcePath).text()).toBe("source")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
 test("real v3 session resolves a core-owned open command into a structured result", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")

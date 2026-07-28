@@ -16,20 +16,33 @@
 
 #include "../undo.h"
 
-typedef struct nv_undo_mkdir_record_t nv_undo_mkdir_record_t;
-
-struct nv_undo_mkdir_record_t
+typedef enum
 {
-	char *path;
-	nv_fs_identity_t parent_identity;
+	NV_UNDO_RECORD_MKDIR,
+	NV_UNDO_RECORD_COPY,
+	NV_UNDO_RECORD_MOVE,
+} nv_undo_record_kind_t;
+
+typedef struct nv_undo_record_t nv_undo_record_t;
+
+struct nv_undo_record_t
+{
+	nv_undo_record_kind_t kind;
+	char *source_path;
+	char *destination_path;
+	nv_fs_identity_t source_parent_identity;
+	nv_fs_identity_t destination_parent_identity;
+	nv_fs_identity_t source_identity;
 	nv_fs_identity_t child_identity;
 	nv_undo_bridge_location_t location;
-	nv_undo_mkdir_record_t *next;
+	uint64_t group_id;
+	nv_undo_record_t *next;
 };
 
-static nv_undo_mkdir_record_t *records;
+static nv_undo_record_t *records;
 static int initialized;
 static int undo_levels = 64;
+static uint64_t next_group_id = 1U;
 
 static uint64_t
 ctime_unix_ns(const struct stat *st)
@@ -52,74 +65,100 @@ identity_equal(nv_fs_identity_t left, nv_fs_identity_t right)
 		left.ctime_unix_ns == right.ctime_unix_ns;
 }
 
-static nv_undo_mkdir_record_t *
-find_record(const char path[])
+static nv_undo_record_t *
+find_record_for_undo(OPS op, const char src[], const char dst[])
 {
-	for(nv_undo_mkdir_record_t *record = records; record != NULL;
+	for(nv_undo_record_t *record = records; record != NULL;
 			record = record->next)
 	{
-		if(strcmp(record->path, path) == 0) return record;
+		if(op == OP_RMDIR && record->kind == NV_UNDO_RECORD_MKDIR &&
+				strcmp(record->destination_path, src) == 0) return record;
+		if(op == OP_MKDIR && record->kind == NV_UNDO_RECORD_MKDIR &&
+				strcmp(record->destination_path, src) == 0) return record;
+		if(op == OP_REMOVE && record->kind == NV_UNDO_RECORD_COPY &&
+				strcmp(record->destination_path, src) == 0) return record;
+		if(op == OP_MOVE && record->kind == NV_UNDO_RECORD_MOVE &&
+				strcmp(record->destination_path, src) == 0 &&
+				dst != NULL && strcmp(record->source_path, dst) == 0) return record;
 	}
 	return NULL;
+}
+
+static int
+current_identity(const char path[], nv_fs_identity_t *identity)
+{
+	struct stat st = {};
+	int is_symlink = 0;
+	if(nv_lstat(path, &st, &is_symlink) != 0)
+		return -1;
+	*identity = (nv_fs_identity_t){
+		.device = (uint64_t)st.st_dev,
+		.inode = (uint64_t)st.st_ino,
+		.ctime_unix_ns = ctime_unix_ns(&st),
+	};
+	return 0;
+}
+
+static void
+free_record(nv_undo_record_t *record)
+{
+	if(record == NULL) return;
+	free(record->source_path);
+	free(record->destination_path);
+	free(record);
 }
 
 static OpsResult
 perform_undo_operation(OPS op, void *data, const char src[], const char dst[])
 {
 	(void)data;
-	(void)dst;
 	if(src == NULL) return OPS_FAILED;
-	nv_undo_mkdir_record_t *const record = find_record(src);
+	nv_undo_record_t *const record = find_record_for_undo(op, src, dst);
 	if(record == NULL)
 	{
 		errno = ENOENT;
 		return OPS_FAILED;
 	}
 
-	if(op == OP_RMDIR)
+	if(op == OP_RMDIR || op == OP_REMOVE)
 	{
-		struct stat st = {};
-		int is_symlink = 0;
-		if(nv_lstat(src, &st, &is_symlink) != 0 || is_symlink != 0 ||
-				!S_ISDIR(st.st_mode))
+		nv_fs_identity_t current = {};
+		if(current_identity(src, &current) != 0 ||
+				!identity_equal(current, record->child_identity))
 		{
 			if(errno == 0) errno = ESTALE;
 			return OPS_FAILED;
 		}
-		const nv_fs_identity_t current = {
-			.device = (uint64_t)st.st_dev,
-			.inode = (uint64_t)st.st_ino,
-			.ctime_unix_ns = ctime_unix_ns(&st),
-		};
-		if(!identity_equal(current, record->child_identity))
-		{
-			errno = ESTALE;
-			return OPS_FAILED;
-		}
-		return nv_fs_remove(src, record->parent_identity,
+		return nv_fs_remove(src, record->destination_parent_identity,
 				record->child_identity, NULL, NULL) == 0 ? OPS_SUCCEEDED :
 			OPS_FAILED;
 	}
 
+	if(op == OP_MOVE)
+	{
+		nv_fs_identity_t current = {};
+		if(current_identity(src, &current) != 0 ||
+				!identity_equal(current, record->child_identity))
+		{
+			if(errno == 0) errno = ESTALE;
+			return OPS_FAILED;
+		}
+		return nv_fs_move(src, dst, record->destination_parent_identity,
+				record->source_parent_identity, record->child_identity, NULL,
+				NULL) == 0 ? OPS_SUCCEEDED : OPS_FAILED;
+	}
+
 	if(op == OP_MKDIR)
 	{
-		if(nv_fs_mkdir(src, 0777, record->parent_identity) != 0)
+		if(nv_fs_mkdir(src, 0777, record->destination_parent_identity) != 0)
 			return OPS_FAILED;
-		struct stat st = {};
-		int is_symlink = 0;
-		if(nv_lstat(src, &st, &is_symlink) != 0 || is_symlink != 0 ||
-				!S_ISDIR(st.st_mode))
+		if(current_identity(src, &record->child_identity) != 0)
 		{
-			(void)nv_fs_remove(src, record->parent_identity,
+			(void)nv_fs_remove(src, record->destination_parent_identity,
 					record->child_identity, NULL, NULL);
 			errno = EIO;
 			return OPS_FAILED;
 		}
-		record->child_identity = (nv_fs_identity_t){
-			.device = (uint64_t)st.st_dev,
-			.inode = (uint64_t)st.st_ino,
-			.ctime_unix_ns = ctime_unix_ns(&st),
-		};
 		return OPS_SUCCEEDED;
 	}
 
@@ -130,7 +169,8 @@ perform_undo_operation(OPS op, void *data, const char src[], const char dst[])
 static int
 operation_available(OPS op)
 {
-	return op == OP_MKDIR || op == OP_RMDIR ? 0 : -1;
+	return op == OP_MKDIR || op == OP_RMDIR || op == OP_REMOVE ||
+		op == OP_MOVE ? 0 : -1;
 }
 
 int
@@ -149,11 +189,11 @@ nv_undo_bridge_reset(void)
 	un_reset();
 	while(records != NULL)
 	{
-		nv_undo_mkdir_record_t *const next = records->next;
-		free(records->path);
-		free(records);
+		nv_undo_record_t *const next = records->next;
+		free_record(records);
 		records = next;
 	}
+	next_group_id = 1U;
 	initialized = 0;
 }
 
@@ -174,26 +214,27 @@ nv_undo_bridge_record_mkdir(const char path[], nv_fs_identity_t parent_identity,
 		if(errno == 0) errno = EINVAL;
 		return -1;
 	}
-	nv_undo_mkdir_record_t *const record = calloc(1U, sizeof(*record));
-	if(record == NULL || (record->path = strdup(path)) == NULL)
+	nv_undo_record_t *const record = calloc(1U, sizeof(*record));
+	if(record == NULL || (record->destination_path = strdup(path)) == NULL)
 	{
-		free(record);
+		free_record(record);
 		errno = ENOMEM;
 		return -1;
 	}
-	record->parent_identity = parent_identity;
+	record->kind = NV_UNDO_RECORD_MKDIR;
+	record->destination_parent_identity = parent_identity;
 	record->location = location;
 	record->child_identity = (nv_fs_identity_t){
 		.device = (uint64_t)st.st_dev,
 		.inode = (uint64_t)st.st_ino,
 		.ctime_unix_ns = ctime_unix_ns(&st),
 	};
+	record->group_id = next_group_id++;
 	un_group_open("mkdir");
 	if(un_group_add_op(OP_MKDIR, NULL, NULL, path, "") != 0)
 	{
 		un_group_close();
-		free(record->path);
-		free(record);
+		free_record(record);
 		errno = ENOMEM;
 		return -1;
 	}
@@ -201,6 +242,101 @@ nv_undo_bridge_record_mkdir(const char path[], nv_fs_identity_t parent_identity,
 	record->next = records;
 	records = record;
 	return 0;
+}
+
+static int
+record_transfer_group(const nv_undo_bridge_transfer_t transfers[], size_t count,
+		nv_undo_record_kind_t kind, nv_fs_identity_t source_parent,
+		nv_fs_identity_t destination_parent, nv_undo_bridge_location_t location)
+{
+	if(!initialized || transfers == NULL || count == 0U || count > 64U ||
+			(kind != NV_UNDO_RECORD_COPY && kind != NV_UNDO_RECORD_MOVE))
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	nv_undo_record_t *group = NULL;
+	for(size_t i = 0U; i < count; ++i)
+	{
+		if(transfers[i].source_path == NULL || transfers[i].source_path[0] == '\0' ||
+				transfers[i].destination_path == NULL ||
+				transfers[i].destination_path[0] == '\0')
+		{
+			errno = EINVAL;
+			goto failed;
+		}
+		nv_fs_identity_t child_identity = {};
+		if(current_identity(transfers[i].destination_path, &child_identity) != 0)
+			goto failed;
+		nv_undo_record_t *const record = calloc(1U, sizeof(*record));
+		if(record == NULL || (record->source_path = strdup(transfers[i].source_path)) == NULL ||
+				(record->destination_path = strdup(transfers[i].destination_path)) == NULL)
+		{
+			free_record(record);
+			errno = ENOMEM;
+			goto failed;
+		}
+		record->kind = kind;
+		record->source_parent_identity = source_parent;
+		record->destination_parent_identity = destination_parent;
+		record->source_identity = transfers[i].source_identity;
+		record->child_identity = child_identity;
+		record->location = location;
+		record->next = group;
+		group = record;
+	}
+	un_group_open(kind == NV_UNDO_RECORD_COPY ? "copy" : "move");
+	for(nv_undo_record_t *record = group; record != NULL; record = record->next)
+	{
+		const OPS operation = kind == NV_UNDO_RECORD_COPY ? OP_COPY : OP_MOVE;
+		if(un_group_add_op(operation, NULL, NULL, record->source_path,
+				record->destination_path) != 0)
+		{
+			un_group_close();
+			errno = ENOMEM;
+			goto failed;
+		}
+	}
+	un_group_close();
+	const uint64_t group_id = next_group_id++;
+	for(nv_undo_record_t *record = group; record != NULL; record = record->next)
+		record->group_id = group_id;
+	while(group != NULL)
+	{
+		nv_undo_record_t *const next = group->next;
+		group->next = records;
+		records = group;
+		group = next;
+	}
+	return 0;
+
+failed:
+	while(group != NULL)
+	{
+		nv_undo_record_t *const next = group->next;
+		free_record(group);
+		group = next;
+	}
+	return -1;
+}
+
+int
+nv_undo_bridge_record_copy_group(const nv_undo_bridge_transfer_t transfers[],
+		size_t count, nv_fs_identity_t destination_parent,
+		nv_undo_bridge_location_t location)
+{
+	return record_transfer_group(transfers, count, NV_UNDO_RECORD_COPY,
+			(nv_fs_identity_t){}, destination_parent, location);
+}
+
+int
+nv_undo_bridge_record_move_group(const nv_undo_bridge_transfer_t transfers[],
+		size_t count, nv_fs_identity_t source_parent,
+		nv_fs_identity_t destination_parent,
+		nv_undo_bridge_location_t location)
+{
+	return record_transfer_group(transfers, count, NV_UNDO_RECORD_MOVE,
+			source_parent, destination_parent, location);
 }
 
 nv_undo_bridge_result_t
@@ -213,10 +349,13 @@ nv_undo_bridge_undo(nv_undo_bridge_location_t *location)
 		*location = records->location;
 	if(result == UN_ERR_SUCCESS && records != NULL)
 	{
-		nv_undo_mkdir_record_t *const record = records;
-		records = record->next;
-		free(record->path);
-		free(record);
+		const uint64_t group_id = records->group_id;
+		while(records != NULL && records->group_id == group_id)
+		{
+			nv_undo_record_t *const record = records;
+			records = record->next;
+			free_record(record);
+		}
 	}
 	switch(result)
 	{

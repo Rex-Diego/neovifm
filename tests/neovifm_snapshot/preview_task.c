@@ -1,5 +1,6 @@
 #include <stic.h>
 
+#include <fcntl.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -7,6 +8,15 @@
 #include <test-utils.h>
 
 #include "../../src/neovifm/preview_task.h"
+
+static void
+make_bytes(const char path[], const unsigned char bytes[], size_t length)
+{
+	const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	assert_true(fd >= 0);
+	assert_int_equal((long long)length, (long long)write(fd, bytes, length));
+	assert_int_equal(0, close(fd));
+}
 
 static int
 pop_terminal_event(nv_preview_queue_t *queue, nv_preview_event_t *event)
@@ -116,6 +126,87 @@ TEST(preview_queue_treats_markdown_as_bounded_text)
 	nv_preview_event_free(&event);
 	nv_preview_queue_free(queue);
 	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
+{
+	const char *const dir = SANDBOX_PATH "/preview-image";
+	const char *const path = SANDBOX_PATH "/preview-image/photo.png";
+	create_dir(dir);
+	const unsigned char png_header[] = {
+		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+		0, 0, 0, 13, 'I', 'H', 'D', 'R',
+		0, 0, 1, 0, 0, 0, 0, 0xc8,
+	};
+	make_bytes(path, png_header, sizeof(png_header));
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 10U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_IMAGE, .max_bytes = 512U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal(NV_PREVIEW_KIND_IMAGE, event.kind);
+	assert_non_null(strstr(event.content, "format: PNG"));
+	assert_non_null(strstr(event.content, "size: 256x200"));
+	assert_non_null(strstr(event.content, "metadata-only"));
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
+{
+	const char *const dir = SANDBOX_PATH "/preview-media";
+	const char *const audio = SANDBOX_PATH "/preview-media/track.mp3";
+	const char *const video = SANDBOX_PATH "/preview-media/movie.mp4";
+	create_dir(dir);
+	const unsigned char mp3_header[] = { 'I', 'D', '3', 4, 0, 0, 0, 0, 0, 0 };
+	const unsigned char mp4_header[] = { 0, 0, 0, 0, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm' };
+	make_bytes(audio, mp3_header, sizeof(mp3_header));
+	make_bytes(video, mp4_header, sizeof(mp4_header));
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], audio_hex[1024], video_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(audio, audio_hex, sizeof(audio_hex)));
+	assert_success(nv_preview_hex_encode(video, video_hex, sizeof(video_hex)));
+	const nv_preview_request_t audio_request = {
+		.pane = NV_PREVIEW_PANE_RIGHT, .generation = 11U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = audio_hex,
+		.kind = NV_PREVIEW_KIND_AUDIO, .max_bytes = 512U, .timeout_ms = 1000U,
+	};
+	const nv_preview_request_t video_request = {
+		.pane = NV_PREVIEW_PANE_RIGHT, .target_pane = NV_PREVIEW_PANE_LEFT,
+		.has_target_pane = 1, .generation = 12U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = video_hex,
+		.kind = NV_PREVIEW_KIND_VIDEO, .max_bytes = 512U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &audio_request, NULL));
+	assert_success(nv_preview_queue_submit(queue, &video_request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal(NV_PREVIEW_KIND_AUDIO, event.kind);
+	assert_non_null(strstr(event.content, "format: MP3"));
+	nv_preview_event_free(&event);
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal(NV_PREVIEW_KIND_VIDEO, event.kind);
+	assert_non_null(strstr(event.content, "format: MP4/MOV"));
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(audio);
+	remove_file(video);
 	remove_dir(dir);
 }
 

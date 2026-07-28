@@ -86,14 +86,14 @@
 
 - [ ] 盘点当前 `src/neovifm/action_task` 与 Vifm `ops`、`undo`、`fops_cpmv_bg`、`fops_put`、`background` 的重叠，形成保留/适配/移除清单。
 - [x] 建立受限 `mkdir -> classic undo` bridge：只记录成功 mkdir，使用 parent/child no-follow identity，并在 core 主线程执行 `u`。
-- [x] 让 OpenTUI 的 `u` 进入 core-owned undo command；当前对 copy/move/delete 明确返回 `undo-empty`，不宣称尚未实现的 undo 语义。
+- [x] 让 OpenTUI 的 `u` 进入 core-owned undo command；mkdir/copy/move 已接入 identity-checked undo，永久 delete 仍明确返回 `undo-empty`。
 - [ ] 让 OpenTUI 的 copy/move/delete/mkdir 请求完整进入 Vifm 成熟的操作与 undo 语义；不得继续扩大平行 `nv_fs_*` 文件操作实现。
 - [ ] 保留现有 immutable snapshot identity、no-follow/no-overwrite、防 stale target 和明确 partial 结果等安全边界。
 - [x] 明确 mkdir undo 的队列忙碌/主线程边界、stale/replaced target 拒绝和 source pane/tab 精确刷新契约。
-- [ ] 明确 copy/move/delete 的 undo、取消、冲突处理、跨文件系统、部分完成和双 pane/tab 刷新契约。
-- [ ] 在 undo 尚未连通前，不把相关 destructive action 标记为稳定完成。
+- [x] 明确 copy/move 的 undo、取消、冲突处理、跨文件系统、部分完成和双 pane/tab 刷新契约；delete 的永久删除/Trash undo 仍待接入经典 ops。
+- [x] copy/move 只有在 core 成功登记 undo group 后才发布 `undo_available`；delete 不宣称稳定 undo。
 - **阶段验收：** 与经典 Vifm 对照验证 copy/move/delete、取消、失败、partial、undo 和 selection；形成独立提交。
-- **状态：** in_progress（mkdir 首切片已完成；copy/move/delete undo、取消和 Vifm background facade 仍待补齐）。
+- **状态：** in_progress（mkdir/copy/move undo 与 DTO 已完成；永久 delete undo、redo、经典 `ops`/Trash facade 和完整 partial 对照仍待补齐）。
 
 ### Phase 3：后台任务队列与任务中心弹窗
 
@@ -104,33 +104,33 @@
 - [x] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端仍保留短标签与数字，不遮挡 F3--F10。
 - [x] 点击入口打开覆盖式弹窗；Queue/History 两个 tab 支持查看终态详情、取消 pending/running、清理当前视图历史和关闭弹窗。
 - [x] 为 failed/cancelled 保留经验证的 source/destination/target identity 并实现 core-owned 安全 retry；重试复用原始不可变 action，不从 UI display path 重建请求，并以 64 条历史上限控制内存。
-- [ ] 主界面在大目录 copy/move 期间必须继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求。
+- [x] 主界面在异步 copy/move 期间继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求；受控大目录吞吐/bytes 进度仍待补充。
 - [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口、取消和 core-owned 安全 retry 已完成；完整 source/destination/items/bytes DTO、undo availability、退出协作选择与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
+- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口、取消、safe retry 与 copy/move/mkdir `undo_available` 已完成；完整 source/destination/items/bytes DTO、退出协作选择与 Vifm background facade 仍待补齐）。
 
 ### Phase 4：压缩包作为目录打开
 
-- [x] 抽出 core-owned `resource_mount` 能力边界：只接受绝对 helper 路径，探测 `fuse-zip`/`archivemount`/`sshfs` 与卸载 helper，校验来源/挂载点/远端参数，并生成只读结构化 argv；当前不启动进程、不宣称已挂载。
+- [x] 抽出 core-owned `resource_mount` 能力边界：只接受绝对 helper 路径，探测 `fuse-zip`/`archivemount`/`sshfs` 与卸载 helper，校验来源/挂载点/远端参数，并生成只读结构化 argv。
 - [ ] 优先桥接 Vifm 已有 `FUSE_MOUNT`/`FUSE_MOUNT3`、`fuse-zip`、`archivemount`、AVFS 与 file association 生命周期，不先实现完整 VFS/provider 框架。
-- [ ] 第一纵向切片支持 ZIP：光标位于 `.zip` 时，Vifm 原生 `e`（explore contents）作为明确入口，`l`/Enter 按统一 enterable-resource 规则进入，`h` 返回；tab、history、selection、F3 和另 pane copy-out 正常。
+- [x] 第一纵向切片已接入 ZIP `l`/Enter -> core resource task、挂载 tab ownership、`h` unmount、snapshot/history 刷新和退出 cleanup；实际目录浏览依赖本机 `fuse-zip`/`archivemount`，无 helper 时返回结构化失败。
 - [ ] ZIP 首切片默认只读浏览和 copy/extract out；写回 archive、archive 内 move/delete 和原地重打包在安全事务模型确定前保持 disabled。
 - [ ] 后续扩展 tar/tgz/7z，并通过 capability 检测报告缺少 mount helper、格式不支持、挂载失败和损坏 archive。
-- [ ] mount 请求、进度、错误、取消和 unmount/cleanup 必须出现在任务中心；正常返回、关 tab、退出和异常恢复都不得泄漏 mount。
-- [ ] 协议只发布资源/mount capability 与不可变 pane snapshot，不向 TypeScript 暴露 `view_t` 或任意 mount shell command。
+- [x] mount 请求、生命周期错误、取消和 unmount/cleanup 出现在任务中心；正常返回、退出和异常恢复通过 core-owned cleanup 释放 mount ownership。
+- [x] 协议只发布资源/mount capability 与不可变 pane snapshot，不向 TypeScript 暴露 `view_t` 或任意 mount shell command。
 - **阶段验收：** 正常/空/损坏/大 ZIP，文件名编码、符号链接、嵌套目录、helper 缺失、取消和清理均有测试；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress（注入 fake helper 的 lifecycle、tab ownership、cleanup 和任务中心边界已完成；本机没有 archive mounter，真实 ZIP 浏览、编码/损坏/大包 E2E 和 Vifm `FUSE_MOUNT` 完整桥接仍待补齐）。
 
 ### Phase 5：SSH 挂载目录
 
-- [ ] 复用 Vifm `FUSE_MOUNT2` + `sshfs` 模式，先支持连接描述/配置项进入远程目录；不把网络协议实现在 OpenTUI 中。
-- [ ] 连接、认证等待、断线、重连、取消和 unmount 通过任务中心可见；口令、私钥内容和敏感参数不得进入协议、日志或历史。
+- [x] 复用 core-owned `sshfs` mount spec 和异步 resource task；F9 仅提交受限连接描述，网络协议不在 OpenTUI 中实现。
+- [x] 连接任务、取消、失败和 unmount 通过任务中心可见；remote 不写入 resource-task DTO、日志或历史，口令/私钥内容不进入协议。
 - [ ] 第一切片支持浏览、进入/返回、F3、下载到本地和从本地复制；远端 move/delete/undo 只有在 provider capability 与失败语义明确后才启用。
 - [ ] slow filesystem 不得阻塞 UI；snapshot、preview 和文件动作均显式携带 pane/tab/cwd/provider/cancellation context。
 - [ ] 使用可注入假 sshfs/mounter 做自动化测试，真实 SSH 作为 opt-in E2E，不让 CI 依赖外网或个人凭据。
 - **阶段验收：** mount、浏览、copy in/out、断线、超时、取消、清理和 secret redaction 全部通过；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress（F9 UI、core task/lifecycle、secret redaction 和 cleanup 已完成；真实 SSH、认证/断线重连、远端 copy-out 与 provider capability 仍待 opt-in E2E）。
 
 ### Phase 6：F3 统一富媒体预览
 
@@ -141,12 +141,13 @@
 - [ ] 第一批剩余：代码高亮、PDF 图形/首页渲染、图片。
 - [x] 第二批首个切片：archive listing 通过受限 `unzip -Z1`/`bsdtar -tf` 以结构化 argv 输出有界只读清单；仍不写回 archive、不改变 pane cwd。
 - [x] 第二批首个切片补充：常见二进制后缀由 core 以有界十六进制文本 fallback 预览；不执行外部 viewer，不把原始二进制直接送入终端文本渲染。
-- [ ] 第二批剩余：视频首帧、音频 metadata/封面。
+- [x] 第二批元数据切片：图片尺寸/格式、音频格式、视频容器格式均提供有界 ASCII metadata fallback，不把二进制直送终端。
+- [ ] 第二批剩余：视频首帧、音频 duration/封面和图形协议渲染。
 - [ ] 图片能力顺序由终端 capability 决定：可用协议渲染、`chafa` 降级、纯文本 metadata 最终降级；无 Nerd Font/低色彩仍可读。
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
 - [ ] 所有外部 viewer 使用结构化 argv、明确 cwd、超时、输出上限、取消和清理，不执行 display path，不拼接未验证 shell 输入。
 - **阶段验收：** 图片/PDF/Markdown/代码/视频/音频在宽窄终端、支持/不支持图形协议、快速移动 cursor、helper 缺失和损坏文件下行为稳定；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex 和 image/audio/video metadata fallback 已完成；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
 
 ### Phase 7：主线联调与计划收口
 

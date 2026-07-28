@@ -245,6 +245,32 @@ test("column headers and the function bar are clickable mouse targets", async ()
   expect(cancelled).toBe(true)
 })
 
+test("opens the guarded F9 SSH dialog and sends a validated resource command", async () => {
+  const sent: unknown[] = []
+  setup = await testRender(() => <App
+    workspace={workspace}
+    capabilities={[...capabilities, "resource-tasks-v1"]}
+    onCommand={(command) => { sent.push(command) }}
+  />, { width: 120, height: 20 })
+  await setup.renderOnce()
+
+  const sshButton = setup.renderer.root.findDescendantById("function-mount-ssh")
+  expect(sshButton).toBeDefined()
+  await setup.mockMouse.click(sshButton!.x, sshButton!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("F9 SSH")
+  expect(setup.renderer.root.findDescendantById("mount-ssh-input")).toBeDefined()
+
+  await setup.mockInput.typeText("user@example.test:/srv/data")
+  setup.mockInput.pressEnter()
+  await setup.renderOnce()
+  expect(sent.at(-1)).toEqual({
+    action: "mount-ssh",
+    pane: "left",
+    remote: "user@example.test:/srv/data",
+  })
+})
+
 test("never allocates a third pane for preview or tasks", async () => {
   setup = await testRender(() => <App workspace={workspace} preview={{
     task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
@@ -545,7 +571,7 @@ test("opens a clickable task center with queue and history", async () => {
     },
     {
       task_id: "3", command_sequence: 2, pane: "left", action: "move", state: "done",
-      completed_count: 1, total_count: 1, partial: false, retryable: false,
+      completed_count: 1, total_count: 1, partial: false, retryable: false, undo_available: true,
     },
   ]
   const sent: unknown[] = []
@@ -566,6 +592,11 @@ test("opens a clickable task center with queue and history", async () => {
   await setup.mockMouse.click(historyTab!.x, historyTab!.y)
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("move #3 done 1/1")
+  const historyEntry = setup.renderer.root.findDescendantById("task-row-3")
+  expect(historyEntry).toBeDefined()
+  await setup.mockMouse.click(historyEntry!.x, historyEntry!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("Undo available")
   const cancelEntry = setup.renderer.root.findDescendantById("task-row-4")
   expect(cancelEntry).toBeUndefined()
   const queueTab = setup.renderer.root.findDescendantById("task-queue-tab")

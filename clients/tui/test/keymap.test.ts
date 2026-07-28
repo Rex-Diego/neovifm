@@ -109,6 +109,7 @@ test("exposes every Total Commander function key through the shared action dispa
   expect(map.handle(key("f6"))).toEqual({ kind: "function", action: "move" })
   expect(map.handle(key("f7"))).toEqual({ kind: "function", action: "mkdir" })
   expect(map.handle(key("f8"))).toEqual({ kind: "function", action: "delete" })
+  expect(map.handle(key("f9"))).toEqual({ kind: "function", action: "mount-ssh" })
   expect(map.handle(key("f10"))).toEqual({ kind: "function", action: "quit" })
 })
 

@@ -221,12 +221,36 @@ describe("JSONL protocol", () => {
         content: "00000000  00 01 02 0f  |....|\n", truncated: false,
       },
     })
+    const image = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 9,
+      payload: {
+        task_id: "47", generation: "12", pane: "left", target_pane: "left", kind: "image", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f70686f746f2e706e67",
+        content: "image metadata\nformat: PNG\nsize: 256x200", truncated: false,
+      },
+    })
+    const audio = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 10,
+      payload: {
+        task_id: "48", generation: "13", pane: "left", target_pane: "left", kind: "audio", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f747261636b2e6d7033",
+        content: "audio metadata\nformat: MP3", truncated: false,
+      },
+    })
+    const video = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 11,
+      payload: {
+        task_id: "49", generation: "14", pane: "left", target_pane: "left", kind: "video", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6d6f7669652e6d7034",
+        content: "video metadata\nformat: MP4/MOV", truncated: false,
+      },
+    })
     const actionTask = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "action-task", sequence: 4,
       payload: {
         task_id: "9", command_sequence: 3, pane: "left", action: "copy",
         state: "failed", completed_count: 1, total_count: 2, failed_index: 1,
-        partial: true, retryable: true, error_code: "destination-exists", os_error: 17,
+        partial: true, retryable: true, undo_available: false, error_code: "destination-exists", os_error: 17,
       },
     })
 
@@ -238,8 +262,11 @@ describe("JSONL protocol", () => {
     if (archive.type !== "preview") throw new Error("expected archive preview")
     expect(archive.payload.content).toContain("note.txt")
     expect(binary).toMatchObject({ type: "preview", payload: { kind: "binary", content: expect.stringContaining("00000000") } })
+    expect(image).toMatchObject({ type: "preview", payload: { kind: "image", content: expect.stringContaining("size: 256x200") } })
+    expect(audio).toMatchObject({ type: "preview", payload: { kind: "audio", content: expect.stringContaining("format: MP3") } })
+    expect(video).toMatchObject({ type: "preview", payload: { kind: "video", content: expect.stringContaining("format: MP4/MOV") } })
     expect(Object.isFrozen(preview)).toBe(true)
-    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true } })
+    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true, undo_available: false } })
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },

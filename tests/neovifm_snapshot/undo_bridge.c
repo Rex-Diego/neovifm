@@ -68,4 +68,64 @@ TEST(undo_bridge_refuses_to_remove_a_replaced_directory)
 	remove_dir(parent);
 }
 
+TEST(undo_bridge_removes_a_completed_copy_as_one_group)
+{
+	const char *const source_parent = SANDBOX_PATH "/undo-copy-source";
+	const char *const destination_parent = SANDBOX_PATH "/undo-copy-destination";
+	const char *const source = SANDBOX_PATH "/undo-copy-source/file";
+	const char *const destination = SANDBOX_PATH "/undo-copy-destination/file";
+	create_dir(source_parent);
+	create_dir(destination_parent);
+	make_file(source, "content");
+	assert_success(nv_undo_bridge_init());
+	const nv_fs_identity_t source_identity = identity_for(source);
+	assert_success(nv_fs_copy(source, destination, identity_for(source_parent),
+			identity_for(destination_parent), source_identity, NULL, NULL));
+	const nv_undo_bridge_transfer_t transfer = {
+		.source_path = source, .destination_path = destination,
+		.source_identity = source_identity,
+	};
+	assert_success(nv_undo_bridge_record_copy_group(&transfer, 1U,
+			identity_for(destination_parent), (nv_undo_bridge_location_t){
+				.pane = 0U, .tab_id = 2U }));
+	assert_int_equal(NV_UNDO_BRIDGE_SUCCESS, nv_undo_bridge_undo(NULL));
+	assert_success(access(source, F_OK));
+	assert_failure(access(destination, F_OK));
+	nv_undo_bridge_reset();
+	remove_file(source);
+	remove_dir(source_parent);
+	remove_dir(destination_parent);
+}
+
+TEST(undo_bridge_moves_a_completed_move_back_to_its_source)
+{
+	const char *const source_parent = SANDBOX_PATH "/undo-move-source";
+	const char *const destination_parent = SANDBOX_PATH "/undo-move-destination";
+	const char *const source = SANDBOX_PATH "/undo-move-source/file";
+	const char *const destination = SANDBOX_PATH "/undo-move-destination/file";
+	create_dir(source_parent);
+	create_dir(destination_parent);
+	make_file(source, "content");
+	assert_success(nv_undo_bridge_init());
+	const nv_fs_identity_t source_identity = identity_for(source);
+	const nv_fs_identity_t source_parent_identity = identity_for(source_parent);
+	const nv_fs_identity_t destination_parent_identity = identity_for(destination_parent);
+	assert_success(nv_fs_move(source, destination, source_parent_identity,
+			destination_parent_identity, source_identity, NULL, NULL));
+	const nv_undo_bridge_transfer_t transfer = {
+		.source_path = source, .destination_path = destination,
+		.source_identity = source_identity,
+	};
+	assert_success(nv_undo_bridge_record_move_group(&transfer, 1U,
+			source_parent_identity, destination_parent_identity,
+			(nv_undo_bridge_location_t){ .pane = 1U, .tab_id = 3U }));
+	assert_int_equal(NV_UNDO_BRIDGE_SUCCESS, nv_undo_bridge_undo(NULL));
+	assert_success(access(source, F_OK));
+	assert_failure(access(destination, F_OK));
+	nv_undo_bridge_reset();
+	remove_file(source);
+	remove_dir(source_parent);
+	remove_dir(destination_parent);
+}
+
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */

@@ -8,7 +8,7 @@ export interface KeyLike {
   readonly meta: boolean
 }
 
-export type FunctionAction = "view" | "quick-view" | "edit" | "copy" | "move" | "mkdir" | "delete" | "quit"
+export type FunctionAction = "view" | "quick-view" | "edit" | "copy" | "move" | "mkdir" | "delete" | "mount-ssh" | "quit"
 
 export type KeymapResult =
   | Readonly<{ kind: "command"; command: CoreSessionCommand }>
@@ -107,6 +107,7 @@ export class VifmKeymap {
     if (name === "f6") return { kind: "function", action: "move" }
     if (name === "f7") return { kind: "function", action: "mkdir" }
     if (name === "f8") return { kind: "function", action: "delete" }
+    if (name === "f9") return { kind: "function", action: "mount-ssh" }
     if (name === "z" && key.shift) {
       this.#prefix = "shift-z"
       return { kind: "pending" }
