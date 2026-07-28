@@ -112,6 +112,7 @@
 
 ### Phase 4：压缩包作为目录打开
 
+- [x] 抽出 core-owned `resource_mount` 能力边界：只接受绝对 helper 路径，探测 `fuse-zip`/`archivemount`/`sshfs` 与卸载 helper，校验来源/挂载点/远端参数，并生成只读结构化 argv；当前不启动进程、不宣称已挂载。
 - [ ] 优先桥接 Vifm 已有 `FUSE_MOUNT`/`FUSE_MOUNT3`、`fuse-zip`、`archivemount`、AVFS 与 file association 生命周期，不先实现完整 VFS/provider 框架。
 - [ ] 第一纵向切片支持 ZIP：光标位于 `.zip` 时，Vifm 原生 `e`（explore contents）作为明确入口，`l`/Enter 按统一 enterable-resource 规则进入，`h` 返回；tab、history、selection、F3 和另 pane copy-out 正常。
 - [ ] ZIP 首切片默认只读浏览和 copy/extract out；写回 archive、archive 内 move/delete 和原地重打包在安全事务模型确定前保持 disabled。

@@ -128,3 +128,10 @@
 
 - Common binary suffixes now have a core-owned `binary` preview kind and a readable bounded hex/ascii representation. Unknown extensions still use the existing text path until content sniffing is introduced deliberately.
 - Generated output is ASCII-only and bounded by the normal preview byte cap, so NULs and invalid UTF-8 never reach the terminal renderer as raw file content.
+
+## 2026-07-28 Resource mounter capability boundary
+
+- `src/neovifm/resource_mount.[ch]` now provides a core-owned, shell-free preparation boundary for Vifm-compatible `fuse-zip`, `archivemount`, and `sshfs` flows. It accepts only absolute executable helper paths (or a fixed absolute candidate list), validates source/mount/remote bytes, and keeps every user value in one argv item.
+- Archive invocations are explicitly read-only: `fuse-zip -r archive mount` or `archivemount -o readonly archive mount`; SSH uses `sshfs -o ro remote mount`. The matching absolute `umount`/`fusermount` helper is required before a spec is returned so later cleanup cannot be silently omitted.
+- Tests inject executable fake helpers and cover fuse-zip preference, archivemount fallback, SSH remote argument isolation, read-only flags, and missing configured helper errors. On this macOS host `/usr/local/bin/sshfs` and `/sbin/umount` exist, but archive mounters are absent; no archive mount is attempted.
+- This is a preparation DTO, not a lifecycle implementation. The next archive/SSH slice must run specs in a cancellable background resource task, publish task events, retain mount ownership across tabs, and unmount on parent/close/exit/error before changing pane snapshots.

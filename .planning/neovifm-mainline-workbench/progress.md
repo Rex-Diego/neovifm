@@ -147,3 +147,9 @@
 ## 2026-07-28 Narrow Space viewer fallback
 
 - RED/GREEN evidence: a new 60-column app test first observed `SPACE QUICK VIEW`; the narrow Space path now renders the same full-screen `F3 VIEW` component while retaining the opposite-pane preview identity and close behavior. Focused test and typecheck pass.
+
+## 2026-07-28 Resource mounter capability boundary
+
+- Added `src/neovifm/resource_mount.[ch]` and wired it into the core probe/session build lists. The module prepares Vifm-compatible archive and SSH mounts without shell interpolation: absolute helper discovery, bounded path/remote validation, explicit read-only argv, and required unmount helper capability.
+- Added five C fixture tests using injected fake executables. Focused fixture passed 54 checks / 5 tests; the full snapshot binary passed 9418 checks / 77 tests after the cleanup fix.
+- This slice intentionally does not fork a helper or mutate pane state. The host has `sshfs` and `umount` but no `fuse-zip`/`archivemount`, so `archive-mount-unavailable` remains the correct core enter result until the cancellable resource lifecycle is wired.
