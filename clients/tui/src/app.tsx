@@ -1215,7 +1215,7 @@ export function App(props: AppProps) {
         : viewerOpen()
           ? <Viewer preview={matchingPreview()} />
           : quickPreviewOpen() && !wide()
-            ? <Viewer preview={matchingPreview()} quick />
+            ? <Viewer preview={matchingPreview()} />
           : props.workspace !== undefined
             ? <Workspace
                 workspace={props.workspace}

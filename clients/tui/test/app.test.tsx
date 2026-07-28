@@ -313,6 +313,23 @@ test("uses Space for an ephemeral opposite-pane preview while Tab still changes 
   expect(setup.captureCharFrame()).not.toContain("opposite pane preview")
 })
 
+test("falls back to the F3 full-screen viewer for Space in a narrow terminal", async () => {
+  setup = await testRender(() => <App workspace={workspace} onCommand={() => true} preview={{
+    task_id: "1", generation: "2", pane: "left", target_pane: "right", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content: "narrow opposite pane preview", truncated: false,
+  }} />, { width: 60, height: 20 })
+
+  await setup.renderOnce()
+  setup.mockInput.pressKey(" ")
+  await setup.renderOnce()
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("F3 VIEW")
+  expect(frame).toContain("narrow opposite pane preview")
+  expect(frame).not.toContain("SPACE QUICK VIEW")
+  expect(frame).not.toContain("right.txt")
+})
+
 test("opens a file with l through the same preview path as F3", async () => {
   setup = await testRender(() => <App workspace={workspace} preview={{
     task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",

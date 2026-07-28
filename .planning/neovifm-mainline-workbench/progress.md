@@ -131,3 +131,7 @@
 - The preview worker invokes only absolute helper paths and structured argv: ZIP prefers `unzip -Z1`, while tar-family archives prefer `bsdtar -tf` and then `tar -tf`. Output remains bounded by the existing preview byte cap and inherits cancellation/deadline handling.
 - This is intentionally a listing preview, not a mounted directory. It does not write archives, change pane cwd/tabs, or expose helper shell syntax; Phase 4 still needs the Vifm FUSE/sshfs-compatible enter/mount lifecycle.
 - RED/GREEN evidence: the protocol archive fixture failed before the new kind was implemented; after implementation the protocol suite/typecheck passed, core snapshot passed 9364 checks / 72 tests, real integration passed 12 tests / 79 expects, full TUI coverage passed 129 tests / 464 expects at 86.72% functions and 97.18% lines, audit passed, serial `env -u VIFM -u MYVIFMRC make check` passed, and schema/diff checks passed.
+
+## 2026-07-28 Narrow Space viewer fallback
+
+- RED/GREEN evidence: a new 60-column app test first observed `SPACE QUICK VIEW`; the narrow Space path now renders the same full-screen `F3 VIEW` component while retaining the opposite-pane preview identity and close behavior. Focused test and typecheck pass.

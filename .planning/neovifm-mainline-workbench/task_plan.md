@@ -52,7 +52,7 @@
 
 - [x] 先写交互契约和 RED tests，将 `Space` 从当前与 `Tab` 相同的 `focus-next` 映射中拆出；`Tab` 只负责切换活动 pane，`Space` 切换“在对面 pane 快速预览当前项”。
 - [x] Space 快速预览不得修改对面 pane 的 cwd、tab、selection、history 或 snapshot：源 pane 保持 active，移动源 cursor 时用 generation cancellation 更新预览；再次按 Space 或 Esc 恢复对面 pane 原视图，Tab 切 pane 前先关闭临时预览。
-- [ ] 双栏宽度不足或退化为单 pane 时，Space 使用与 F3 相同的全屏 viewer fallback；目录显示只读目录摘要/列表，普通文件走统一 preview resolver，archive/remote 不因预览而触发 mount/enter。
+- [x] 双栏宽度不足或退化为单 pane 时，Space 使用与 F3 相同的全屏 viewer fallback；目录显示只读目录摘要/列表，普通文件走统一 preview resolver，archive/remote 不因预览而触发 mount/enter。
 - [x] 将目录优先设为所有排序字段的稳定一级分组：parent entry（若存在）固定最前，真实目录在文件之前，升/降序只改变各组内部顺序；symlink 不在客户端追踪，只有 core 发布 enterable-directory capability 时才进入目录组。
 - [x] 把底部固定为恰好三行：status line、单行 divider、`F3--F10` function bar；删除空白 spacer，保证 60/80/100/160 列都不遮挡状态和任务入口。
 - [x] 将滚动条占宽限制为一个 terminal cell，缩短/变细 thumb；Nerd/Unicode 模式用圆角端帽字形，ASCII/低能力模式使用直线 glyph。若 OpenTUI 原生 scrollbar 不能稳定满足，封装局部 scrollbar adapter，不修改列表滚动语义。
