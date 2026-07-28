@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,19 @@ typedef struct nv_pending_action_context_t
 	struct nv_pending_action_context_t *next;
 } nv_pending_action_context_t;
 
+typedef struct nv_pending_resource_context_t
+{
+	uint64_t task_id;
+	nv_resource_task_kind_t kind;
+	nv_session_pane_t pane;
+	uint64_t tab_id;
+	char *origin_directory;
+	char *origin_cwd_bytes_hex;
+	char *origin_entry_path_bytes_hex;
+	char *remote;
+	struct nv_pending_resource_context_t *next;
+} nv_pending_resource_context_t;
+
 static int write_line(const char json[]);
 static int write_workspace(const nv_workspace_session_t *session,
 		unsigned int output_sequence, unsigned int command_sequence,
@@ -65,9 +79,13 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
 		nv_pending_action_context_t **pending_actions,
-		size_t *retry_history_count);
+		size_t *retry_history_count,
+		nv_resource_task_queue_t *resource_queue,
+		nv_pending_resource_context_t **pending_resources);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
+static int active_entry_is_archive(const nv_workspace_session_t *session);
+static int active_tab_has_resource(const nv_workspace_session_t *session);
 static int validate_preview_identity(const nv_workspace_session_t *session,
 		const nv_session_command_t *command, nv_entry_kind_t *kind,
 		const char **entry_name,
@@ -88,6 +106,28 @@ static int drain_action_events(nv_action_queue_t *queue,
 		uint64_t *preview_generation,
 		nv_pending_action_context_t **pending_actions,
 		size_t *retry_history_count);
+static int drain_resource_events(nv_resource_task_queue_t *queue,
+		nv_workspace_session_t *session, unsigned int *output_sequence,
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
+		nv_pending_resource_context_t **pending_resources);
+static int submit_archive_mount(const nv_workspace_session_t *session,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources);
+static int submit_ssh_mount(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_resource_task_queue_t *queue,
+		unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources);
+static int submit_resource_unmount(const nv_workspace_session_t *session,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources);
+static int submit_resource_unmount_at(const nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t tab_index,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources);
+static nv_pending_resource_context_t *find_resource_context(
+		nv_pending_resource_context_t *contexts, uint64_t task_id,
+		nv_pending_resource_context_t **previous);
+static void pending_resource_context_free(nv_pending_resource_context_t *context);
 static int command_is_action(nv_session_command_kind_t kind);
 static int refresh_action_tab(nv_workspace_session_t *session,
 		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
@@ -506,6 +546,19 @@ parse_command(const char line[], unsigned int previous_sequence,
 			NV_SESSION_MOVE_FIRST : NV_SESSION_MOVE_LAST;
 	}
 	else if(strcmp(action, "enter") == 0) command->kind = NV_SESSION_ENTER;
+	else if(strcmp(action, "mount-ssh") == 0)
+	{
+		command->kind = NV_SESSION_MOUNT_SSH;
+		command->owns_resource_fields = 1;
+		if(pane_from_string(json_object_get_string(payload, "pane"),
+				&command->pane) != 0 || copy_action_string(payload, "remote",
+				&command->resource_remote) != 0)
+		{
+			nv_session_command_free(command);
+			json_value_free(value);
+			return -1;
+		}
+	}
 	else if(strcmp(action, "parent") == 0) command->kind = NV_SESSION_PARENT;
 	else if(strcmp(action, "toggle-selection") == 0) command->kind = NV_SESSION_TOGGLE_SELECTION;
 	else if(strcmp(action, "refresh") == 0) command->kind = NV_SESSION_REFRESH;
@@ -519,6 +572,16 @@ parse_command(const char line[], unsigned int previous_sequence,
 			return -1;
 		}
 		command->kind = NV_SESSION_CANCEL_ACTION;
+	}
+	else if(strcmp(action, "cancel-resource") == 0)
+	{
+		if(parse_u64_field(payload, "task_id", &command->resource_task_id) != 0 ||
+				command->resource_task_id == 0U)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_CANCEL_RESOURCE;
 	}
 	else if(strcmp(action, "retry-action") == 0)
 	{
@@ -738,6 +801,30 @@ pending_action_context_free(nv_pending_action_context_t *context)
 	free(context);
 }
 
+static void
+pending_resource_context_free(nv_pending_resource_context_t *context)
+{
+	if(context == NULL) return;
+	free(context->origin_directory);
+	free(context->origin_cwd_bytes_hex);
+	free(context->origin_entry_path_bytes_hex);
+	free(context->remote);
+	free(context);
+}
+
+static nv_pending_resource_context_t *
+find_resource_context(nv_pending_resource_context_t *contexts, uint64_t task_id,
+		nv_pending_resource_context_t **previous)
+{
+	if(previous != NULL) *previous = NULL;
+	while(contexts != NULL && contexts->task_id != task_id)
+	{
+		if(previous != NULL) *previous = contexts;
+		contexts = contexts->next;
+	}
+	return contexts;
+}
+
 static nv_pending_action_context_t *
 find_retry_context(nv_pending_action_context_t *contexts, uint64_t task_id)
 {
@@ -808,13 +895,221 @@ apply_undo_command(nv_workspace_session_t *session, nv_action_queue_t *queue,
 }
 
 static int
+submit_archive_mount(const nv_workspace_session_t *session,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(session == NULL || queue == NULL || pending_resources == NULL ||
+			command_sequence == 0U)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	const nv_session_pane_t pane = session->active_pane;
+	const nv_pane_snapshot_t *const snapshot = nv_workspace_session_active(session);
+	if(snapshot == NULL || snapshot->cursor < 0 ||
+			snapshot->entries[snapshot->cursor].resource_kind != NV_ENTRY_RESOURCE_ARCHIVE)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	const size_t tab_index = nv_workspace_session_active_tab_index(session, pane);
+	const uint64_t tab_id = nv_workspace_session_tab_id(session, pane, tab_index);
+	const nv_session_resource_t *const resource =
+		nv_workspace_session_tab_resource(session, pane, tab_index);
+	if(tab_id == 0U || (resource != NULL && resource->active))
+	{
+		errno = EBUSY;
+		return -1;
+	}
+	char *const source_path = open_hex_decode(
+			snapshot->entries[snapshot->cursor].path_bytes_hex);
+	char *const origin_directory = open_hex_decode(snapshot->cwd_bytes_hex);
+	nv_pending_resource_context_t *const context = calloc(1U, sizeof(*context));
+	if(source_path == NULL || origin_directory == NULL || context == NULL)
+	{
+		free(source_path);
+		free(origin_directory);
+		free(context);
+		errno = ENOMEM;
+		return -1;
+	}
+	context->kind = NV_RESOURCE_TASK_MOUNT_ARCHIVE;
+	context->pane = pane;
+	context->tab_id = tab_id;
+	context->origin_directory = origin_directory;
+	context->origin_cwd_bytes_hex = strdup(snapshot->cwd_bytes_hex);
+	context->origin_entry_path_bytes_hex = strdup(
+			snapshot->entries[snapshot->cursor].path_bytes_hex);
+	if(context->origin_cwd_bytes_hex == NULL ||
+			context->origin_entry_path_bytes_hex == NULL)
+	{
+		free(source_path);
+		pending_resource_context_free(context);
+		errno = ENOMEM;
+		return -1;
+	}
+	const nv_resource_task_request_t request = {
+		.kind = NV_RESOURCE_TASK_MOUNT_ARCHIVE,
+		.pane = (unsigned int)pane,
+		.tab_id = tab_id,
+		.command_sequence = command_sequence,
+		.source_path = source_path,
+	};
+	uint64_t task_id = 0U;
+	const int result = nv_resource_task_queue_submit(queue, &request, &task_id);
+	free(source_path);
+	if(result != 0)
+	{
+		pending_resource_context_free(context);
+		return -1;
+	}
+	context->task_id = task_id;
+	context->next = *pending_resources;
+	*pending_resources = context;
+	return 0;
+}
+
+static int
+submit_ssh_mount(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_resource_task_queue_t *queue,
+		unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(session == NULL || command == NULL || queue == NULL ||
+			pending_resources == NULL ||
+			(command->pane != NV_SESSION_LEFT && command->pane != NV_SESSION_RIGHT) ||
+			command->resource_remote == NULL || command_sequence == 0U)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	const size_t tab_index = nv_workspace_session_active_tab_index(session,
+			command->pane);
+	const uint64_t tab_id = nv_workspace_session_tab_id(session, command->pane,
+			tab_index);
+	const nv_session_resource_t *const resource =
+		nv_workspace_session_tab_resource(session, command->pane, tab_index);
+	const nv_pane_snapshot_t *const snapshot = command->pane == NV_SESSION_LEFT ?
+		&session->left : &session->right;
+	if(tab_id == 0U || (resource != NULL && resource->active) ||
+			snapshot->cwd_bytes_hex == NULL)
+	{
+		errno = EBUSY;
+		return -1;
+	}
+	char *const origin_directory = open_hex_decode(snapshot->cwd_bytes_hex);
+	nv_pending_resource_context_t *const context = calloc(1U, sizeof(*context));
+	if(origin_directory == NULL || context == NULL)
+	{
+		free(origin_directory);
+		free(context);
+		errno = ENOMEM;
+		return -1;
+	}
+	context->kind = NV_RESOURCE_TASK_MOUNT_SSH;
+	context->pane = command->pane;
+	context->tab_id = tab_id;
+	context->origin_directory = origin_directory;
+	context->origin_cwd_bytes_hex = strdup(snapshot->cwd_bytes_hex);
+	context->remote = strdup(command->resource_remote);
+	if(context->origin_cwd_bytes_hex == NULL || context->remote == NULL)
+	{
+		pending_resource_context_free(context);
+		errno = ENOMEM;
+		return -1;
+	}
+	const nv_resource_task_request_t request = {
+		.kind = NV_RESOURCE_TASK_MOUNT_SSH,
+		.pane = (unsigned int)command->pane,
+		.tab_id = tab_id,
+		.command_sequence = command_sequence,
+		.remote = command->resource_remote,
+	};
+	uint64_t task_id = 0U;
+	if(nv_resource_task_queue_submit(queue, &request, &task_id) != 0)
+	{
+		pending_resource_context_free(context);
+		return -1;
+	}
+	context->task_id = task_id;
+	context->next = *pending_resources;
+	*pending_resources = context;
+	return 0;
+}
+
+static int
+submit_resource_unmount(const nv_workspace_session_t *session,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+	nv_pending_resource_context_t **pending_resources)
+{
+	if(session == NULL) { errno = EINVAL; return -1; }
+	const nv_session_pane_t pane = session->active_pane;
+	const size_t tab_index = nv_workspace_session_active_tab_index(session, pane);
+	return submit_resource_unmount_at(session, pane, tab_index, queue,
+			command_sequence, pending_resources);
+}
+
+static int
+submit_resource_unmount_at(const nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t tab_index,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(session == NULL || queue == NULL || pending_resources == NULL ||
+			command_sequence == 0U || pane > NV_SESSION_RIGHT)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	const uint64_t tab_id = nv_workspace_session_tab_id(session, pane, tab_index);
+	const nv_session_resource_t *const resource =
+		nv_workspace_session_tab_resource(session, pane, tab_index);
+	if(tab_id == 0U || resource == NULL || !resource->active ||
+			resource->mount_point == NULL || resource->unmount_path == NULL)
+	{
+		errno = ENOENT;
+		return -1;
+	}
+	nv_pending_resource_context_t *const context = calloc(1U, sizeof(*context));
+	if(context == NULL)
+	{
+		errno = ENOMEM;
+		return -1;
+	}
+	context->kind = NV_RESOURCE_TASK_UNMOUNT;
+	context->pane = pane;
+	context->tab_id = tab_id;
+	const nv_resource_task_request_t request = {
+		.kind = NV_RESOURCE_TASK_UNMOUNT,
+		.pane = (unsigned int)pane,
+		.tab_id = tab_id,
+		.command_sequence = command_sequence,
+		.mount_point = resource->mount_point,
+		.unmount_path = resource->unmount_path,
+	};
+	uint64_t task_id = 0U;
+	if(nv_resource_task_queue_submit(queue, &request, &task_id) != 0)
+	{
+		pending_resource_context_free(context);
+		return -1;
+	}
+	context->task_id = task_id;
+	context->next = *pending_resources;
+	*pending_resources = context;
+	return 0;
+}
+
+static int
 process_command_line(nv_workspace_session_t *session, char line[],
 		size_t line_capacity, unsigned int *output_sequence,
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
 		nv_pending_action_context_t **pending_actions,
-		size_t *retry_history_count)
+		size_t *retry_history_count,
+		nv_resource_task_queue_t *resource_queue,
+		nv_pending_resource_context_t **pending_resources)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
@@ -897,6 +1192,104 @@ process_command_line(nv_workspace_session_t *session, char line[],
 			nv_open_error_free(&open_error);
 			free(path);
 		}
+		else if(command.kind == NV_SESSION_ENTER && active_entry_is_archive(session))
+		{
+			const nv_pane_snapshot_t *const active =
+				nv_workspace_session_active(session);
+			const int archive = active != NULL && active->cursor >= 0 &&
+				active->entries[active->cursor].resource_kind == NV_ENTRY_RESOURCE_ARCHIVE;
+			if(archive)
+			{
+				if(resource_queue == NULL || pending_resources == NULL)
+				{
+					set_error(&error, "unsupported-resource",
+							"resource mounting is unavailable on this platform");
+				}
+				else if(submit_archive_mount(session, resource_queue, next_sequence,
+						pending_resources) == 0)
+				{
+					*command_sequence = next_sequence;
+					const int result = write_workspace(session, (*output_sequence)++,
+							*command_sequence, "command");
+					nv_snapshot_error_free(&error);
+					nv_session_command_free(&command);
+					return result;
+				}
+				else
+				{
+					const int submit_error = errno;
+					set_error(&error, submit_error == EBUSY ? "resource-queue-full" :
+							submit_error == EINVAL ? "invalid-resource" :
+							"resource-queue-failed", submit_error == EBUSY ?
+							"resource task queue is full" : "failed to queue resource mount");
+					error.os_error = submit_error;
+					error.retryable = submit_error == EBUSY;
+				}
+			}
+		}
+		else if(command.kind == NV_SESSION_MOUNT_SSH)
+		{
+			if(resource_queue == NULL || pending_resources == NULL)
+			{
+				set_error(&error, "unsupported-resource",
+						"resource mounting is unavailable on this platform");
+			}
+			else if(submit_ssh_mount(session, &command, resource_queue, next_sequence,
+					pending_resources) == 0)
+			{
+				*command_sequence = next_sequence;
+				const int result = write_workspace(session, (*output_sequence)++,
+						*command_sequence, "command");
+				nv_snapshot_error_free(&error);
+				nv_session_command_free(&command);
+				return result;
+			}
+			else
+			{
+				const int submit_error = errno;
+				set_error(&error, submit_error == EBUSY ? "resource-queue-full" :
+					submit_error == EINVAL ? "invalid-resource" :
+					"resource-queue-failed", submit_error == EBUSY ?
+					"resource task queue is full" : "failed to queue ssh mount");
+				error.os_error = submit_error;
+				error.retryable = submit_error == EBUSY;
+			}
+		}
+		else if(command.kind == NV_SESSION_PARENT && active_tab_has_resource(session))
+		{
+			const nv_session_pane_t pane = session->active_pane;
+			const size_t tab_index = nv_workspace_session_active_tab_index(session, pane);
+			const nv_session_resource_t *const resource =
+				nv_workspace_session_tab_resource(session, pane, tab_index);
+			if(resource != NULL && resource->active)
+			{
+				if(resource_queue == NULL || pending_resources == NULL)
+				{
+					set_error(&error, "unsupported-resource",
+							"resource unmounting is unavailable on this platform");
+				}
+				else if(submit_resource_unmount(session, resource_queue, next_sequence,
+						pending_resources) == 0)
+				{
+					*command_sequence = next_sequence;
+					const int result = write_workspace(session, (*output_sequence)++,
+						*command_sequence, "command");
+					nv_snapshot_error_free(&error);
+					nv_session_command_free(&command);
+					return result;
+				}
+				else
+				{
+					const int submit_error = errno;
+					set_error(&error, submit_error == EBUSY ? "resource-queue-full" :
+						submit_error == ENOENT ? "resource-not-mounted" :
+						"resource-queue-failed", submit_error == EBUSY ?
+						"resource task queue is full" : "failed to queue resource unmount");
+					error.os_error = submit_error;
+					error.retryable = submit_error == EBUSY;
+				}
+			}
+		}
 		else if(command.kind == NV_SESSION_CANCEL_ACTION)
 		{
 			if(action_queue == NULL || nv_action_queue_cancel(action_queue,
@@ -913,6 +1306,28 @@ process_command_line(nv_workspace_session_t *session, char line[],
 				*command_sequence = next_sequence;
 				const int result = write_workspace(session, (*output_sequence)++,
 						*command_sequence, "command");
+				nv_snapshot_error_free(&error);
+				nv_session_command_free(&command);
+				return result;
+			}
+		}
+		else if(command.kind == NV_SESSION_CANCEL_RESOURCE)
+		{
+			if(resource_queue == NULL || nv_resource_task_queue_cancel(resource_queue,
+					command.resource_task_id) != 0)
+			{
+				set_error(&error, resource_queue == NULL ? "unsupported-resource" :
+					errno == ENOENT ? "resource-task-not-found" :
+					"resource-cancel-failed", resource_queue == NULL ?
+					"resource tasks are unavailable on this platform" :
+					errno == ENOENT ? "resource task is no longer queued" :
+					"failed to cancel resource task");
+			}
+			else
+			{
+				*command_sequence = next_sequence;
+				const int result = write_workspace(session, (*output_sequence)++,
+					*command_sequence, "command");
 				nv_snapshot_error_free(&error);
 				nv_session_command_free(&command);
 				return result;
@@ -1079,6 +1494,26 @@ process_command_line(nv_workspace_session_t *session, char line[],
 	nv_snapshot_error_free(&error);
 	nv_session_command_free(&command);
 	return result;
+}
+
+static int
+active_entry_is_archive(const nv_workspace_session_t *session)
+{
+	if(session == NULL) return 0;
+	const nv_pane_snapshot_t *const active = nv_workspace_session_active(session);
+	return active != NULL && active->cursor >= 0 &&
+		active->entries[active->cursor].resource_kind == NV_ENTRY_RESOURCE_ARCHIVE;
+}
+
+static int
+active_tab_has_resource(const nv_workspace_session_t *session)
+{
+	if(session == NULL) return 0;
+	const nv_session_pane_t pane = session->active_pane;
+	const size_t tab_index = nv_workspace_session_active_tab_index(session, pane);
+	const nv_session_resource_t *const resource =
+		nv_workspace_session_tab_resource(session, pane, tab_index);
+	return resource != NULL && resource->active;
 }
 
 static int
@@ -1427,6 +1862,147 @@ drain_action_events(nv_action_queue_t *queue,
 	}
 }
 
+static int
+drain_resource_events(nv_resource_task_queue_t *queue,
+		nv_workspace_session_t *session, unsigned int *output_sequence,
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(queue == NULL) return 0;
+	if(nv_resource_task_queue_failed(queue))
+	{
+		fputs("neovifm-core-session: failed to publish resource terminal event\n",
+				stderr);
+		return -1;
+	}
+	for(;;)
+	{
+		nv_resource_task_event_t event = {};
+		const int popped = nv_resource_task_queue_pop(queue, &event);
+		if(popped < 0) return -1;
+		if(popped == 0) return 0;
+		int state_changed = 0;
+		int refresh_failed = 0;
+		if(event.state == NV_RESOURCE_TASK_DONE && pending_resources != NULL &&
+				(event.kind == NV_RESOURCE_TASK_MOUNT_ARCHIVE ||
+				 event.kind == NV_RESOURCE_TASK_MOUNT_SSH ||
+				 event.kind == NV_RESOURCE_TASK_UNMOUNT))
+		{
+			nv_pending_resource_context_t *previous = NULL;
+			nv_pending_resource_context_t *const context = find_resource_context(
+					*pending_resources, event.task_id, &previous);
+			if(context != NULL)
+			{
+				nv_snapshot_error_t error = {};
+				if(context->kind == NV_RESOURCE_TASK_UNMOUNT)
+				{
+					if(nv_workspace_session_detach_resource(session, context->pane,
+							context->tab_id, &error) == 0) state_changed = 1;
+				}
+				else
+				{
+					const nv_session_resource_kind_t kind = context->kind ==
+						NV_RESOURCE_TASK_MOUNT_ARCHIVE ? NV_SESSION_RESOURCE_ARCHIVE :
+						NV_SESSION_RESOURCE_SSH;
+					if(event.mount_point == NULL || event.unmount_path == NULL ||
+							nv_workspace_session_attach_resource(session, context->pane,
+							context->tab_id, kind, context->origin_directory,
+							context->origin_cwd_bytes_hex,
+							context->origin_entry_path_bytes_hex, context->remote,
+							event.mount_point, event.unmount_path, &error) == 0)
+						state_changed = 1;
+				}
+				if(!state_changed)
+				{
+					fprintf(stderr, "neovifm-core-session: resource state update failed: %s\n",
+							error.message == NULL ? "unknown error" : error.message);
+					refresh_failed = 1;
+				}
+				nv_snapshot_error_free(&error);
+				if(previous == NULL) *pending_resources = context->next;
+				else previous->next = context->next;
+				pending_resource_context_free(context);
+			}
+		}
+		else if((event.state == NV_RESOURCE_TASK_FAILED ||
+				event.state == NV_RESOURCE_TASK_CANCELLED) && pending_resources != NULL)
+		{
+			nv_pending_resource_context_t *previous = NULL;
+			nv_pending_resource_context_t *const context = find_resource_context(
+					*pending_resources, event.task_id, &previous);
+			if(context != NULL)
+			{
+				if(previous == NULL) *pending_resources = context->next;
+				else previous->next = context->next;
+				pending_resource_context_free(context);
+			}
+		}
+		if(state_changed && write_workspace(session, (*output_sequence)++,
+				event.command_sequence, "resource") != 0)
+			refresh_failed = 1;
+		char *const json = nv_protocol_resource_task_json(&event,
+				(*output_sequence)++);
+		const int result = json == NULL || write_line(json) != 0 ? -1 : 0;
+		nv_protocol_json_free(json);
+		nv_resource_task_event_free(&event);
+		if(!refresh_failed && state_changed && preview_queue != NULL &&
+				preview_generation != NULL && submit_active_preview(session,
+					preview_queue, preview_generation) != 0)
+		{
+			fputs("neovifm-core-session: failed to queue resource preview\n", stderr);
+		}
+		if(result != 0 || refresh_failed) return -1;
+	}
+}
+
+static int
+drain_resource_events_until_idle(nv_resource_task_queue_t *queue,
+		nv_workspace_session_t *session, unsigned int *output_sequence,
+		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(queue == NULL || pending_resources == NULL) return 0;
+	for(;;)
+	{
+		if(drain_resource_events(queue, session, output_sequence, preview_queue,
+				preview_generation, pending_resources) != 0)
+			return -1;
+		if(!nv_resource_task_queue_busy(queue) && *pending_resources == NULL)
+			return 0;
+	}
+}
+
+static int
+submit_resource_cleanup(const nv_workspace_session_t *session,
+		nv_resource_task_queue_t *queue, unsigned int command_sequence,
+		nv_pending_resource_context_t **pending_resources)
+{
+	if(session == NULL || queue == NULL || pending_resources == NULL ||
+			command_sequence == 0U)
+		return -1;
+	int result = 0;
+	for(nv_session_pane_t pane = NV_SESSION_LEFT; pane <= NV_SESSION_RIGHT;
+			++pane)
+	{
+		const size_t count = nv_workspace_session_tab_count(session, pane);
+		for(size_t index = 0U; index < count; ++index)
+		{
+			const nv_session_resource_t *const resource =
+				nv_workspace_session_tab_resource(session, pane, index);
+			if(resource == NULL || !resource->active) continue;
+			if(submit_resource_unmount_at(session, pane, index, queue,
+					command_sequence, pending_resources) != 0)
+			{
+				fprintf(stderr,
+					"neovifm-core-session: failed to queue resource cleanup for %s tab %zu\n",
+					pane == NV_SESSION_LEFT ? "left" : "right", index);
+				result = -1;
+			}
+		}
+	}
+	return result;
+}
+
 static char *
 open_hex_decode(const char hex[])
 {
@@ -1674,12 +2250,23 @@ main(int argc, char *argv[])
 		return 1;
 	}
 #endif
+	nv_resource_task_queue_t *const resource_queue = nv_resource_task_queue_alloc();
+	if(resource_queue == NULL)
+	{
+		fputs("neovifm-core-session: failed to initialize resource task queue\n", stderr);
+		nv_action_queue_free(action_queue);
+		nv_preview_queue_free(preview_queue);
+		nv_undo_bridge_reset();
+		nv_workspace_session_free(&session);
+		return 1;
+	}
 	uint64_t preview_generation = 0U;
 	char *const hello = nv_protocol_preview_session_hello_json(0U);
 	if(write_line(hello) != 0 || write_workspace(&session, 1U, 0U, "initial") != 0)
 	{
 		nv_protocol_json_free(hello);
-		nv_action_queue_free(action_queue);
+		 nv_action_queue_free(action_queue);
+		 nv_resource_task_queue_free(resource_queue);
 		nv_preview_queue_free(preview_queue);
 		nv_undo_bridge_reset();
 		nv_workspace_session_free(&session);
@@ -1695,6 +2282,7 @@ main(int argc, char *argv[])
 	unsigned int output_sequence = 2U;
 	unsigned int command_sequence = 0U;
 	nv_pending_action_context_t *pending_actions = NULL;
+	nv_pending_resource_context_t *pending_resources = NULL;
 	size_t retry_history_count = 0U;
 	int result = 0;
 #ifdef __APPLE__
@@ -1715,20 +2303,26 @@ main(int argc, char *argv[])
 				result = 1;
 				break;
 			}
-			if(drain_action_events(action_queue, &session, &output_sequence,
+				if(drain_action_events(action_queue, &session, &output_sequence,
 					command_sequence, preview_queue, &preview_generation,
 					&pending_actions, &retry_history_count) != 0)
 			{
 				result = 1;
-				break;
-			}
+					break;
+				}
+				if(drain_resource_events(resource_queue, &session, &output_sequence,
+						preview_queue, &preview_generation, &pending_resources) != 0)
+				{
+					result = 1;
+					break;
+				}
 			if(!stdin_ready) continue;
 			if(fgets(line, sizeof(line), stdin) == NULL) break;
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, &directory_changed, preview_queue,
 					&preview_generation, action_queue, &pending_actions,
-					&retry_history_count) != 0)
+					&retry_history_count, resource_queue, &pending_resources) != 0)
 			{
 				result = 1;
 				break;
@@ -1762,29 +2356,47 @@ main(int argc, char *argv[])
 #else
 		stdin_ready = 1;
 #endif
-		if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
-				drain_action_events(action_queue, &session, &output_sequence,
-					command_sequence, preview_queue, &preview_generation,
-					&pending_actions, &retry_history_count) != 0)
+			if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
+					drain_action_events(action_queue, &session, &output_sequence,
+						command_sequence, preview_queue, &preview_generation,
+						&pending_actions, &retry_history_count) != 0)
 		{
 			result = 1;
-			break;
-		}
+				break;
+			}
+			if(drain_resource_events(resource_queue, &session, &output_sequence,
+					preview_queue, &preview_generation, &pending_resources) != 0)
+			{
+				result = 1;
+				break;
+			}
 		if(!stdin_ready) continue;
 		if(fgets(line, sizeof(line), stdin) == NULL) break;
-		if(process_command_line(&session, line, sizeof(line), &output_sequence,
-					&command_sequence, NULL, preview_queue, &preview_generation,
-					action_queue, &pending_actions, &retry_history_count) != 0)
+				if(process_command_line(&session, line, sizeof(line), &output_sequence,
+						&command_sequence, NULL, preview_queue, &preview_generation,
+						action_queue, &pending_actions, &retry_history_count,
+						resource_queue, &pending_resources) != 0)
 		{
 			result = 1;
 			break;
 		}
 	}
 	nv_action_queue_cancel_all(action_queue);
+	nv_resource_task_queue_cancel_all(resource_queue);
 	if(drain_action_events(action_queue, &session, &output_sequence,
 				command_sequence, preview_queue, &preview_generation,
 				&pending_actions, &retry_history_count) != 0) result = 1;
 	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
+	if(drain_resource_events_until_idle(resource_queue, &session,
+			&output_sequence, preview_queue, &preview_generation,
+			&pending_resources) != 0) result = 1;
+	const unsigned int cleanup_sequence = command_sequence == UINT_MAX ?
+		command_sequence : command_sequence + 1U;
+	if(submit_resource_cleanup(&session, resource_queue, cleanup_sequence,
+			&pending_resources) != 0) result = 1;
+	if(drain_resource_events_until_idle(resource_queue, &session,
+			&output_sequence, preview_queue, &preview_generation,
+			&pending_resources) != 0) result = 1;
 	nv_snapshot_error_free(&error);
 	while(pending_actions != NULL)
 	{
@@ -1792,7 +2404,14 @@ main(int argc, char *argv[])
 		pending_action_context_free(pending_actions);
 		pending_actions = next;
 	}
+	while(pending_resources != NULL)
+	{
+		nv_pending_resource_context_t *const next = pending_resources->next;
+		pending_resource_context_free(pending_resources);
+		pending_resources = next;
+	}
 	nv_action_queue_free(action_queue);
+	nv_resource_task_queue_free(resource_queue);
 	nv_preview_queue_free(preview_queue);
 	nv_undo_bridge_reset();
 	nv_workspace_session_free(&session);

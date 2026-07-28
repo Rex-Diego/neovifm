@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/task" },
     { "$ref": "#/$defs/preview" },
     { "$ref": "#/$defs/actionTask" },
+    { "$ref": "#/$defs/resourceTask" },
     { "$ref": "#/$defs/open" },
     { "$ref": "#/$defs/commandError" },
     { "$ref": "#/$defs/command" }
@@ -41,7 +42,7 @@
               "required": ["command_sequence", "trigger", "active_pane", "left", "right"],
               "properties": {
                 "command_sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-                "trigger": { "enum": ["initial", "command", "watch", "action"] },
+                "trigger": { "enum": ["initial", "command", "watch", "action", "resource"] },
                 "active_pane": { "enum": ["left", "right"] },
                 "left": { "$ref": "neovifm-core-v1.schema.json#/$defs/paneSnapshot" },
                 "right": { "$ref": "neovifm-core-v1.schema.json#/$defs/paneSnapshot" },
@@ -122,6 +123,29 @@
         { "properties": { "type": { "const": "action-task" }, "payload": { "$ref": "#/$defs/actionTaskPayload" } } }
       ]
     },
+    "resourceTaskPayload": {
+      "type": "object",
+      "required": ["task_id", "command_sequence", "pane", "tab_id", "resource", "state"],
+      "properties": {
+        "task_id": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
+        "command_sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "pane": { "enum": ["left", "right"] },
+        "tab_id": { "$ref": "#/$defs/tabId" },
+        "resource": { "enum": ["mount-archive", "mount-ssh", "unmount"] },
+        "state": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
+        "source_path": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "mount_point": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "unmount_path": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "os_error": { "type": "integer" }
+      }
+    },
+    "resourceTask": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "properties": { "type": { "const": "resource-task" }, "payload": { "$ref": "#/$defs/resourceTaskPayload" } } }
+      ]
+    },
     "openPayload": {
       "type": "object",
       "required": ["command_sequence", "intent", "source", "state", "path_bytes_hex", "argv"],
@@ -189,7 +213,8 @@
       "properties": {
         "id": { "$ref": "#/$defs/tabId" },
         "cwd_display": { "type": "string", "maxLength": 16384 },
-        "active": { "type": "boolean" }
+        "active": { "type": "boolean" },
+        "resource_kind": { "enum": ["archive", "ssh"] }
       }
     },
     "tabId": {
@@ -227,6 +252,8 @@
         { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "tab-cycle" }, "delta": { "type": "integer", "minimum": -999, "maximum": 999, "not": { "const": 0 } } } },
         { "type": "object", "required": ["action"], "properties": { "action": { "const": "undo" } } },
         { "type": "object", "required": ["action", "task_id"], "properties": { "action": { "enum": ["cancel-action", "retry-action"] }, "task_id": { "$ref": "neovifm-core-v0.schema.json#/$defs/unsignedDecimalString" } } },
+        { "type": "object", "required": ["action", "task_id"], "properties": { "action": { "const": "cancel-resource" }, "task_id": { "$ref": "neovifm-core-v0.schema.json#/$defs/unsignedDecimalString" } } },
+        { "type": "object", "required": ["action", "pane", "remote"], "properties": { "action": { "const": "mount-ssh" }, "pane": { "enum": ["left", "right"] }, "remote": { "type": "string", "minLength": 1, "maxLength": 16384 } } },
         {
           "allOf": [
             { "$ref": "#/$defs/sourceIdentity" },

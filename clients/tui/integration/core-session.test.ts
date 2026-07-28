@@ -204,12 +204,23 @@ test("real v3 session previews a ZIP archive as a bounded listing", async () => 
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive preview")
     expect(state.preview).toMatchObject({ kind: "archive", state: "done", truncated: false })
     expect(state.preview?.content).toContain("note.txt")
-    const enterCommandSequence = state.commandSequence + 1
-    expect(await session.send({ action: "enter" })).toBe(true)
-    await waitFor(() => state.phase === "ready" && "session" in state && state.commandError?.code === "archive-mount-unavailable" && state.commandSequence === enterCommandSequence)
-    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive enter acknowledgement")
-    expect(state.workspace.left.cwd_display).toBe(left)
-    expect(errors).toEqual([])
+		const enterCommandSequence = state.commandSequence + 1
+		expect(await session.send({ action: "enter" })).toBe(true)
+		await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === enterCommandSequence && state.resourceTasks?.some((task) => task.command_sequence === enterCommandSequence && (task.state === "done" || task.state === "failed" || task.state === "cancelled")) === true)
+		if (state.phase !== "ready" || !("session" in state)) throw new Error("expected archive enter acknowledgement")
+		const mountTask = state.resourceTasks?.find((task) => task.command_sequence === enterCommandSequence && task.state !== "queued" && task.state !== "running")
+		if (mountTask?.state === "failed") {
+			expect(mountTask.error_code).toBe("resource-mounter-unavailable")
+			expect(state.workspace.left.cwd_display).toBe(left)
+		} else {
+			expect(mountTask?.state).toBe("done")
+			expect(state.workspace.left.cwd_display).not.toBe(left)
+			expect(state.workspace.left_tabs?.find((tab) => tab.active)?.resource_kind).toBe("archive")
+			const parentCommandSequence = state.commandSequence + 1
+			expect(await session.send({ action: "parent" })).toBe(true)
+			await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.cwd_display === left && state.resourceTasks?.some((task) => task.command_sequence === parentCommandSequence && task.state === "done") === true)
+		}
+		expect(errors).toEqual([])
   } finally {
     session.close()
     await session.completion

@@ -5,6 +5,7 @@ import type {
   OpenPayload,
   PreviewPayload,
   PreviewTaskPayload,
+  ResourceTaskPayload,
   ProtocolRecord,
   SnapshotPayload,
   WorkspaceSnapshotPayload,
@@ -18,7 +19,7 @@ export type ProbeState =
   | Readonly<{
       phase: "ready"; hello: HelloPayload; workspace: WorkspaceSnapshotPayload; sequence: number
       session: true; version: 2 | 3; commandSequence: number; commandError?: ErrorPayload
-      tasks?: readonly PreviewTaskPayload[]; actionTasks?: readonly ActionTaskPayload[]; preview?: PreviewPayload; open?: OpenPayload
+      tasks?: readonly PreviewTaskPayload[]; actionTasks?: readonly ActionTaskPayload[]; resourceTasks?: readonly ResourceTaskPayload[]; preview?: PreviewPayload; open?: OpenPayload
     }>
   | Readonly<{ phase: "failed"; hello: HelloPayload; error: ErrorPayload; sequence: number }>
 
@@ -43,7 +44,7 @@ export function reduceProbeState(state: ProbeState, record: ProtocolRecord): Pro
     if (state.version === 0 && record.type === "snapshot") return frozen({ phase: "ready", hello: state.hello, snapshot: record.payload, sequence: record.sequence })
     if (state.version === 1 && record.type === "workspace-snapshot") return frozen({ phase: "ready", hello: state.hello, workspace: record.payload, sequence: record.sequence })
     if ((state.version === 2 || state.version === 3) && record.version === state.version && record.type === "workspace-snapshot" && record.payload.command_sequence === 0 && record.payload.trigger === "initial") {
-      return frozen({ phase: "ready", hello: state.hello, workspace: record.payload, sequence: record.sequence, session: true, version: state.version, commandSequence: 0, ...(state.version === 3 ? { tasks: frozen([]), actionTasks: frozen([]) } : {}) })
+      return frozen({ phase: "ready", hello: state.hello, workspace: record.payload, sequence: record.sequence, session: true, version: state.version, commandSequence: 0, ...(state.version === 3 ? { tasks: frozen([]), actionTasks: frozen([]), resourceTasks: frozen([]) } : {}) })
     }
     throw new ProbeStateError("Expected the version-specific terminal record after hello")
   }
@@ -51,9 +52,9 @@ export function reduceProbeState(state: ProbeState, record: ProtocolRecord): Pro
     increasing(state.sequence, record.sequence)
     if (record.version !== state.version) throw new ProbeStateError("Protocol record version changed within a session")
     if (record.type === "workspace-snapshot") {
-      const isAsyncRefresh = (record.payload.trigger === "watch" || record.payload.trigger === "action") && record.payload.command_sequence === state.commandSequence
+      const isAsyncRefresh = (record.payload.trigger === "watch" || record.payload.trigger === "action" || record.payload.trigger === "resource") && record.payload.command_sequence === state.commandSequence
       if (!isAsyncRefresh && record.payload.command_sequence <= state.commandSequence) throw new ProbeStateError("Session command sequence must increase")
-      if (record.payload.trigger !== "watch" && record.payload.trigger !== "action" && record.payload.command_sequence === state.commandSequence) throw new ProbeStateError("Only asynchronous snapshots can retain a command sequence")
+      if (record.payload.trigger !== "watch" && record.payload.trigger !== "action" && record.payload.trigger !== "resource" && record.payload.command_sequence === state.commandSequence) throw new ProbeStateError("Only asynchronous snapshots can retain a command sequence")
       return frozen({ ...state, workspace: record.payload, sequence: record.sequence, commandSequence: record.payload.command_sequence, commandError: undefined })
     }
     if (record.type === "command-error") {
@@ -74,6 +75,12 @@ export function reduceProbeState(state: ProbeState, record: ProtocolRecord): Pro
       const prior = state.actionTasks ?? []
       const actionTasks = frozen([...prior.filter((task) => task.task_id !== record.payload.task_id), record.payload].slice(-64))
       return frozen({ ...state, sequence: record.sequence, actionTasks })
+    }
+    if (state.version === 3 && record.type === "resource-task") {
+      if (record.payload.command_sequence > state.commandSequence) throw new ProbeStateError("Resource task references an unacknowledged command")
+      const prior = state.resourceTasks ?? []
+      const resourceTasks = frozen([...prior.filter((task) => task.task_id !== record.payload.task_id), record.payload].slice(-64))
+      return frozen({ ...state, sequence: record.sequence, resourceTasks })
     }
     if (state.version === 3 && record.type === "preview") {
       const current = state.preview

@@ -104,12 +104,13 @@ export interface ErrorPayload {
 
 export type PaneId = "left" | "right"
 export type PaneSortKey = "name" | "extension" | "size" | "ctime" | "mtime" | "mode" | "type" | "other"
-export type SessionSnapshotTrigger = "initial" | "command" | "watch" | "action"
+export type SessionSnapshotTrigger = "initial" | "command" | "watch" | "action" | "resource"
 
 export interface PaneTabPayload {
   readonly id: string
   readonly cwd_display: string
   readonly active: boolean
+  readonly resource_kind?: "archive" | "ssh"
 }
 
 export interface WorkspaceSnapshotPayload {
@@ -167,6 +168,22 @@ export interface ActionTaskPayload {
   readonly os_error?: number
 }
 
+export type ResourceTaskKind = "mount-archive" | "mount-ssh" | "unmount"
+
+export interface ResourceTaskPayload {
+  readonly task_id: string
+  readonly command_sequence: number
+  readonly pane: PaneId
+  readonly tab_id: string
+  readonly resource: ResourceTaskKind
+  readonly state: PreviewTaskState
+  readonly source_path?: string
+  readonly mount_point?: string
+  readonly unmount_path?: string
+  readonly error_code?: string
+  readonly os_error?: number
+}
+
 export type OpenIntent = "open" | "edit" | "preview"
 export type OpenSource = "association" | "platform"
 export interface OpenPayload {
@@ -213,6 +230,7 @@ export type PreviewSessionWorkspaceSnapshotRecord = Envelope<
 export type PreviewTaskRecord = Envelope<"task", PreviewTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewRecord = Envelope<"preview", PreviewPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type ActionTaskRecord = Envelope<"action-task", ActionTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type ResourceTaskRecord = Envelope<"resource-task", ResourceTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type OpenRecord = Envelope<"open", OpenPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionCommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionErrorRecord = Envelope<"error", ErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
@@ -233,6 +251,7 @@ export type ProtocolRecord =
   | PreviewTaskRecord
   | PreviewRecord
   | ActionTaskRecord
+  | ResourceTaskRecord
   | OpenRecord
   | PreviewSessionCommandErrorRecord
   | PreviewSessionErrorRecord
@@ -559,8 +578,8 @@ function parsePaneSortKey(value: unknown, path: string): PaneSortKey {
 
 function parseSessionSnapshotTrigger(value: unknown, path: string): SessionSnapshotTrigger {
   const trigger = stringValue(value, path)
-  if (trigger !== "initial" && trigger !== "command" && trigger !== "watch" && trigger !== "action") {
-    return invalid(path, "must be initial, command, watch, or action")
+  if (trigger !== "initial" && trigger !== "command" && trigger !== "watch" && trigger !== "action" && trigger !== "resource") {
+    return invalid(path, "must be initial, command, watch, action, or resource")
   }
   return trigger
 }
@@ -586,6 +605,14 @@ function parsePaneTabs(
       id,
       cwd_display: displayString(object.cwd_display, `${path}[${index}].cwd_display`),
       active: booleanValue(object.active, `${path}[${index}].active`),
+      ...(object.resource_kind === undefined ? {} : {
+        resource_kind: (() => {
+          const resource = stringValue(object.resource_kind, `${path}[${index}].resource_kind`)
+          if (resource === "archive") return "archive" as const
+          if (resource === "ssh") return "ssh" as const
+          return invalid(`${path}[${index}].resource_kind`, "must be archive or ssh")
+        })(),
+      }),
     })
   })
   const activeTabs = tabs.filter((tab) => tab.active)
@@ -747,6 +774,40 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
   })
 }
 
+function parseResourceTaskPayload(value: unknown): ResourceTaskPayload {
+  const payload = objectValue(value, "payload")
+  const resource = stringValue(payload.resource, "payload.resource")
+  if (resource !== "mount-archive" && resource !== "mount-ssh" && resource !== "unmount") {
+    return invalid("payload.resource", "is not a supported resource task")
+  }
+  const sourcePath = payload.source_path === undefined
+    ? undefined
+    : displayString(payload.source_path, "payload.source_path", false, MAX_HEX_TEXT_BYTES)
+  const mountPoint = payload.mount_point === undefined
+    ? undefined
+    : displayString(payload.mount_point, "payload.mount_point", false, MAX_HEX_TEXT_BYTES)
+  const unmountPath = payload.unmount_path === undefined
+    ? undefined
+    : displayString(payload.unmount_path, "payload.unmount_path", false, MAX_HEX_TEXT_BYTES)
+  const errorCode = payload.error_code === undefined
+    ? undefined
+    : boundedString(payload.error_code, "payload.error_code", MAX_ERROR_CODE_BYTES, false)
+  const osError = payload.os_error === undefined ? undefined : integerValue(payload.os_error, "payload.os_error")
+  return frozen({
+    task_id: patternString(payload.task_id, "payload.task_id", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
+    command_sequence: integerValue(payload.command_sequence, "payload.command_sequence", 1),
+    pane: parsePaneId(payload.pane, "payload.pane"),
+    tab_id: patternString(payload.tab_id, "payload.tab_id", POSITIVE_DECIMAL_PATTERN, MAX_UINT64_TEXT_BYTES),
+    resource,
+    state: parsePreviewTaskState(payload.state, "payload.state"),
+    ...(sourcePath === undefined ? {} : { source_path: sourcePath }),
+    ...(mountPoint === undefined ? {} : { mount_point: mountPoint }),
+    ...(unmountPath === undefined ? {} : { unmount_path: unmountPath }),
+    ...(errorCode === undefined ? {} : { error_code: errorCode }),
+    ...(osError === undefined ? {} : { os_error: osError }),
+  })
+}
+
 function parseOpenPayload(value: unknown): OpenPayload {
   const payload = objectValue(value, "payload")
   const intent = stringValue(payload.intent, "payload.intent")
@@ -800,6 +861,7 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
       case "task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewTaskPayload(envelope.payload) })
       case "preview": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewPayload(envelope.payload) })
       case "action-task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseActionTaskPayload(envelope.payload) })
+      case "resource-task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseResourceTaskPayload(envelope.payload) })
       case "open": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseOpenPayload(envelope.payload) })
       case "command-error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseCommandErrorPayload(envelope.payload) })
       case "error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseErrorPayload(envelope.payload) })

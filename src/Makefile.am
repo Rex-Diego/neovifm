@@ -76,6 +76,7 @@ neovifm_core_session_SOURCES = \
 	neovifm/undo_bridge.c neovifm/undo_bridge.h \
 	neovifm/undo_compat.c \
 	neovifm/action_task.c neovifm/action_task.h \
+	neovifm/resource_task.c neovifm/resource_task.h \
 	neovifm/preview_task.c neovifm/preview_task.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
 	undo.c undo.h \

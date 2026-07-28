@@ -30,6 +30,11 @@ static int ensure_tabs(nv_workspace_session_t *session,
 		nv_snapshot_error_t *error);
 static int clone_snapshot(const nv_pane_snapshot_t *source,
 		nv_pane_snapshot_t *clone, nv_snapshot_error_t *error);
+static void resource_free(nv_session_resource_t *resource);
+static nv_pane_snapshot_t *tab_snapshot(nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t index);
+static nv_session_resource_t *tab_resource(nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t index);
 static int find_tab_index(const nv_session_tabs_t *tabs, uint64_t id,
 		size_t *index);
 static int replace_snapshot(nv_workspace_session_t *session,
@@ -39,6 +44,19 @@ static char *hex_decode(const char hex[]);
 static char *parent_path(const char path[]);
 static int refresh_snapshot(nv_workspace_session_t *session,
 		nv_pane_snapshot_t *snapshot, nv_snapshot_error_t *error);
+
+static void
+resource_free(nv_session_resource_t *resource)
+{
+	if(resource == NULL) return;
+	free(resource->origin_directory);
+	free(resource->origin_cwd_bytes_hex);
+	free(resource->origin_entry_path_bytes_hex);
+	free(resource->remote);
+	free(resource->mount_point);
+	free(resource->unmount_path);
+	*resource = (nv_session_resource_t){};
+}
 
 static int
 set_error(nv_snapshot_error_t *error, const char code[], const char message[])
@@ -93,6 +111,25 @@ static const nv_session_tabs_t *
 const_pane_tabs(const nv_workspace_session_t *session, nv_session_pane_t pane)
 {
 	return pane == NV_SESSION_LEFT ? &session->left_tabs : &session->right_tabs;
+}
+
+static nv_pane_snapshot_t *
+tab_snapshot(nv_workspace_session_t *session, nv_session_pane_t pane,
+		size_t index)
+{
+	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
+	if(tabs->count == 0U || index >= tabs->count) return NULL;
+	return index == tabs->active ? pane_snapshot(session, pane) :
+		&tabs->items[index].snapshot;
+}
+
+static nv_session_resource_t *
+tab_resource(nv_workspace_session_t *session, nv_session_pane_t pane,
+		size_t index)
+{
+	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
+	if(tabs->count == 0U || index >= tabs->count) return NULL;
+	return &tabs->items[index].resource;
 }
 
 static uint64_t
@@ -206,6 +243,17 @@ nv_workspace_session_tab_snapshot(const nv_workspace_session_t *session,
 		return const_pane_snapshot(session, pane);
 	}
 	return &tabs->items[index].snapshot;
+}
+
+const nv_session_resource_t *
+nv_workspace_session_tab_resource(const nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t index)
+{
+	if(session == NULL || !valid_pane(pane) ||
+			index >= nv_workspace_session_tab_count(session, pane)) return NULL;
+	const nv_session_tabs_t *const tabs = const_pane_tabs(session, pane);
+	if(tabs->count == 0U) return NULL;
+	return &tabs->items[index].resource;
 }
 
 int
@@ -385,6 +433,117 @@ nv_workspace_session_refresh_tab(nv_workspace_session_t *session,
 	return refresh_snapshot(session, snapshot, error);
 }
 
+int
+nv_workspace_session_attach_resource(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_session_resource_kind_t kind,
+		const char origin_directory[], const char origin_cwd_bytes_hex[],
+		const char origin_entry_path_bytes_hex[], const char remote[],
+		const char mount_point[], const char unmount_path[],
+		nv_snapshot_error_t *error)
+{
+	if(session == NULL || error == NULL || !valid_pane(pane) || tab_id == 0U ||
+			(kind != NV_SESSION_RESOURCE_ARCHIVE && kind != NV_SESSION_RESOURCE_SSH) ||
+			origin_directory == NULL || origin_cwd_bytes_hex == NULL ||
+			mount_point == NULL || mount_point[0] != '/' || unmount_path == NULL ||
+			unmount_path[0] != '/')
+	{
+		return set_error(error, "invalid-resource", "resource attachment is invalid");
+	}
+	if(kind == NV_SESSION_RESOURCE_ARCHIVE && origin_entry_path_bytes_hex == NULL)
+		return set_error(error, "invalid-resource", "archive origin is missing");
+	if(kind == NV_SESSION_RESOURCE_SSH && remote == NULL)
+		return set_error(error, "invalid-resource", "ssh origin is missing");
+	nv_snapshot_error_free(error);
+	if(ensure_tabs(session, error) != 0) return -1;
+	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
+	size_t index = 0U;
+	if(find_tab_index(tabs, tab_id, &index) != 0)
+		return set_error(error, "invalid-tab", "resource tab does not exist");
+	nv_pane_snapshot_t *const snapshot = tab_snapshot(session, pane, index);
+	nv_session_resource_t *const resource = tab_resource(session, pane, index);
+	if(snapshot == NULL || resource == NULL || resource->active ||
+			strcmp(snapshot->cwd_bytes_hex, origin_cwd_bytes_hex) != 0)
+		return set_error(error, "stale-resource", "resource origin is no longer active");
+	nv_session_resource_t next = {
+		.active = 1,
+		.kind = kind,
+		.origin_directory = strdup(origin_directory),
+		.origin_cwd_bytes_hex = strdup(origin_cwd_bytes_hex),
+		.origin_entry_path_bytes_hex = origin_entry_path_bytes_hex == NULL ? NULL :
+			strdup(origin_entry_path_bytes_hex),
+		.remote = remote == NULL ? NULL : strdup(remote),
+		.mount_point = strdup(mount_point),
+		.unmount_path = strdup(unmount_path),
+	};
+	if(next.origin_directory == NULL || next.origin_cwd_bytes_hex == NULL ||
+			(next.origin_entry_path_bytes_hex == NULL &&
+				kind == NV_SESSION_RESOURCE_ARCHIVE) ||
+			(next.remote == NULL && kind == NV_SESSION_RESOURCE_SSH) ||
+			next.mount_point == NULL || next.unmount_path == NULL)
+	{
+		resource_free(&next);
+		return set_error(error, "out-of-memory", "failed to store resource origin");
+	}
+	if(replace_snapshot(session, snapshot, mount_point, error) != 0)
+	{
+		resource_free(&next);
+		return -1;
+	}
+	resource_free(resource);
+	*resource = next;
+	return 0;
+}
+
+int
+nv_workspace_session_detach_resource(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error)
+{
+	if(session == NULL || error == NULL || !valid_pane(pane) || tab_id == 0U)
+		return set_error(error, "invalid-resource", "resource detachment is invalid");
+	nv_snapshot_error_free(error);
+	if(ensure_tabs(session, error) != 0) return -1;
+	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
+	size_t index = 0U;
+	if(find_tab_index(tabs, tab_id, &index) != 0)
+		return set_error(error, "invalid-tab", "resource tab does not exist");
+	nv_pane_snapshot_t *const snapshot = tab_snapshot(session, pane, index);
+	nv_session_resource_t *const resource = tab_resource(session, pane, index);
+	if(snapshot == NULL || resource == NULL || !resource->active ||
+			resource->origin_directory == NULL)
+		return set_error(error, "resource-not-mounted", "tab has no mounted resource");
+	char *const origin_directory = strdup(resource->origin_directory);
+	char *const origin_entry = resource->origin_entry_path_bytes_hex == NULL ? NULL :
+		strdup(resource->origin_entry_path_bytes_hex);
+	if(origin_directory == NULL ||
+			(resource->origin_entry_path_bytes_hex != NULL && origin_entry == NULL))
+	{
+		free(origin_directory);
+		free(origin_entry);
+		return set_error(error, "out-of-memory", "failed to restore resource origin");
+	}
+	if(replace_snapshot(session, snapshot, origin_directory, error) != 0)
+	{
+		free(origin_directory);
+		free(origin_entry);
+		return -1;
+	}
+	if(origin_entry != NULL)
+	{
+		for(size_t i = 0U; i < snapshot->entry_count; ++i)
+		{
+			if(strcmp(snapshot->entries[i].path_bytes_hex, origin_entry) == 0)
+			{
+				snapshot->cursor = (int)i;
+				break;
+			}
+		}
+	}
+	free(origin_directory);
+	free(origin_entry);
+	resource_free(resource);
+	return 0;
+}
+
 static int
 hex_digit(char character)
 {
@@ -538,8 +697,11 @@ activate_tab_at(nv_workspace_session_t *session, nv_session_pane_t pane,
 	if(index != tabs->active)
 	{
 		nv_pane_snapshot_t *const current = pane_snapshot(session, pane);
+		nv_session_resource_t active_resource = tabs->items[tabs->active].resource;
 		tabs->items[tabs->active].snapshot = *current;
+		tabs->items[tabs->active].resource = tabs->items[index].resource;
 		*current = tabs->items[index].snapshot;
+		tabs->items[index].resource = active_resource;
 		tabs->items[index].snapshot = (nv_pane_snapshot_t){};
 		tabs->active = index;
 	}
@@ -558,6 +720,11 @@ new_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
 	if(tabs->count == NV_SESSION_MAX_TABS)
 	{
 		return set_error(error, "tab-limit", "pane tab limit reached");
+	}
+	if(tabs->items[tabs->active].resource.active)
+	{
+		return set_error(error, "resource-tab-unsupported",
+				"open a new tab after returning from the mounted resource");
 	}
 	nv_pane_snapshot_t clone = {};
 	if(clone_snapshot(pane_snapshot(session, pane), &clone, error) != 0) return -1;
@@ -605,11 +772,15 @@ close_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
 	size_t index = 0U;
 	if(find_tab_index(tabs, id, &index) != 0)
 		return set_error(error, "invalid-tab", "tab does not exist");
+	if(tabs->items[index].resource.active)
+		return set_error(error, "resource-tab-mounted",
+				"return from the mounted resource before closing its tab");
 	if(tabs->count == 1U)
 		return set_error(error, "last-tab", "cannot close the last pane tab");
 	if(index != tabs->active)
 	{
 		nv_pane_snapshot_free(&tabs->items[index].snapshot);
+		resource_free(&tabs->items[index].resource);
 		remove_tab_slot(tabs, index);
 		if(index < tabs->active) --tabs->active;
 		return 0;
@@ -617,11 +788,14 @@ close_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
 
 	const size_t replacement = index + 1U < tabs->count ? index + 1U : index - 1U;
 	nv_pane_snapshot_t next = tabs->items[replacement].snapshot;
+	nv_session_resource_t next_resource = tabs->items[replacement].resource;
 	tabs->items[replacement].snapshot = (nv_pane_snapshot_t){};
+	tabs->items[replacement].resource = (nv_session_resource_t){};
 	nv_pane_snapshot_free(pane_snapshot(session, pane));
 	*pane_snapshot(session, pane) = next;
 	remove_tab_slot(tabs, index);
 	tabs->active = replacement > index ? index : replacement;
+	tabs->items[tabs->active].resource = next_resource;
 	return 0;
 }
 
@@ -921,6 +1095,10 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_UNDO:
 			return set_error(error, "core-command-required",
 					"undo must run through the core session command path");
+		case NV_SESSION_MOUNT_SSH:
+		case NV_SESSION_CANCEL_RESOURCE:
+			return set_error(error, "core-command-required",
+					"resource tasks must run through the core session command path");
 		case NV_SESSION_FOCUS:
 		case NV_SESSION_FOCUS_NEXT:
 		case NV_SESSION_SORT_BY:
@@ -965,6 +1143,8 @@ nv_session_command_free(nv_session_command_t *command)
 			free(command->open_association_argv[i]);
 		free(command->open_association_argv);
 	}
+	if(command->owns_resource_fields)
+		free(command->resource_remote);
 	memset(command, 0, sizeof(*command));
 }
 
@@ -979,11 +1159,13 @@ nv_workspace_session_free(nv_workspace_session_t *session)
 	nv_pane_snapshot_free(&session->right);
 	for(size_t i = 0U; i < session->left_tabs.count; ++i)
 	{
+		resource_free(&session->left_tabs.items[i].resource);
 		if(i != session->left_tabs.active)
 			nv_pane_snapshot_free(&session->left_tabs.items[i].snapshot);
 	}
 	for(size_t i = 0U; i < session->right_tabs.count; ++i)
 	{
+		resource_free(&session->right_tabs.items[i].resource);
 		if(i != session->right_tabs.active)
 			nv_pane_snapshot_free(&session->right_tabs.items[i].snapshot);
 	}

@@ -48,9 +48,11 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_string_equal("file-actions-v1", json_array_get_string(capabilities,
 			3U));
 	assert_string_equal("open-v1", json_array_get_string(capabilities, 4U));
+	assert_string_equal("resource-tasks-v1", json_array_get_string(capabilities, 5U));
 	#else
-	assert_int_equal(4, json_array_get_count(capabilities));
+	assert_int_equal(5, json_array_get_count(capabilities));
 	assert_string_equal("open-v1", json_array_get_string(capabilities, 3U));
+	assert_string_equal("resource-tasks-v1", json_array_get_string(capabilities, 4U));
 	#endif
 	json_value_free(value);
 	nv_protocol_json_free(hello);
@@ -97,6 +99,25 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_int_equal(1, json_object_get_number(payload, "completed_count"));
 	assert_true(json_object_get_boolean(payload, "partial"));
 	assert_false(json_object_get_boolean(payload, "retryable"));
+	json_value_free(value);
+	nv_protocol_json_free(line);
+
+	nv_resource_task_event_t resource = {
+		.task_id = 11U, .command_sequence = 4U, .pane = NV_SESSION_LEFT,
+		.tab_id = 2U, .kind = NV_RESOURCE_TASK_MOUNT_ARCHIVE,
+		.state = NV_RESOURCE_TASK_FAILED, .source_path = "/tmp/bundle.zip",
+		.error_code = "resource-mounter-unavailable", .os_error = ENOENT,
+	};
+	line = nv_protocol_resource_task_json(&resource, 4U);
+	assert_non_null(line);
+	value = json_parse_string(line);
+	assert_non_null(value);
+	root = json_object(value);
+	assert_string_equal("resource-task", json_object_get_string(root, "type"));
+	payload = json_object_get_object(root, "payload");
+	assert_string_equal("mount-archive", json_object_get_string(payload, "resource"));
+	assert_string_equal("failed", json_object_get_string(payload, "state"));
+	assert_string_equal("2", json_object_get_string(payload, "tab_id"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
 }

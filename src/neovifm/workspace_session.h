@@ -27,12 +27,20 @@ typedef enum
 
 typedef enum
 {
+	NV_SESSION_RESOURCE_NONE,
+	NV_SESSION_RESOURCE_ARCHIVE,
+	NV_SESSION_RESOURCE_SSH,
+} nv_session_resource_kind_t;
+
+typedef enum
+{
 	NV_SESSION_FOCUS,
 	NV_SESSION_FOCUS_NEXT,
 	NV_SESSION_MOVE_CURSOR,
 	NV_SESSION_MOVE_FIRST,
 	NV_SESSION_MOVE_LAST,
 	NV_SESSION_ENTER,
+	NV_SESSION_MOUNT_SSH,
 	NV_SESSION_PARENT,
 	NV_SESSION_TOGGLE_SELECTION,
 	NV_SESSION_REFRESH,
@@ -51,6 +59,7 @@ typedef enum
 	NV_SESSION_PREVIEW,
 	NV_SESSION_OPEN,
 	NV_SESSION_CANCEL_ACTION,
+	NV_SESSION_CANCEL_RESOURCE,
 	NV_SESSION_RETRY_ACTION,
 } nv_session_command_kind_t;
 
@@ -88,6 +97,9 @@ typedef struct
 	int toggle_selection;
 	uint64_t tab_id;
 	uint64_t action_task_id;
+	uint64_t resource_task_id;
+	char *resource_remote;
+	int owns_resource_fields;
 	nv_session_pane_t preview_target_pane;
 	char *preview_cwd_bytes_hex;
 	uint64_t preview_snapshot_revision;
@@ -138,8 +150,21 @@ typedef struct
 
 typedef struct
 {
+	int active;
+	nv_session_resource_kind_t kind;
+	char *origin_directory;
+	char *origin_cwd_bytes_hex;
+	char *origin_entry_path_bytes_hex;
+	char *remote;
+	char *mount_point;
+	char *unmount_path;
+} nv_session_resource_t;
+
+typedef struct
+{
 	uint64_t id;
 	nv_pane_snapshot_t snapshot;
+	nv_session_resource_t resource;
 } nv_session_tab_t;
 
 typedef struct
@@ -184,6 +209,17 @@ uint64_t nv_workspace_session_tab_id(const nv_workspace_session_t *session,
 const nv_pane_snapshot_t *nv_workspace_session_tab_snapshot(
 		const nv_workspace_session_t *session, nv_session_pane_t pane,
 		size_t index);
+const nv_session_resource_t *nv_workspace_session_tab_resource(
+		const nv_workspace_session_t *session, nv_session_pane_t pane,
+		size_t index);
+int nv_workspace_session_attach_resource(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_session_resource_kind_t kind,
+		const char origin_directory[], const char origin_cwd_bytes_hex[],
+		const char origin_entry_path_bytes_hex[], const char remote[],
+		const char mount_point[], const char unmount_path[],
+		nv_snapshot_error_t *error);
+int nv_workspace_session_detach_resource(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
 void nv_session_command_free(nv_session_command_t *command);
 void nv_workspace_session_free(nv_workspace_session_t *session);
 

@@ -8,6 +8,7 @@ import type {
   ActionTaskPayload,
   PreviewPayload,
   PreviewTaskPayload,
+  ResourceTaskPayload,
   OpenPayload,
   SnapshotPayload,
   WorkspaceSnapshotPayload,
@@ -64,6 +65,7 @@ export interface AppProps {
   readonly preview?: PreviewPayload
   readonly tasks?: readonly PreviewTaskPayload[]
   readonly actionTasks?: readonly ActionTaskPayload[]
+  readonly resourceTasks?: readonly ResourceTaskPayload[]
   readonly commandError?: string
   readonly capabilities?: readonly string[]
   readonly iconMode?: IconMode
@@ -524,8 +526,14 @@ function actionTaskLabel(task: ActionTaskPayload): string {
   return `${task.action} #${task.task_id} ${task.state} ${task.completed_count}/${task.total_count}${task.partial ? " partial" : ""}${task.error_code === undefined ? "" : ` ${task.error_code}`}`
 }
 
+function resourceTaskLabel(task: ResourceTaskPayload): string {
+  const target = task.mount_point ?? task.source_path ?? task.unmount_path ?? "resource"
+  return `${task.resource} #${task.task_id} ${task.state} ${target}${task.error_code === undefined ? "" : ` ${task.error_code}`}`
+}
+
 function TaskCenter(props: {
   readonly actionTasks?: readonly ActionTaskPayload[]
+  readonly resourceTasks?: readonly ResourceTaskPayload[]
   readonly onClose: () => void
   readonly onCommand: (command: CoreSessionCommand) => boolean | Promise<boolean> | void
 }) {
@@ -539,6 +547,8 @@ function TaskCenter(props: {
     const taskId = selectedTaskId()
     return taskId === undefined ? undefined : history().find((task) => task.task_id === taskId)
   }
+  const resourceQueue = () => (props.resourceTasks ?? []).filter((task) => task.state === "queued" || task.state === "running")
+  const resourceHistory = () => (props.resourceTasks ?? []).filter((task) => task.state !== "queued" && task.state !== "running" && !clearedHistory().has(`resource-${task.task_id}`))
   const taskRows = (tasks: readonly ActionTaskPayload[], empty: string, cancelable: boolean) => <Show when={tasks.length !== 0} fallback={<text fg={COLORS.overlay1}>{empty}</text>}>
     <For each={tasks}>{(task) => <box
       id={`task-row-${task.task_id}`}
@@ -594,6 +604,23 @@ function TaskCenter(props: {
       </Show>
     </Show>
   </box>
+  const resourceRows = (tasks: readonly ResourceTaskPayload[], cancelable: boolean) => <Show when={tasks.length !== 0} fallback={<text fg={COLORS.overlay1}>{cancelable ? "No queued or running resource tasks" : "No completed resource tasks"}</text>}>
+    <For each={tasks}>{(task) => <box
+      id={`resource-task-row-${task.task_id}`}
+      width="100%"
+      flexDirection="row"
+      backgroundColor={COLORS.base}
+      onMouseDown={(event) => {
+        if (event.button !== MouseButton.LEFT) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (cancelable) props.onCommand({ action: "cancel-resource", task_id: task.task_id })
+      }}
+    >
+      <text flexGrow={1} fg={task.state === "failed" || task.state === "cancelled" ? COLORS.red : COLORS.text}>{resourceTaskLabel(task)}</text>
+      <Show when={cancelable}><text fg={COLORS.yellow}> [x]</text></Show>
+    </box>}</For>
+  </Show>
   const tab = (kind: "queue" | "history", label: string, count: () => number) => <text
     id={`task-${kind}-tab`}
     bg={view() === kind ? COLORS.yellow : COLORS.surface1}
@@ -613,8 +640,8 @@ function TaskCenter(props: {
     }
   }}>
     <box width="100%" height={1} flexDirection="row" gap={1}>
-      {tab("queue", "QUEUE", () => queue().length)}
-      {tab("history", "HISTORY", () => history().length)}
+      {tab("queue", "QUEUE", () => queue().length + resourceQueue().length)}
+      {tab("history", "HISTORY", () => history().length + resourceHistory().length)}
     </box>
     <scrollbox flexGrow={1} width="100%" verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: COLORS.yellow, backgroundColor: COLORS.surface0 } }}>
       <Show when={view() === "queue"} fallback={<>
@@ -624,18 +651,25 @@ function TaskCenter(props: {
             if (event.button !== MouseButton.LEFT) return
             event.preventDefault()
             event.stopPropagation()
-            setClearedHistory(new Set((props.actionTasks ?? [])
+            setClearedHistory(new Set([
+              ...(props.actionTasks ?? [])
               .filter((task) => task.state !== "queued" && task.state !== "running")
-              .map((task) => task.task_id)))
+              .map((task) => task.task_id),
+              ...(props.resourceTasks ?? [])
+                .filter((task) => task.state !== "queued" && task.state !== "running")
+                .map((task) => `resource-${task.task_id}`),
+            ]))
             setSelectedTaskId(undefined)
           }}>Clear</text>
         </box>
         {taskRows(history(), "No completed actions", false)}
+        {resourceRows(resourceHistory(), false)}
         <Show when={selectedTask() !== undefined}>
           {details(selectedTask()!)}
         </Show>
       </>}>
         {taskRows(queue(), "No queued or running file actions", true)}
+        {resourceRows(resourceQueue(), true)}
       </Show>
     </scrollbox>
     <text height={1} fg={COLORS.subtext0}>Choose Queue/History; Esc closes</text>
@@ -646,6 +680,7 @@ function StatusBar(props: {
   readonly workspace?: WorkspaceSnapshotPayload
   readonly tasks?: readonly PreviewTaskPayload[]
   readonly actionTasks?: readonly ActionTaskPayload[]
+  readonly resourceTasks?: readonly ResourceTaskPayload[]
   readonly compact: boolean
   readonly notice?: string
   readonly iconMode: IconMode
@@ -667,8 +702,10 @@ function StatusBar(props: {
   }
   const latestTask = () => props.tasks?.at(-1)
   const latestAction = () => props.actionTasks?.at(-1)
+  const latestResource = () => props.resourceTasks?.at(-1)
   const queuedActions = () => props.actionTasks?.filter((task) => task.state === "queued" || task.state === "running").length ?? 0
-  const taskCount = () => props.actionTasks?.length ?? 0
+  const queuedResources = () => props.resourceTasks?.filter((task) => task.state === "queued" || task.state === "running").length ?? 0
+  const taskCount = () => (props.actionTasks?.length ?? 0) + (props.resourceTasks?.length ?? 0)
   const taskMouseDown = (event: { button: number; preventDefault(): void; stopPropagation(): void }) => {
     if (event.button !== MouseButton.LEFT) return
     event.preventDefault()
@@ -677,6 +714,7 @@ function StatusBar(props: {
   }
   const detail = () => props.notice ?? (latestAction() !== undefined
     ? `${latestAction()!.action} ${latestAction()!.state} ${latestAction()!.completed_count}/${latestAction()!.total_count}${latestAction()!.partial ? " partial" : ""}${latestAction()!.error_code === undefined ? "" : ` ${latestAction()!.error_code}`}`
+    : latestResource() !== undefined ? `${latestResource()!.resource} ${latestResource()!.state}`
     : latestTask() === undefined ? `${snapshot()?.selection_count ?? 0} selected` : `task ${latestTask()!.state}`)
   const showDetail = () => props.notice !== undefined || !props.compact
     || latestAction()?.state === "failed" || latestAction()?.state === "cancelled" || latestAction()?.partial === true
@@ -685,7 +723,7 @@ function StatusBar(props: {
       <text bg={COLORS.mauve} fg={COLORS.crust}> NORMAL </text>
       <text id="status-path" flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate onMouseDown={pathMouseDown}> {displayedPath()} </text>
       <text bg={COLORS.green} fg={COLORS.crust}> {snapshot()?.entry_count ?? 0} items </text>
-      <text id="tasks-entry" bg={queuedActions() !== 0 ? COLORS.yellow : COLORS.surface1} fg={COLORS.crust} onMouseDown={taskMouseDown}> Tasks {queuedActions()}/{taskCount()} </text>
+      <text id="tasks-entry" bg={queuedActions() + queuedResources() !== 0 ? COLORS.yellow : COLORS.surface1} fg={COLORS.crust} onMouseDown={taskMouseDown}> Tasks {queuedActions() + queuedResources()}/{taskCount()} </text>
       <Show when={showDetail()}>
         <text bg={COLORS.surface1} fg={COLORS.text}> {detail()} </text>
       </Show>
@@ -772,6 +810,7 @@ function BottomBars(props: {
   readonly workspace?: WorkspaceSnapshotPayload
   readonly tasks?: readonly PreviewTaskPayload[]
   readonly actionTasks?: readonly ActionTaskPayload[]
+  readonly resourceTasks?: readonly ResourceTaskPayload[]
   readonly compact: boolean
   readonly stacked: boolean
   readonly notice?: string
@@ -786,7 +825,7 @@ function BottomBars(props: {
   readonly onOpenTasks: () => void
 }) {
   return <box width="100%" height={3} flexDirection="column">
-    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} onOpenTasks={props.onOpenTasks} />
+    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} onOpenTasks={props.onOpenTasks} />
     <box id="bottom-divider" width="100%" height={1} border={["top"]} borderStyle="single" borderColor={COLORS.divider} />
     <FunctionRow keys={FUNCTION_KEYS} compact={props.stacked} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
   </box>
@@ -1236,11 +1275,11 @@ export function App(props: AppProps) {
             : props.loading
               ? <LoadingPanel />
               : <ErrorPanel message="Core returned no workspace" />}>
-        <TaskCenter actionTasks={props.actionTasks} onClose={() => setTaskCenterOpen(false)} onCommand={sendCommand} />
+        <TaskCenter actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} onClose={() => setTaskCenterOpen(false)} onCommand={sendCommand} />
       </Show>
     }>
       {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
     </Show>
-    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
+    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
   </box>
 }

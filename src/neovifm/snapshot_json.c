@@ -24,6 +24,7 @@ static JSON_Value *entry_value(const nv_pane_entry_t *entry);
 static char *hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
 		const char quaternary_capability[], const char quinary_capability[],
+		const char senary_capability[],
 		unsigned int sequence);
 static char *error_json(unsigned int version, const nv_snapshot_error_t *error,
 		unsigned int sequence);
@@ -32,10 +33,13 @@ static int entry_model_is_valid(const nv_pane_entry_t *entry);
 static int string_fits(const char value[], size_t maximum);
 static int hex_string_is_valid(const char value[], size_t maximum);
 static const char *sort_key_name(nv_pane_sort_key_t key);
+static const char *session_resource_name(nv_session_resource_kind_t kind);
 static JSON_Value *preview_task_payload(const nv_preview_event_t *event);
 static const char *preview_pane_name(nv_preview_pane_t pane);
 static const char *preview_kind_name(nv_preview_kind_t kind);
 static const char *preview_state_name(nv_preview_task_state_t state);
+static const char *resource_task_kind_name(nv_resource_task_kind_t kind);
+static const char *resource_task_state_name(nv_resource_task_state_t state);
 static JSON_Value *open_argv_value(const nv_open_resolution_t *resolution);
 
 static int
@@ -151,6 +155,13 @@ sort_key_name(nv_pane_sort_key_t key)
 	return NULL;
 }
 
+static const char *
+session_resource_name(nv_session_resource_kind_t kind)
+{
+	return kind == NV_SESSION_RESOURCE_ARCHIVE ? "archive" :
+		kind == NV_SESSION_RESOURCE_SSH ? "ssh" : NULL;
+}
+
 static int
 snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot)
 {
@@ -238,6 +249,7 @@ static char *
 hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
 		const char quaternary_capability[], const char quinary_capability[],
+		const char senary_capability[],
 		unsigned int sequence)
 {
 	JSON_Value *const payload_value = json_value_init_object();
@@ -266,6 +278,9 @@ hello_json(unsigned int version, const char capability[],
 			(quinary_capability != NULL &&
 			 json_array_append_string(capabilities, quinary_capability) !=
 			 JSONSuccess) ||
+			(senary_capability != NULL &&
+			 json_array_append_string(capabilities, senary_capability) !=
+			 JSONSuccess) ||
 			json_object_set_value(payload, "capabilities",
 					capabilities_value) != JSONSuccess)
 	{
@@ -287,19 +302,19 @@ hello_json(unsigned int version, const char capability[],
 char *
 nv_protocol_hello_json(unsigned int sequence)
 {
-	return hello_json(0U, "snapshot-v0", NULL, NULL, NULL, NULL, sequence);
+	return hello_json(0U, "snapshot-v0", NULL, NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_workspace_hello_json(unsigned int sequence)
 {
-	return hello_json(1U, "workspace-v1", NULL, NULL, NULL, NULL, sequence);
+	return hello_json(1U, "workspace-v1", NULL, NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_session_hello_json(unsigned int sequence)
 {
-	return hello_json(2U, "workspace-session-v2", NULL, NULL, NULL, NULL, sequence);
+	return hello_json(2U, "workspace-session-v2", NULL, NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
@@ -307,10 +322,11 @@ nv_protocol_preview_session_hello_json(unsigned int sequence)
 {
 	#ifdef __APPLE__
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			"pane-tabs-v1", "file-actions-v1", "open-v1", sequence);
+			"pane-tabs-v1", "file-actions-v1", "open-v1",
+			"resource-tasks-v1", sequence);
 	#else
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			"pane-tabs-v1", NULL, "open-v1", sequence);
+			"pane-tabs-v1", NULL, "open-v1", "resource-tasks-v1", sequence);
 	#endif
 }
 
@@ -342,6 +358,28 @@ preview_state_name(nv_preview_task_state_t state)
 		case NV_PREVIEW_TASK_DONE: return "done";
 		case NV_PREVIEW_TASK_FAILED: return "failed";
 		case NV_PREVIEW_TASK_CANCELLED: return "cancelled";
+	}
+	return NULL;
+}
+
+static const char *
+resource_task_kind_name(nv_resource_task_kind_t kind)
+{
+	return kind == NV_RESOURCE_TASK_MOUNT_ARCHIVE ? "mount-archive" :
+		kind == NV_RESOURCE_TASK_MOUNT_SSH ? "mount-ssh" :
+		kind == NV_RESOURCE_TASK_UNMOUNT ? "unmount" : NULL;
+}
+
+static const char *
+resource_task_state_name(nv_resource_task_state_t state)
+{
+	switch(state)
+	{
+		case NV_RESOURCE_TASK_QUEUED: return "queued";
+		case NV_RESOURCE_TASK_RUNNING: return "running";
+		case NV_RESOURCE_TASK_DONE: return "done";
+		case NV_RESOURCE_TASK_FAILED: return "failed";
+		case NV_RESOURCE_TASK_CANCELLED: return "cancelled";
 	}
 	return NULL;
 }
@@ -491,6 +529,56 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 	char *json = NULL;
 	return serialize_payload("action-task", 3U, output_sequence, value, &json) ==
 		NV_PROTOCOL_JSON_OK ? json : NULL;
+}
+
+char *
+nv_protocol_resource_task_json(const nv_resource_task_event_t *event,
+		unsigned int output_sequence)
+{
+	if(event == NULL || event->task_id == 0U || event->command_sequence == 0U ||
+		event->pane > NV_SESSION_RIGHT || event->tab_id == 0U ||
+		resource_task_kind_name(event->kind) == NULL ||
+		resource_task_state_name(event->state) == NULL ||
+		(event->source_path != NULL && !string_fits(event->source_path,
+			NV_RESOURCE_MAX_PATH_BYTES)) ||
+		(event->mount_point != NULL && !string_fits(event->mount_point,
+			NV_RESOURCE_MAX_PATH_BYTES)) ||
+		(event->unmount_path != NULL && !string_fits(event->unmount_path,
+			NV_RESOURCE_MAX_PATH_BYTES)) ||
+		(event->error_code != NULL && !string_fits(event->error_code, 128U)))
+	{
+		return NULL;
+	}
+	JSON_Value *const value = json_value_init_object();
+	if(value == NULL) return NULL;
+	JSON_Object *const payload = json_value_get_object(value);
+	if(set_u64_string(payload, "task_id", event->task_id) != JSONSuccess ||
+			json_object_set_number(payload, "command_sequence",
+				event->command_sequence) != JSONSuccess ||
+			json_object_set_string(payload, "pane",
+				event->pane == NV_SESSION_LEFT ? "left" : "right") != JSONSuccess ||
+			set_u64_string(payload, "tab_id", event->tab_id) != JSONSuccess ||
+			json_object_set_string(payload, "resource",
+				resource_task_kind_name(event->kind)) != JSONSuccess ||
+			json_object_set_string(payload, "state",
+				resource_task_state_name(event->state)) != JSONSuccess ||
+			(event->source_path != NULL && json_object_set_string(payload,
+				"source_path", event->source_path) != JSONSuccess) ||
+			(event->mount_point != NULL && json_object_set_string(payload,
+				"mount_point", event->mount_point) != JSONSuccess) ||
+			(event->unmount_path != NULL && json_object_set_string(payload,
+				"unmount_path", event->unmount_path) != JSONSuccess) ||
+			(event->error_code != NULL && json_object_set_string(payload,
+				"error_code", event->error_code) != JSONSuccess) ||
+			(event->os_error != 0 && json_object_set_number(payload, "os_error",
+				event->os_error) != JSONSuccess))
+	{
+		json_value_free(value);
+		return NULL;
+	}
+	char *json = NULL;
+	return serialize_payload("resource-task", 3U, output_sequence, value,
+			&json) == NV_PROTOCOL_JSON_OK ? json : NULL;
 }
 
 char *
@@ -801,7 +889,7 @@ nv_protocol_session_snapshot_json(const nv_pane_snapshot_t *left,
 			(strcmp(active_pane, "left") != 0 && strcmp(active_pane, "right") != 0) ||
 			trigger == NULL || (strcmp(trigger, "initial") != 0 &&
 					strcmp(trigger, "command") != 0 && strcmp(trigger, "watch") != 0 &&
-					strcmp(trigger, "action") != 0) ||
+					strcmp(trigger, "action") != 0 && strcmp(trigger, "resource") != 0) ||
 			json == NULL)
 	{
 		return NV_PROTOCOL_JSON_ERROR;
@@ -916,10 +1004,14 @@ set_session_tabs(JSON_Object *payload, const char field[],
 		JSON_Object *const tab = json_value_get_object(tab_value);
 		const nv_pane_snapshot_t *const snapshot =
 			nv_workspace_session_tab_snapshot(session, pane, i);
+		const nv_session_resource_t *const resource =
+			nv_workspace_session_tab_resource(session, pane, i);
 		if(set_u64_string(tab, "id", nv_workspace_session_tab_id(session, pane,
 				i)) != JSONSuccess || json_object_set_string(tab, "cwd_display",
 					snapshot->cwd_display) != JSONSuccess ||
 				json_object_set_boolean(tab, "active", i == active) != JSONSuccess ||
+				(resource != NULL && resource->active && json_object_set_string(tab,
+					"resource_kind", session_resource_name(resource->kind)) != JSONSuccess) ||
 				json_array_append_value(array, tab_value) != JSONSuccess)
 		{
 			if(json_value_get_parent(tab_value) == NULL) json_value_free(tab_value);
