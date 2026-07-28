@@ -15,3 +15,5 @@
 - Phase 0 全套验收完成：focused C 9082 checks / 55 tests；TUI unit 106 tests / 377 expects，coverage 85.97% functions / 97.73% lines，typecheck 和 audit 通过；真实 C/PTY integration 7/7；串行 `env -u VIFM -u MYVIFMRC make check` 通过。首次全量回归的 `selection_multi_run` 仅因 macOS shell/error-pipe 回收超过 500ms 测试窗口失败，已将测试 helper 等待上限调整为 5s 并复跑通过；`git diff --check` 通过。
 - Phase 0 当前已完成验收并准备独立提交；Phase 1--7 新功能保持未实现、pending。
 - Phase 0 独立提交已创建；工作树保持干净，未 push。下一步可从 Phase 1 快捷键/动作兼容矩阵开始。
+- Phase 1 已开始：先以现有 `src/modes/normal.c`、`src/engine/keys.c`、ViATc 动作表和当前 `clients/tui/src/keymap.ts` 建立 supported/mapped/conflict/deferred 矩阵，再选择不破坏现有协议的第一批补齐项。
+- Phase 1 首个实现切片：新增 `docs/NEOVIFM_KEYMAP_MATRIX.md`，明确 Vifm/ViATc 来源、当前冲突和 archive/remote/高级编辑等 deferred 边界；为 `p/P/d/D` 增加复用 F5/F6/F8 dispatcher 的客户端别名，并先写 RED 单测再实现。搜索、marks、registers、visual、history 等仍等待 core capability，不在本切片伪造客户端语义。

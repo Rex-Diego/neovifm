@@ -114,6 +114,8 @@ export class VifmKeymap {
     if (name === "g" && key.shift) return command({ action: "move-to", target: "last" })
     if (name === "home") return command({ action: "move-to", target: "first" })
     if (name === "end") return command({ action: "move-to", target: "last" })
+    if (name === "p") return { kind: "function", action: key.shift ? "move" : "copy" }
+    if (name === "d") return { kind: "function", action: "delete" }
     if (key.shift) return { kind: "unhandled" }
     if (name === "q") {
       this.#prefix = "q"

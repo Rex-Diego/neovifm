@@ -37,7 +37,7 @@
 
 ### Phase 1：Vifm/ViATc 快捷键与动作兼容矩阵
 
-- [ ] 以 `src/modes/normal.c`、`src/engine/keys.c`、Vifm 文档、`/Users/rex/soft/_refs/neovifm/viatc` 为来源，建立完整行为矩阵：按键序列、计数、模式、目标动作、当前支持度、冲突、验收用例和来源。
+- [x] 以 `src/modes/normal.c`、`src/engine/keys.c`、Vifm 文档、`/Users/rex/soft/_refs/neovifm/viatc` 为来源，建立完整行为矩阵：按键序列、计数、模式、目标动作、当前支持度、冲突、验收用例和来源。
 - [ ] 第一批固定主线交互层：`F3--F10` + `hjkl`、`gg/G`、计数、`Ctrl-W`、`gt/gT`、搜索/next/previous、marks、registers、selection/visual、历史、pane 切换、刷新、打开/返回和退出语义。
 - [ ] 第二批覆盖 Total Commander/ViATc 高频动作：同扩展名选择、反选、目录历史/常用目录、复制名称/完整路径、左右 pane 同步/交换、在另一 pane 或新 tab 打开。
 - [ ] 第三批单列高级动作：批量重命名、目录比较/同步、内容比较、快速搜索和命令浏览；逐项判断复用 Vifm、实现 adapter 或明确 defer。
@@ -45,7 +45,7 @@
 - [ ] 为每个已承诺按键先写 RED 单测，再补 C/协议/客户端最小实现；真实 PTY 必须覆盖普通键、组合键、多键前缀、计数、Esc、窄终端和宿主抢占 Fn 键时的鼠标替代入口。
 - [ ] 矩阵中的每一项必须标为 supported、mapped、conflict、deferred 或 not-applicable，不允许静默缺失。
 - **阶段验收：** 日常快捷键闭环在 unit、integration 和正式 PTY 中一致；经典 Vifm 行为不回归；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress。
 
 ### Phase 2：文件操作语义回归 Vifm core
 

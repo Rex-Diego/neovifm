@@ -111,3 +111,11 @@ test("exposes every Total Commander function key through the shared action dispa
   expect(map.handle(key("f8"))).toEqual({ kind: "function", action: "delete" })
   expect(map.handle(key("f10"))).toEqual({ kind: "function", action: "quit" })
 })
+
+test("maps Vifm file action aliases onto the guarded function actions", () => {
+  const map = new VifmKeymap()
+  expect(map.handle(key("p"))).toEqual({ kind: "function", action: "copy" })
+  expect(map.handle(key("p", { shift: true, sequence: "P" }))).toEqual({ kind: "function", action: "move" })
+  expect(map.handle(key("d"))).toEqual({ kind: "function", action: "delete" })
+  expect(map.handle(key("d", { shift: true, sequence: "D" }))).toEqual({ kind: "function", action: "delete" })
+})
