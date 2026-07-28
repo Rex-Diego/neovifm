@@ -119,3 +119,8 @@ test("maps Vifm file action aliases onto the guarded function actions", () => {
   expect(map.handle(key("d"))).toEqual({ kind: "function", action: "delete" })
   expect(map.handle(key("d", { shift: true, sequence: "D" }))).toEqual({ kind: "function", action: "delete" })
 })
+
+test("routes Vifm u through the core-owned undo command", () => {
+  const map = new VifmKeymap()
+  expect(map.handle(key("u"))).toEqual({ kind: "command", command: { action: "undo" } })
+})

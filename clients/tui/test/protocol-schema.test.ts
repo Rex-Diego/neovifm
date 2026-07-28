@@ -116,6 +116,11 @@ test("v3 schema exposes core-owned pane toggle and Vifm first/last movement", ()
   expect(serialized).toContain('"last"')
 })
 
+test("v3 schema exposes the core-owned undo command", () => {
+  const commandPayload = objectValue(previewSessionDefinitions.commandPayload)
+  expect(JSON.stringify(commandPayload)).toContain('"undo"')
+})
+
 test("v3 schema bounds pane tabs and exposes core-owned tab and mouse commands", () => {
   const paneTabs = objectValue(previewSessionDefinitions.paneTabs)
   expect(paneTabs.minItems).toBe(1)

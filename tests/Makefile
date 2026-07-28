@@ -111,7 +111,7 @@ ifdef unix_env
 vifm_src += neovifm/
 endif
 vifm_src := $(wildcard $(addprefix ../src/, $(addsuffix *.c, $(vifm_src))))
-vifm_src := $(filter-out %/tags.c %/xxhash.c %/neovifm/core_probe.c %/neovifm/core_session.c, $(vifm_src))
+vifm_src := $(filter-out %/tags.c %/xxhash.c %/neovifm/core_probe.c %/neovifm/core_session.c %/neovifm/undo_compat.c, $(vifm_src))
 
 # filter out generally non-testable or sources for another platform
 vifm_src := $(filter-out %/src/./vifm.c %/win_helper.c, $(vifm_src))

@@ -50,12 +50,15 @@
 ### Phase 2：文件操作语义回归 Vifm core
 
 - [ ] 盘点当前 `src/neovifm/action_task` 与 Vifm `ops`、`undo`、`fops_cpmv_bg`、`fops_put`、`background` 的重叠，形成保留/适配/移除清单。
-- [ ] 让 OpenTUI 的 copy/move/delete/mkdir 请求进入 Vifm 成熟的操作与 undo 语义；不得继续扩大平行 `nv_fs_*` 文件操作实现。
+- [x] 建立受限 `mkdir -> classic undo` bridge：只记录成功 mkdir，使用 parent/child no-follow identity，并在 core 主线程执行 `u`。
+- [x] 让 OpenTUI 的 `u` 进入 core-owned undo command；当前对 copy/move/delete 明确返回 `undo-empty`，不宣称尚未实现的 undo 语义。
+- [ ] 让 OpenTUI 的 copy/move/delete/mkdir 请求完整进入 Vifm 成熟的操作与 undo 语义；不得继续扩大平行 `nv_fs_*` 文件操作实现。
 - [ ] 保留现有 immutable snapshot identity、no-follow/no-overwrite、防 stale target 和明确 partial 结果等安全边界。
+- [x] 明确 mkdir undo 的队列忙碌/主线程边界、stale/replaced target 拒绝和 source pane/tab 精确刷新契约。
 - [ ] 明确 copy/move/delete 的 undo、取消、冲突处理、跨文件系统、部分完成和双 pane/tab 刷新契约。
 - [ ] 在 undo 尚未连通前，不把相关 destructive action 标记为稳定完成。
 - **阶段验收：** 与经典 Vifm 对照验证 copy/move/delete、取消、失败、partial、undo 和 selection；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress（mkdir 首切片已完成；copy/move/delete undo、取消和 Vifm background facade 仍待补齐）。
 
 ### Phase 3：后台任务队列与任务中心弹窗
 
@@ -69,7 +72,7 @@
 - [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** in_progress（FIFO、历史可见和 Tasks 入口首切片已完成；取消/重试/undo 与 Vifm background facade 仍待补齐）。
+- **状态：** in_progress（FIFO、历史可见和 Tasks 入口首切片已完成；取消/重试、完整 undo 状态与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
 
 ### Phase 4：压缩包作为目录打开
 

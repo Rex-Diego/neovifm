@@ -25,7 +25,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<voi
   }
 }
 
-test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", async () => {
+test("real keyboard navigation, tabs, actions, and mkdir undo update the C-owned workspace", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) {
     throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
@@ -226,6 +226,34 @@ test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", asyn
     />, { width: 100, height: 20 })
 
     await setup.renderOnce()
+    const beforeMkdir = state()
+    if (!(beforeMkdir.phase === "ready" && "workspace" in beforeMkdir)) {
+      throw new Error("workspace disappeared before tab-scoped mkdir")
+    }
+    const firstTabId = beforeMkdir.workspace.left_tabs?.find((tab) => tab.active)?.id
+    if (firstTabId === undefined) throw new Error("core did not publish the active left tab")
+    expect(await session.send({ action: "new-tab", pane: "left" })).toBe(true)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.some((tab) => tab.active && tab.id !== firstTabId) === true
+    })
+    const withSecondTab = state()
+    if (!(withSecondTab.phase === "ready" && "workspace" in withSecondTab)) {
+      throw new Error("workspace disappeared after creating the undo target tab")
+    }
+    const secondTabId = withSecondTab.workspace.left_tabs?.find((tab) => tab.active)?.id
+    if (secondTabId === undefined || secondTabId === firstTabId) {
+      throw new Error("core did not activate the undo target tab")
+    }
+    setup.renderer.destroy()
+    setup = await testRender(() => <App
+      workspace={withSecondTab.workspace}
+      capabilities={withSecondTab.hello.capabilities}
+      onCommand={(command) => session.send(command)}
+    />, { width: 100, height: 20 })
+
+    await setup.renderOnce()
     const mkdirButton = setup.renderer.root.findDescendantById("function-mkdir")
     expect(mkdirButton).toBeDefined()
     await setup.mockMouse.click(mkdirButton!.x, mkdirButton!.y)
@@ -242,10 +270,44 @@ test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", asyn
     if (!(afterMkdir.phase === "ready" && "workspace" in afterMkdir)) {
       throw new Error("workspace disappeared after mkdir")
     }
+    expect(await session.send({ action: "activate-tab", pane: "left", tab_id: firstTabId })).toBe(true)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === firstTabId)?.active === true
+    })
+    const beforeUndo = state()
+    if (!(beforeUndo.phase === "ready" && "workspace" in beforeUndo)) {
+      throw new Error("workspace disappeared before tab-scoped undo")
+    }
     setup.renderer.destroy()
     setup = await testRender(() => <App
-      workspace={afterMkdir.workspace}
-      capabilities={afterMkdir.hello.capabilities}
+      workspace={beforeUndo.workspace}
+      capabilities={beforeUndo.hello.capabilities}
+      onCommand={(command) => session.send(command)}
+    />, { width: 100, height: 20 })
+    await setup.renderOnce()
+    setup.mockInput.pressKey("u")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === firstTabId)?.active === true
+    })
+    expect(await session.send({ action: "activate-tab", pane: "left", tab_id: secondTabId })).toBe(true)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current
+        && current.workspace.left_tabs?.find((tab) => tab.id === secondTabId)?.active === true
+        && !current.workspace.left.entries.some((entry) => entry.name_display === "clicked-dir")
+    })
+    const afterUndo = state()
+    if (!(afterUndo.phase === "ready" && "workspace" in afterUndo)) {
+      throw new Error("workspace disappeared after mkdir undo")
+    }
+    setup.renderer.destroy()
+    setup = await testRender(() => <App
+      workspace={afterUndo.workspace}
+      capabilities={afterUndo.hello.capabilities}
       onCommand={(command) => session.send(command)}
     />, { width: 100, height: 20 })
     await setup.renderOnce()

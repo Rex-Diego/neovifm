@@ -20,3 +20,12 @@
 - Phase 3 首个实现切片：`nv_action_queue` 改为 64 项有界 FIFO，保留 queued/running/terminal 生命周期并按 task id 维护多个 action refresh context；TUI 不再因已有 action 忙碌而禁用后续 copy/move，右下角 `Tasks` 入口打开可滚动 Queue/History 覆盖层。新增 C queue、TUI、真实 core session 回归，验证两个连续 copy 的 done/failed 历史和 destination-exists 语义。
 - 本切片验收：`make -C tests neovifm_snapshot` 9085 checks / 55 tests；TUI 109 tests / 391 expects，coverage 85.95% functions / 97.65% lines，typecheck、audit、schema、`git diff --check` 通过；真实 integration 8 tests / 57 expects；串行 `env -u VIFM -u MYVIFMRC make check` 通过。Phase 2 的 native undo/background bridge 尚未宣称完成。
 - 真实队列回归暴露 macOS `select()` + buffered `fgets()` 会把已写入管道的第二条命令藏在 stdio 缓冲区，导致 FIFO 测试偶发只处理一个 action；core session 现将 stdin 设为 `_IONBF`，连续命令和 full integration 复跑通过。
+
+## 2026-07-28
+
+- Phase 2 mkdir/undo 首切片先写 RED：新增 bridge 单测覆盖空 undo、成功删除和 replaced directory 拒绝；实现后 `9116 checks / 57 tests` 通过。
+- `src/undo.c` 已通过窄兼容边界链接到 core session；bridge 只记录成功 mkdir，保存 parent/child no-follow identity，并在主线程执行 `OP_RMDIR`。copy/move/delete 的 `u` 请求返回明确 `undo-empty`，不伪装成已支持的 destructive undo。
+- undo 记录携带 source pane/tab，`u` 只刷新原始 tab；真实键盘集成覆盖“在第二个 tab mkdir、切回第一个 tab、u、再切回第二个 tab 验证目录消失”，避免 inactive tab snapshot 陈旧。
+- identity 测试改用与产品实现一致的 macOS/Linux 纳秒级 ctime；core-only `undo_compat.c` 改用 `nv_lstat`，普通测试对象图继续使用 Vifm 原有 utility 实现。
+- 当前 slice 验收完成：core session build、focused C `9116 checks / 57 tests`、TUI unit `111 tests / 393 expects`、coverage `85.95% functions / 97.65% lines`、typecheck、audit、schema、真实 integration `8 tests / 60 expects`、串行 `env -u VIFM -u MYVIFMRC make check` 和 `git diff --check` 全部通过；待独立提交。
+- 已知限制：undo 仍是单个 `core_session` 进程内的 classic 全局栈；仅支持 mkdir，记录失败只写 stderr，尚未向 task event 发布 undo availability；copy/move/delete、redo、取消/重试和 Vifm background facade 继续留在后续切片。

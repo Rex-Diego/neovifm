@@ -67,10 +67,14 @@ neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/undo_bridge.c neovifm/undo_bridge.h \
+	neovifm/undo_compat.c \
 	neovifm/action_task.c neovifm/action_task.h \
 	neovifm/preview_task.c neovifm/preview_task.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
+	undo.c undo.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
+	compat/reallocarray.c compat/reallocarray.h \
 	utils/parson.c utils/parson.h \
 	utils/utf8proc.c utils/utf8proc.h utils/utf8proc_data.inc
 

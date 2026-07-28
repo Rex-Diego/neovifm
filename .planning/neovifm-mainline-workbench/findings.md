@@ -37,3 +37,12 @@
 - F3 应是唯一显式 viewer 入口，继续使用全工作区 overlay；底层 viewer resolver 复用 Vifm 的 association/cache/cleanup 语义。
 - 文件操作、mount、remote 和 preview 需要不同资源 lane，但统一显示在任务中心。文件操作初版串行可减少磁盘竞争，preview lane 必须保持独立。
 - 任务历史本计划先保证当前应用会话完整可见。跨重启持久化需要单独定义 retention、隐私、敏感路径和崩溃恢复，不能顺手写无界日志。
+
+## 2026-07-28 Phase 2 undo bridge
+
+- classic `src/undo.c` is a process-global singleton. The first bridge slice is therefore limited to one `core_session` process, initialized once at startup and reset once at exit; `undo` is never executed from the action worker.
+- Linking `undo.c` into the small core-session target would otherwise pull the full classic registers/trash/filesystem graph. `src/neovifm/undo_bridge.c` supplies a narrow compatibility boundary for the classic module when building the core target; normal test builds exclude that core-only shim and use the existing Vifm utility implementations.
+- Only successful `mkdir` actions are recorded. The bridge stores the parent and created-entry no-follow identities and executes `OP_RMDIR` through `nv_fs_remove`, so a replaced or symlinked path fails instead of being removed by path alone.
+- The protocol action is core-owned `{"action":"undo"}` and is intentionally limited to `u`/undo. Copy/move/delete currently return an explicit `undo-empty` result rather than claiming unsupported undo; redo and destructive-action undo remain outside this slice.
+- Each mkdir record carries its source pane/tab location. Undo refreshes that exact tab, so creating a directory in an inactive tab and undoing from another tab cannot leave a stale snapshot behind.
+- If the post-action undo record allocation or classic-group registration fails, the mkdir remains successful and the bridge reports the failure only to stderr; this slice does not yet publish undo availability in the task event. The limitation is explicit and must be removed before destructive actions claim stable undo support.

@@ -20,6 +20,7 @@
 #endif
 
 #include "snapshot_json.h"
+#include "undo_bridge.h"
 #include "workspace_session.h"
 #include "../utils/parson.h"
 
@@ -34,6 +35,8 @@ typedef struct nv_pending_action_context_t
 	int has_destination;
 	nv_session_pane_t destination_pane;
 	uint64_t destination_tab_id;
+	char *undo_path;
+	nv_fs_identity_t undo_parent_identity;
 	struct nv_pending_action_context_t *next;
 } nv_pending_action_context_t;
 
@@ -64,6 +67,8 @@ static int drain_action_events(nv_action_queue_t *queue,
 		uint64_t *preview_generation,
 		nv_pending_action_context_t **pending_actions);
 static int command_is_action(nv_session_command_kind_t kind);
+static int refresh_action_tab(nv_workspace_session_t *session,
+		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
 
 #ifdef __APPLE__
 typedef struct
@@ -348,6 +353,7 @@ parse_command(const char line[], unsigned int previous_sequence,
 	else if(strcmp(action, "parent") == 0) command->kind = NV_SESSION_PARENT;
 	else if(strcmp(action, "toggle-selection") == 0) command->kind = NV_SESSION_TOGGLE_SELECTION;
 	else if(strcmp(action, "refresh") == 0) command->kind = NV_SESSION_REFRESH;
+	else if(strcmp(action, "undo") == 0) command->kind = NV_SESSION_UNDO;
 	else if(strcmp(action, "sort-cycle") == 0)
 	{
 		const double delta = json_object_get_number(payload, "delta");
@@ -490,9 +496,35 @@ command_is_action(nv_session_command_kind_t kind)
 		kind == NV_SESSION_MKDIR || kind == NV_SESSION_DELETE;
 }
 
+static char *
+join_action_path(const char directory[], const char name[])
+{
+	const size_t directory_length = strlen(directory);
+	const size_t name_length = strlen(name);
+	const int separator = directory_length != 0U &&
+		directory[directory_length - 1U] != '/';
+	if(directory_length > SIZE_MAX - name_length - (size_t)separator - 1U)
+	{
+		errno = ENOMEM;
+		return NULL;
+	}
+	char *const path = malloc(directory_length + (size_t)separator +
+		name_length + 1U);
+	if(path == NULL)
+	{
+		errno = ENOMEM;
+		return NULL;
+	}
+	memcpy(path, directory, directory_length);
+	if(separator) path[directory_length] = '/';
+	memcpy(path + directory_length + (size_t)separator, name, name_length + 1U);
+	return path;
+}
+
 static nv_pending_action_context_t
 pending_action_context(const nv_workspace_session_t *session,
-		const nv_session_command_t *command)
+		const nv_session_command_t *command,
+		const nv_session_prepared_action_t *action)
 {
 	const size_t source_index = nv_workspace_session_active_tab_index(session,
 			command->pane);
@@ -512,7 +544,50 @@ pending_action_context(const nv_workspace_session_t *session,
 		context.destination_tab_id = nv_workspace_session_tab_id(session,
 				context.destination_pane, destination_index);
 	}
+	if(action != NULL && action->kind == NV_SESSION_MKDIR)
+	{
+		context.undo_path = join_action_path(action->source_directory,
+				action->name);
+		context.undo_parent_identity = action->source_directory_identity;
+	}
 	return context;
+}
+
+static void
+pending_action_context_free(nv_pending_action_context_t *context)
+{
+	if(context == NULL) return;
+	free(context->undo_path);
+	free(context);
+}
+
+static int
+apply_undo_command(nv_workspace_session_t *session, nv_action_queue_t *queue,
+		nv_snapshot_error_t *error, nv_undo_bridge_location_t *location)
+{
+	if(queue == NULL)
+		return set_error(error, "undo-unavailable",
+				"file undo is unavailable on this platform");
+	if(nv_action_queue_busy(queue) != 0)
+		return set_error(error, "undo-busy",
+				"wait for queued file actions to finish");
+	switch(nv_undo_bridge_undo(location))
+	{
+		case NV_UNDO_BRIDGE_SUCCESS:
+			break;
+		case NV_UNDO_BRIDGE_NONE:
+			return set_error(error, "undo-empty",
+					"no supported file action can be undone");
+		case NV_UNDO_BRIDGE_FAILED:
+		default:
+			return set_error(error, "undo-failed",
+					"the last supported file action could not be undone");
+	}
+	if(location == NULL || location->tab_id == 0U || location->pane > NV_SESSION_RIGHT)
+		return set_error(error, "undo-location-invalid",
+				"undo target location is invalid");
+	return refresh_action_tab(session, (nv_session_pane_t)location->pane,
+			location->tab_id, error);
 }
 
 static int
@@ -569,10 +644,18 @@ process_command_line(nv_workspace_session_t *session, char line[],
 					error.os_error = ENOMEM;
 					error.retryable = 1;
 				}
+				else if((*context = pending_action_context(session, &command,
+						&action)).undo_path == NULL && command.kind == NV_SESSION_MKDIR)
+				{
+					pending_action_context_free(context);
+					set_error(&error, "action-queue-failed",
+							"failed to prepare mkdir undo context");
+					error.os_error = ENOMEM;
+					error.retryable = 1;
+				}
 				else if(nv_action_queue_submit(action_queue, &action, next_sequence,
 						&task_id) == 0)
 				{
-					*context = pending_action_context(session, &command);
 					context->task_id = task_id;
 					context->next = *pending_actions;
 					*pending_actions = context;
@@ -587,7 +670,7 @@ process_command_line(nv_workspace_session_t *session, char line[],
 				else
 				{
 					const int submit_error = errno;
-					free(context);
+					pending_action_context_free(context);
 					set_error(&error, submit_error == EBUSY ? "action-queue-full" :
 							"action-queue-failed", submit_error == EBUSY ?
 							"file action queue is full" :
@@ -597,6 +680,25 @@ process_command_line(nv_workspace_session_t *session, char line[],
 				}
 			}
 			nv_session_prepared_action_free(&action);
+		}
+		else if(command.kind == NV_SESSION_UNDO)
+		{
+			nv_undo_bridge_location_t location = {};
+			if(apply_undo_command(session, action_queue, &error, &location) == 0)
+			{
+				*command_sequence = next_sequence;
+				const int result = write_workspace(session, (*output_sequence)++,
+						*command_sequence, "command");
+				if(result == 0 && submit_active_preview(session, preview_queue,
+						preview_generation) != 0)
+				{
+					fputs("neovifm-core-session: failed to queue undo preview\n", stderr);
+				}
+				nv_snapshot_error_free(&error);
+				nv_session_command_free(&command);
+				return result;
+			}
+			*command_sequence = next_sequence;
 		}
 		else if(nv_workspace_session_apply(session, &command, &error) == 0)
 		{
@@ -743,6 +845,18 @@ drain_action_events(nv_action_queue_t *queue,
 			}
 			if(context != NULL && context->active)
 			{
+				if(event.state == NV_ACTION_TASK_DONE &&
+					 event.kind == NV_SESSION_MKDIR && context->undo_path != NULL &&
+					 nv_undo_bridge_record_mkdir(context->undo_path,
+							context->undo_parent_identity, (nv_undo_bridge_location_t){
+								.pane = (unsigned int)context->source_pane,
+								.tab_id = context->source_tab_id,
+							}) != 0)
+				{
+					fprintf(stderr,
+							"neovifm-core-session: mkdir undo record failed: %s\n",
+							strerror(errno));
+				}
 				refresh_failed = refresh_action_tab(session,
 						context->source_pane, context->source_tab_id,
 						&error) != 0;
@@ -754,7 +868,7 @@ drain_action_events(nv_action_queue_t *queue,
 				}
 				if(previous == NULL) *pending_actions = context->next;
 				else previous->next = context->next;
-				free(context);
+				pending_action_context_free(context);
 			}
 			else
 			{
@@ -992,10 +1106,17 @@ main(int argc, char *argv[])
 		nv_snapshot_error_free(&error);
 		return 1;
 	}
+	if(nv_undo_bridge_init() != 0)
+	{
+		fputs("neovifm-core-session: failed to initialize undo bridge\n", stderr);
+		nv_workspace_session_free(&session);
+		return 1;
+	}
 	nv_preview_queue_t *const preview_queue = nv_preview_queue_alloc();
 	if(preview_queue == NULL)
 	{
 		fputs("neovifm-core-session: failed to initialize preview queue\n", stderr);
+		nv_undo_bridge_reset();
 		nv_workspace_session_free(&session);
 		return 1;
 	}
@@ -1006,6 +1127,7 @@ main(int argc, char *argv[])
 	{
 		fputs("neovifm-core-session: failed to initialize action queue\n", stderr);
 		nv_preview_queue_free(preview_queue);
+		nv_undo_bridge_reset();
 		nv_workspace_session_free(&session);
 		return 1;
 	}
@@ -1017,6 +1139,7 @@ main(int argc, char *argv[])
 		nv_protocol_json_free(hello);
 		nv_action_queue_free(action_queue);
 		nv_preview_queue_free(preview_queue);
+		nv_undo_bridge_reset();
 		nv_workspace_session_free(&session);
 		return 1;
 	}
@@ -1122,11 +1245,12 @@ main(int argc, char *argv[])
 	while(pending_actions != NULL)
 	{
 		nv_pending_action_context_t *const next = pending_actions->next;
-		free(pending_actions);
+		pending_action_context_free(pending_actions);
 		pending_actions = next;
 	}
 	nv_action_queue_free(action_queue);
 	nv_preview_queue_free(preview_queue);
+	nv_undo_bridge_reset();
 	nv_workspace_session_free(&session);
 	return result != 0 || ferror(stdin) ? 1 : 0;
 }

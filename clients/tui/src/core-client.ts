@@ -125,6 +125,7 @@ export type CoreSessionCommand =
       cwd_ctime_unix_ns: string
       name: string
     }>
+  | Readonly<{ action: "undo" }>
   | Readonly<{ action: "enter" | "parent" | "toggle-selection" | "refresh" }>
 
 export interface CoreSessionRequest {

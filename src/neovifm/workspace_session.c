@@ -903,6 +903,9 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_MKDIR:
 			return set_error(error, "async-action-required",
 					"file actions must run through the action queue");
+		case NV_SESSION_UNDO:
+			return set_error(error, "core-command-required",
+					"undo must run through the core session command path");
 		case NV_SESSION_FOCUS:
 		case NV_SESSION_FOCUS_NEXT:
 		case NV_SESSION_SORT_BY:
