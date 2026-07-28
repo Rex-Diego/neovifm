@@ -1,6 +1,6 @@
-import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { MouseButton, type ScrollBoxRenderable } from "@opentui/core"
+import { MouseButton, SyntaxStyle, type ScrollBoxRenderable } from "@opentui/core"
 
 import type {
   PaneId,
@@ -8,6 +8,7 @@ import type {
   ActionTaskPayload,
   PreviewPayload,
   PreviewTaskPayload,
+  OpenPayload,
   SnapshotPayload,
   WorkspaceSnapshotPayload,
   PaneTabPayload,
@@ -17,9 +18,10 @@ import { VifmKeymap, type FunctionAction } from "./keymap.js"
 import {
   extensionGroup,
   formatFileSize,
-  formatMode,
   formatMtime,
   iconForEntry,
+  mtimeAge,
+  permissionTokens,
   type IconMode,
 } from "./file-style.js"
 import { formatStatusPath, type StatusPathMode } from "./status-path.js"
@@ -43,6 +45,16 @@ const COLORS = {
   teal: "#94e2d5",
   blue: "#89b4fa",
   selected: "#363a4f",
+  sortActive: "#585b70",
+  divider: "#3f4254",
+  permissionType: "#7f849c",
+  permissionRead: "#a6e3a1",
+  permissionWrite: "#f9e2af",
+  permissionExecute: "#f38ba8",
+  permissionSticky: "#fab387",
+  permissionNone: "#6c7086",
+  recentHour: "#f5e0e8",
+  recentDay: "#f9e2af",
 } as const
 
 export interface AppProps {
@@ -58,6 +70,10 @@ export interface AppProps {
   readonly onCancel?: () => void
   readonly onCommand?: (command: CoreSessionCommand) => boolean | Promise<boolean> | void
   readonly onEdit?: (path: string) => Promise<void> | void
+  /** Opens a regular file through the core-resolved association or platform fallback. */
+  readonly onOpen?: (path: string) => Promise<void> | void
+  readonly open?: OpenPayload
+  readonly onOpenResolved?: (argv: readonly string[]) => Promise<void> | void
   readonly homeDirectory?: string
   readonly onCopyText?: (text: string) => Promise<void> | void
 }
@@ -87,6 +103,26 @@ function entryColor(entry: SnapshotPayload["entries"][number]): string {
   return COLORS.text
 }
 
+function entryTextColor(entry: SnapshotPayload["entries"][number], emphasized: boolean): string {
+  if (emphasized) return COLORS.text
+  const age = mtimeAge(entry.mtime_unix_ms)
+  if (age === "hour") return COLORS.recentHour
+  if (age === "day") return COLORS.recentDay
+  return entryColor(entry)
+}
+
+function permissionColor(kind: ReturnType<typeof permissionTokens>[number]["kind"]): string {
+  switch (kind) {
+    case "type": return COLORS.permissionType
+    case "read": return COLORS.permissionRead
+    case "write": return COLORS.permissionWrite
+    case "execute": return COLORS.permissionExecute
+    case "sticky": return COLORS.permissionSticky
+    case "none": return COLORS.permissionNone
+    case "unknown": return COLORS.overlay1
+  }
+}
+
 function sortLabel(snapshot: SnapshotPayload, key: PaneSortKey, label: string): string {
   if (snapshot.sort_key !== key) return label
   return `${label} ${snapshot.sort_descending ? "▼" : "▲"}`
@@ -102,37 +138,55 @@ function metadataLabel(key: "size" | "ctime" | "mtime" | "mode"): string {
 }
 
 function metadataWidth(key: "size" | "ctime" | "mtime" | "mode"): number {
-  return key === "size" ? 10 : key === "mode" ? 14 : 18
+  return key === "size" ? 10 : key === "mode" ? 18 : 18
+}
+
+function ownerColumnWidth(): number {
+  return 12
+}
+
+function hasOwnerGroup(snapshot: SnapshotPayload): boolean {
+  return snapshot.entries.some((entry) => entry.owner_display !== undefined || entry.group_display !== undefined)
 }
 
 function ColumnHeader(props: {
   readonly id: string
   readonly label: string
   readonly active: boolean
+  readonly iconMode: IconMode
   readonly width?: number
   readonly grow?: boolean
   readonly onToggle: () => void
   readonly onCycle: () => void
 }) {
-  return <text
+  return <box
     id={props.id}
     width={props.width}
+    height={1}
     flexGrow={props.grow ? 1 : 0}
-    fg={props.active ? COLORS.crust : COLORS.subtext0}
-    bg={props.active ? COLORS.lavender : COLORS.surface0}
+    flexDirection="row"
+    backgroundColor={COLORS.surface0}
     onMouseDown={(event) => {
       event.preventDefault()
       event.stopPropagation()
       if (event.button === MouseButton.RIGHT) props.onCycle()
       else if (event.button === MouseButton.LEFT) props.onToggle()
     }}
-  > {props.label}</text>
+  >
+    <Show when={props.active && props.iconMode !== "ascii"} fallback={<text fg={props.active ? COLORS.text : COLORS.subtext0}>{props.active ? `[${props.label}]` : ` ${props.label} `}</text>}>
+      <text fg={COLORS.sortActive} bg={COLORS.surface0}></text>
+      <text fg={COLORS.text} bg={COLORS.sortActive}> {props.label} </text>
+      <text fg={COLORS.sortActive} bg={COLORS.surface0}></text>
+    </Show>
+  </box>
 }
 
 function PaneColumns(props: {
   readonly pane: PaneId
   readonly snapshot: SnapshotPayload
   readonly detailed: boolean
+  readonly showOwners: boolean
+  readonly iconMode: IconMode
   readonly onSortDirection: (pane: PaneId, key: PaneSortKey) => void
   readonly onSortCycle: (pane: PaneId, delta: -1 | 1) => void
 }) {
@@ -140,27 +194,71 @@ function PaneColumns(props: {
   const compactKey = () => compactMetadataKey(props.snapshot)
   return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.surface0}>
     <text width={4} bg={COLORS.surface0}> </text>
-    <ColumnHeader id={`sort-${props.pane}-name`} label={header("name", "Name")} active={props.snapshot.sort_key === "name"} grow onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+    <ColumnHeader id={`sort-${props.pane}-name`} label={header("name", "Name")} active={props.snapshot.sort_key === "name"} iconMode={props.iconMode} grow onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
     <Show when={props.detailed} fallback={<ColumnHeader
       id={`sort-${props.pane}-${compactKey()}`}
       label={header(compactKey(), metadataLabel(compactKey()))}
       active={props.snapshot.sort_key === compactKey()}
+      iconMode={props.iconMode}
       width={metadataWidth(compactKey())}
       onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)}
       onCycle={() => props.onSortCycle(props.pane, 1)}
     />}>
-      <ColumnHeader id={`sort-${props.pane}-mode`} label={header("mode", "Permissions")} active={props.snapshot.sort_key === "mode"} width={14} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
-      <ColumnHeader id={`sort-${props.pane}-size`} label={header("size", "Size")} active={props.snapshot.sort_key === "size"} width={10} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
-      <ColumnHeader id={`sort-${props.pane}-ctime`} label={header("ctime", "Created")} active={props.snapshot.sort_key === "ctime"} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
-      <ColumnHeader id={`sort-${props.pane}-mtime`} label={header("mtime", "Modified")} active={props.snapshot.sort_key === "mtime"} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-mode`} label={header("mode", "Permissions")} active={props.snapshot.sort_key === "mode"} iconMode={props.iconMode} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <Show when={props.showOwners}>
+        <ColumnHeader id={`sort-${props.pane}-owner`} label="Owner" active={false} iconMode={props.iconMode} width={ownerColumnWidth()} onToggle={() => undefined} onCycle={() => undefined} />
+        <ColumnHeader id={`sort-${props.pane}-group`} label="Group" active={false} iconMode={props.iconMode} width={ownerColumnWidth()} onToggle={() => undefined} onCycle={() => undefined} />
+      </Show>
+      <ColumnHeader id={`sort-${props.pane}-size`} label={header("size", "Size")} active={props.snapshot.sort_key === "size"} iconMode={props.iconMode} width={10} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-ctime`} label={header("ctime", "Created")} active={props.snapshot.sort_key === "ctime"} iconMode={props.iconMode} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
+      <ColumnHeader id={`sort-${props.pane}-mtime`} label={header("mtime", "Modified")} active={props.snapshot.sort_key === "mtime"} iconMode={props.iconMode} width={18} onToggle={() => props.onSortDirection(props.pane, props.snapshot.sort_key)} onCycle={() => props.onSortCycle(props.pane, 1)} />
     </Show>
   </box>
+}
+
+function PermissionValue(props: { readonly entry: SnapshotPayload["entries"][number] }) {
+  return <box width={18} flexDirection="row" flexShrink={0}>
+    <text> </text>
+    <For each={permissionTokens(props.entry.mode_octal, props.entry.kind)}>
+      {(token) => <text fg={permissionColor(token.kind)}>{token.character}</text>}
+    </For>
+  </box>
+}
+
+function QuickPreview(props: { readonly preview?: PreviewPayload }) {
+  const preview = () => props.preview
+  return <box flexGrow={1} width="100%" flexDirection="column" backgroundColor={COLORS.base} border borderStyle="rounded" borderColor={COLORS.teal} paddingX={1} title="SPACE QUICK VIEW" titleColor={COLORS.teal}>
+    <text height={1} fg={COLORS.subtext0}>{preview() === undefined ? "loading preview" : `${preview()!.kind} · ${preview()!.state}`}</text>
+    <scrollbox
+      flexGrow={1}
+      width="100%"
+      backgroundColor={COLORS.base}
+      verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: COLORS.teal, backgroundColor: COLORS.surface0 } }}
+    >
+      <text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>
+    </scrollbox>
+    <text height={1} fg={COLORS.subtext0}>Space/Esc closes · Tab switches pane</text>
+  </box>
+}
+
+function CompactMetadata(props: {
+  readonly entry: SnapshotPayload["entries"][number]
+  readonly metadataKey: () => "size" | "ctime" | "mtime" | "mode"
+}) {
+  return <Show when={props.metadataKey() === "mode"} fallback={<text width={metadataWidth(props.metadataKey())} fg={props.metadataKey() === "mtime" ? entryTextColor(props.entry, props.entry.selected) : COLORS.subtext0}> {props.metadataKey() === "size"
+    ? formatFileSize(props.entry.size_bytes)
+    : props.metadataKey() === "ctime"
+      ? formatMtime((BigInt(props.entry.ctime_unix_ns ?? "0") / 1_000_000n).toString())
+      : formatMtime(props.entry.mtime_unix_ms)}</text>}>
+    <PermissionValue entry={props.entry} />
+  </Show>
 }
 
 function EntryList(props: {
   readonly pane: PaneId
   readonly snapshot: SnapshotPayload
   readonly detailed: boolean
+  readonly showOwners: boolean
   readonly iconMode: IconMode
   readonly onSelect: (pane: PaneId, index: number, toggle: boolean) => void
 }) {
@@ -176,7 +274,14 @@ function EntryList(props: {
       if (scrollTimer !== undefined) clearTimeout(scrollTimer)
     })
   })
-  return <scrollbox id={`entries-${props.pane}`} ref={(value) => { list = value }} flexGrow={1} width="100%" backgroundColor={COLORS.base}>
+  return <scrollbox
+    id={`entries-${props.pane}`}
+    ref={(value) => { list = value }}
+    flexGrow={1}
+    width="100%"
+    backgroundColor={COLORS.base}
+    verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: COLORS.surface1, backgroundColor: COLORS.base } }}
+  >
     <For each={props.snapshot.entries}>
       {(entry, index) => {
         const current = () => index() === props.snapshot.cursor
@@ -196,18 +301,16 @@ function EntryList(props: {
           <text width={1} fg={current() ? COLORS.lavender : COLORS.overlay1}>{current() ? ">" : " "}</text>
           <text width={1} fg={entry.selected ? COLORS.peach : COLORS.overlay1}>{entry.selected ? "*" : " "}</text>
           <text width={2} fg={entryColor(entry)}>{iconForEntry(entry, props.iconMode)}</text>
-          <text flexGrow={1} fg={entry.hidden ? COLORS.overlay1 : entryColor(entry)} truncate>{entry.name_display}</text>
-          <Show when={props.detailed} fallback={<text width={metadataWidth(compactKey())} fg={COLORS.subtext0}> {compactKey() === "size"
-            ? formatFileSize(entry.size_bytes)
-            : compactKey() === "ctime"
-              ? formatMtime((BigInt(entry.ctime_unix_ns ?? "0") / 1_000_000n).toString())
-              : compactKey() === "mtime"
-                ? formatMtime(entry.mtime_unix_ms)
-              : formatMode(entry.mode_octal, entry.kind)}</text>}>
-            <text width={14} fg={COLORS.subtext0}> {formatMode(entry.mode_octal, entry.kind)}</text>
+          <text flexGrow={1} fg={entry.hidden ? COLORS.overlay1 : entryTextColor(entry, entry.selected || current())} truncate>{entry.name_display}</text>
+          <Show when={props.detailed} fallback={<CompactMetadata entry={entry} metadataKey={compactKey} />}>
+            <PermissionValue entry={entry} />
+            <Show when={props.showOwners}>
+              <text width={ownerColumnWidth()} fg={COLORS.subtext0} truncate> {entry.owner_display ?? "-"}</text>
+              <text width={ownerColumnWidth()} fg={COLORS.subtext0} truncate> {entry.group_display ?? "-"}</text>
+            </Show>
             <text width={10} fg={COLORS.subtext0}> {formatFileSize(entry.size_bytes)}</text>
             <text width={18} fg={COLORS.subtext0}> {formatMtime((BigInt(entry.ctime_unix_ns ?? "0") / 1_000_000n).toString())}</text>
-            <text width={18} fg={COLORS.subtext0}> {formatMtime(entry.mtime_unix_ms)}</text>
+            <text width={18} fg={entryTextColor(entry, entry.selected || current())}> {formatMtime(entry.mtime_unix_ms)}</text>
           </Show>
         </box>
       }}
@@ -240,7 +343,6 @@ function PaneTabs(props: {
 }) {
   const marker = () => props.activePane ? (props.iconMode === "ascii" ? "*" : "●") : " "
   return <box width="100%" height={1} flexDirection="row" backgroundColor={COLORS.crust}>
-    <text width={2} fg={COLORS.lavender}> {marker()}</text>
     <For each={props.tabs}>
       {(tab, index) => {
         const color = () => tab.active ? COLORS.lavender : COLORS.surface1
@@ -270,15 +372,17 @@ function PaneTabs(props: {
         </box>
       }}
     </For>
+    <text flexGrow={1}> </text>
+    <text id={`active-marker-${props.pane}`} width={2} fg={COLORS.lavender}>{marker()} </text>
     <Show when={props.enabled}>
-      <box id={`tab-${props.pane}-new`} height={1} onMouseDown={(event) => {
+      <box id={`tab-${props.pane}-new`} width={5} height={1} justifyContent="center" alignItems="center" onMouseDown={(event) => {
         if (event.button !== MouseButton.LEFT) return
         event.preventDefault()
         event.stopPropagation()
         props.onNew(props.pane)
       }}>
-        <Show when={props.iconMode !== "ascii"} fallback={<text fg={COLORS.green}>[+]</text>}>
-          <text fg={COLORS.green}></text><text fg={COLORS.crust} bg={COLORS.green}>+</text><text fg={COLORS.green}></text>
+        <Show when={props.iconMode !== "ascii"} fallback={<text fg={COLORS.green}>[ + ]</text>}>
+          <text fg={COLORS.green}></text><text fg={COLORS.crust} bg={COLORS.green}> + </text><text fg={COLORS.green}></text>
         </Show>
       </box>
     </Show>
@@ -290,6 +394,7 @@ function Pane(props: {
   readonly snapshot: SnapshotPayload
   readonly active: boolean
   readonly detailed: boolean
+  readonly showOwners: boolean
   readonly iconMode: IconMode
   readonly tabs: readonly PaneTabPayload[]
   readonly tabsEnabled: boolean
@@ -299,6 +404,8 @@ function Pane(props: {
   readonly onActivateTab: (pane: PaneId, tabId: string) => void
   readonly onCloseTab: (pane: PaneId, tabId: string) => void
   readonly onNewTab: (pane: PaneId) => void
+  readonly showQuickPreview: boolean
+  readonly quickPreview?: PreviewPayload
 }) {
   return <box
     flexGrow={1}
@@ -310,8 +417,10 @@ function Pane(props: {
     backgroundColor={COLORS.base}
   >
     <PaneTabs pane={props.pane} tabs={props.tabs} activePane={props.active} iconMode={props.iconMode} enabled={props.tabsEnabled} onActivate={props.onActivateTab} onClose={props.onCloseTab} onNew={props.onNewTab} />
-    <PaneColumns pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} onSortDirection={props.onSortDirection} onSortCycle={props.onSortCycle} />
-    <EntryList pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} iconMode={props.iconMode} onSelect={props.onSelect} />
+    <PaneColumns pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} showOwners={props.showOwners} iconMode={props.iconMode} onSortDirection={props.onSortDirection} onSortCycle={props.onSortCycle} />
+    <Show when={props.showQuickPreview} fallback={<EntryList pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} showOwners={props.showOwners} iconMode={props.iconMode} onSelect={props.onSelect} />}>
+      <QuickPreview preview={props.quickPreview} />
+    </Show>
   </box>
 }
 
@@ -319,6 +428,7 @@ function Workspace(props: {
   readonly workspace: WorkspaceSnapshotPayload
   readonly wide: boolean
   readonly detailed: boolean
+  readonly showOwners: boolean
   readonly iconMode: IconMode
   readonly tabsEnabled: boolean
   readonly onSortDirection: (pane: PaneId, key: PaneSortKey) => void
@@ -327,6 +437,8 @@ function Workspace(props: {
   readonly onActivateTab: (pane: PaneId, tabId: string) => void
   readonly onCloseTab: (pane: PaneId, tabId: string) => void
   readonly onNewTab: (pane: PaneId) => void
+  readonly quickPreviewPane?: PaneId
+  readonly quickPreview?: PreviewPayload
 }) {
   const tabs = (pane: PaneId): readonly PaneTabPayload[] => props.workspace[`${pane}_tabs`] ?? [{
     id: "0",
@@ -340,12 +452,15 @@ function Workspace(props: {
     tabs: tabs(pane),
     tabsEnabled: props.tabsEnabled,
     iconMode: props.iconMode,
+    showOwners: props.showOwners && hasOwnerGroup(props.workspace[pane]),
     onSortDirection: props.onSortDirection,
     onSortCycle: props.onSortCycle,
     onSelect: props.onSelect,
     onActivateTab: props.onActivateTab,
     onCloseTab: props.onCloseTab,
     onNewTab: props.onNewTab,
+    showQuickPreview: props.quickPreviewPane !== undefined && props.quickPreviewPane !== pane,
+    quickPreview: props.quickPreview,
   })
   return <box flexGrow={1} width="100%" flexDirection="row" gap={1}>
     <Show when={props.wide} fallback={props.workspace.active_pane === "left"
@@ -371,14 +486,18 @@ function LoadingPanel() {
   </box>
 }
 
-function Viewer(props: { readonly preview?: PreviewPayload }) {
+function Viewer(props: { readonly preview?: PreviewPayload; readonly quick?: boolean }) {
   const preview = () => props.preview
-  return <box flexGrow={1} width="100%" flexDirection="column" border borderStyle="double" borderColor={COLORS.lavender} backgroundColor={COLORS.base} paddingX={1} title="F3 VIEW" titleColor={COLORS.lavender}>
+  const title = () => props.quick ? "SPACE QUICK VIEW" : "F3 VIEW"
+  const markdown = () => preview()?.kind === "markdown" && preview()?.content !== undefined
+  return <box flexGrow={1} width="100%" flexDirection="column" border borderStyle="double" borderColor={props.quick ? COLORS.teal : COLORS.lavender} backgroundColor={COLORS.base} paddingX={1} title={title()} titleColor={props.quick ? COLORS.teal : COLORS.lavender}>
     <text height={1} fg={COLORS.subtext0}>{preview() === undefined ? "loading preview" : `${preview()!.kind} · ${preview()!.state} · generation ${preview()!.generation}`}</text>
-    <scrollbox flexGrow={1} width="100%" backgroundColor={COLORS.base}>
-      <text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>
+    <scrollbox flexGrow={1} width="100%" backgroundColor={COLORS.base} verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: props.quick ? COLORS.teal : COLORS.lavender, backgroundColor: COLORS.surface0 } }}>
+      <Show when={markdown()} fallback={<text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>}>
+        <markdown flexGrow={1} width="100%" fg={COLORS.text} content={preview()!.content!} syntaxStyle={SyntaxStyle.create()} conceal />
+      </Show>
     </scrollbox>
-    <text height={1} fg={COLORS.subtext0}>F3 or Esc to close</text>
+    <text height={1} fg={COLORS.subtext0}>{props.quick ? "Space or Esc to close" : "F3 or Esc to close"}</text>
   </box>
 }
 
@@ -408,12 +527,73 @@ function actionTaskLabel(task: ActionTaskPayload): string {
 function TaskCenter(props: {
   readonly actionTasks?: readonly ActionTaskPayload[]
   readonly onClose: () => void
+  readonly onCommand: (command: CoreSessionCommand) => boolean | Promise<boolean> | void
 }) {
+  const [clearedHistory, setClearedHistory] = createSignal<ReadonlySet<string>>(new Set())
+  const [view, setView] = createSignal<"queue" | "history">("queue")
+  const [selectedTaskId, setSelectedTaskId] = createSignal<string | undefined>()
   const queue = () => (props.actionTasks ?? []).filter((task) => task.state === "queued" || task.state === "running")
-  const history = () => (props.actionTasks ?? []).filter((task) => task.state !== "queued" && task.state !== "running")
-  const taskRows = (tasks: readonly ActionTaskPayload[], empty: string) => <Show when={tasks.length !== 0} fallback={<text fg={COLORS.overlay1}>{empty}</text>}>
-    <For each={tasks}>{(task) => <text fg={task.state === "failed" || task.state === "cancelled" ? COLORS.red : COLORS.text}>{actionTaskLabel(task)}</text>}</For>
+  const history = () => (props.actionTasks ?? []).filter((task) =>
+    task.state !== "queued" && task.state !== "running" && !clearedHistory().has(task.task_id))
+  const selectedTask = () => {
+    const taskId = selectedTaskId()
+    return taskId === undefined ? undefined : history().find((task) => task.task_id === taskId)
+  }
+  const taskRows = (tasks: readonly ActionTaskPayload[], empty: string, cancelable: boolean) => <Show when={tasks.length !== 0} fallback={<text fg={COLORS.overlay1}>{empty}</text>}>
+    <For each={tasks}>{(task) => <box
+      id={`task-row-${task.task_id}`}
+      width="100%"
+      flexDirection="row"
+      backgroundColor={selectedTaskId() === task.task_id ? COLORS.selected : COLORS.base}
+      onMouseDown={(event) => {
+        if (event.button !== MouseButton.LEFT) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (cancelable) props.onCommand({ action: "cancel-action", task_id: task.task_id })
+        else setSelectedTaskId(task.task_id)
+      }}
+    >
+      <text flexGrow={1} fg={task.state === "failed" || task.state === "cancelled" ? COLORS.red : COLORS.text}>{actionTaskLabel(task)}</text>
+      <Show when={cancelable}><text fg={COLORS.yellow}> [x]</text></Show>
+      </box>}</For>
   </Show>
+  const details = (task: ActionTaskPayload) => <box
+    id={`task-details-${task.task_id}`}
+    width="100%"
+    flexDirection="column"
+    border
+    borderStyle="single"
+    borderColor={task.state === "failed" || task.state === "cancelled" ? COLORS.red : COLORS.surface1}
+    paddingX={1}
+  >
+    <text fg={COLORS.yellow}>TASK DETAILS</text>
+    <text fg={COLORS.text}>Task {task.task_id} · command {task.command_sequence}</text>
+    <text fg={COLORS.text}>{task.action} · {task.state} · {task.pane}</text>
+    <text fg={COLORS.subtext0}>Progress {task.completed_count}/{task.total_count}{task.partial ? " · partial" : ""}</text>
+    <Show when={task.failed_index !== undefined}>
+      <text fg={COLORS.red}>Failed item {task.failed_index! + 1}</text>
+    </Show>
+    <Show when={task.error_code !== undefined}>
+      <text fg={COLORS.red}>Error {task.error_code}</text>
+    </Show>
+    <Show when={task.os_error !== undefined}>
+      <text fg={COLORS.red}>OS error {task.os_error}</text>
+    </Show>
+    <Show when={task.state === "failed" || task.state === "cancelled"}>
+      <text id={`task-retry-${task.task_id}`} fg={COLORS.overlay1}>Retry unavailable: core task identity is not retained</text>
+    </Show>
+  </box>
+  const tab = (kind: "queue" | "history", label: string, count: () => number) => <text
+    id={`task-${kind}-tab`}
+    bg={view() === kind ? COLORS.yellow : COLORS.surface1}
+    fg={view() === kind ? COLORS.crust : COLORS.text}
+    onMouseDown={(event) => {
+      if (event.button !== MouseButton.LEFT) return
+      event.preventDefault()
+      event.stopPropagation()
+      setView(kind)
+    }}
+  > {label} ({count()}) </text>
   return <box width="100%" height="100%" flexDirection="column" border borderStyle="double" borderColor={COLORS.lavender} backgroundColor={COLORS.base} padding={1} title="TASK CENTER" titleColor={COLORS.lavender} onKeyDown={(key) => {
     if (key.name.toLowerCase() === "escape" || key.sequence === "\u001b") {
       key.preventDefault()
@@ -421,13 +601,33 @@ function TaskCenter(props: {
       props.onClose()
     }
   }}>
-    <text fg={COLORS.yellow}>QUEUE ({queue().length})</text>
-    <scrollbox flexGrow={1} width="100%">
-      {taskRows(queue(), "No queued or running file actions")}
-      <text height={1} fg={COLORS.yellow}>HISTORY ({history().length})</text>
-      {taskRows(history(), "No completed actions")}
+    <box width="100%" height={1} flexDirection="row" gap={1}>
+      {tab("queue", "QUEUE", () => queue().length)}
+      {tab("history", "HISTORY", () => history().length)}
+    </box>
+    <scrollbox flexGrow={1} width="100%" verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: COLORS.yellow, backgroundColor: COLORS.surface0 } }}>
+      <Show when={view() === "queue"} fallback={<>
+        <box height={1} width="100%" flexDirection="row">
+          <text flexGrow={1} fg={COLORS.yellow}>Completed actions</text>
+          <text id="task-clear-history" fg={COLORS.yellow} onMouseDown={(event) => {
+            if (event.button !== MouseButton.LEFT) return
+            event.preventDefault()
+            event.stopPropagation()
+            setClearedHistory(new Set((props.actionTasks ?? [])
+              .filter((task) => task.state !== "queued" && task.state !== "running")
+              .map((task) => task.task_id)))
+            setSelectedTaskId(undefined)
+          }}>Clear</text>
+        </box>
+        {taskRows(history(), "No completed actions", false)}
+        <Show when={selectedTask() !== undefined}>
+          {details(selectedTask()!)}
+        </Show>
+      </>}>
+        {taskRows(queue(), "No queued or running file actions", true)}
+      </Show>
     </scrollbox>
-    <text height={1} fg={COLORS.subtext0}>Click Tasks or press Esc to close</text>
+    <text height={1} fg={COLORS.subtext0}>Choose Queue/History; Esc closes</text>
   </box>
 }
 
@@ -502,10 +702,14 @@ function FunctionKey(props: {
   readonly keyName: string
   readonly label: string
   readonly enabled?: boolean
+  readonly compact?: boolean
   readonly iconMode: IconMode
   readonly onAction: (action: FunctionAction) => void
 }) {
   const enabled = () => props.enabled !== false
+  const narrowLabel = () => props.compact && (props.keyName === "F3" || props.keyName === "F10")
+    ? `${props.keyName} ${props.label}`
+    : props.keyName
   return <box
     id={`function-${props.action}`}
     flexGrow={1}
@@ -517,9 +721,9 @@ function FunctionKey(props: {
       if (event.button === MouseButton.LEFT && enabled()) props.onAction(props.action)
     }}
   >
-    <Show when={props.iconMode !== "ascii"} fallback={<text fg={enabled() ? COLORS.sapphire : COLORS.overlay1}>[{props.keyName} {props.label}]</text>}>
+    <Show when={props.iconMode !== "ascii"} fallback={<text fg={enabled() ? COLORS.sapphire : COLORS.overlay1}>{props.compact ? `[${narrowLabel()}]` : `[${props.keyName} ${props.label}]`}</text>}>
       <text fg={enabled() ? COLORS.sapphire : COLORS.surface1} bg={COLORS.crust}></text>
-      <text bg={enabled() ? COLORS.sapphire : COLORS.surface1} fg={enabled() ? COLORS.crust : COLORS.overlay1}>{props.keyName} {props.label}</text>
+      <text bg={enabled() ? COLORS.sapphire : COLORS.surface1} fg={enabled() ? COLORS.crust : COLORS.overlay1}>{props.compact ? narrowLabel() : `${props.keyName} ${props.label}`}</text>
       <text fg={enabled() ? COLORS.sapphire : COLORS.surface1} bg={COLORS.crust}></text>
     </Show>
   </box>
@@ -540,6 +744,7 @@ function FunctionRow(props: {
   readonly canView: boolean
   readonly canFileActions: boolean
   readonly iconMode: IconMode
+  readonly compact?: boolean
   readonly onAction: (action: FunctionAction) => void
 }) {
   const enabled = (action: FunctionAction) => action === "view"
@@ -548,7 +753,7 @@ function FunctionRow(props: {
       ? props.canFileActions
       : true
   return <box width="100%" height={1} flexDirection="row">
-    <For each={props.keys}>{(item) => <FunctionKey {...item} enabled={enabled(item.action)} iconMode={props.iconMode} onAction={props.onAction} />}</For>
+    <For each={props.keys}>{(item) => <FunctionKey {...item} compact={props.compact} enabled={enabled(item.action)} iconMode={props.iconMode} onAction={props.onAction} />}</For>
   </box>
 }
 
@@ -569,12 +774,10 @@ function BottomBars(props: {
   readonly onCopyPath: (path: string) => void
   readonly onOpenTasks: () => void
 }) {
-  return <box width="100%" height={props.stacked ? 3 : 2} flexDirection="column">
+  return <box width="100%" height={3} flexDirection="column">
     <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} onOpenTasks={props.onOpenTasks} />
-    <Show when={props.stacked} fallback={<FunctionRow keys={FUNCTION_KEYS} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />}>
-      <FunctionRow keys={FUNCTION_KEYS.slice(0, 4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
-      <FunctionRow keys={FUNCTION_KEYS.slice(4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
-    </Show>
+    <box id="bottom-divider" width="100%" height={1} border={["top"]} borderStyle="single" borderColor={COLORS.divider} />
+    <FunctionRow keys={FUNCTION_KEYS} compact={props.stacked} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
   </box>
 }
 
@@ -587,12 +790,16 @@ export function App(props: AppProps) {
   const canSort = () => props.capabilities?.includes("workspace-sort-v1") === true
   const canTabs = () => props.capabilities?.includes("pane-tabs-v1") === true
   const canFileActions = () => props.capabilities?.includes("file-actions-v1") === true
-  const keymap = new VifmKeymap()
+  // Keep multi-key Vifm prefixes alive while task/preview records cause rerenders.
+  const keymap = createMemo(() => new VifmKeymap())
   const [viewerOpen, setViewerOpen] = createSignal(false)
+  const [quickPreviewOpen, setQuickPreviewOpen] = createSignal(false)
   const [taskCenterOpen, setTaskCenterOpen] = createSignal(false)
   const [notice, setNotice] = createSignal<string | undefined>()
   const [dialog, setDialog] = createSignal<DialogState | undefined>()
   const [pathMode, setPathMode] = createSignal<StatusPathMode>("absolute")
+  let quickPreviewIdentity = ""
+  let handledOpenSequence = 0
 
   const activeSnapshot = () => props.workspace?.active_pane === "right" ? props.workspace.right : props.workspace?.left
   const currentEntry = () => {
@@ -604,7 +811,10 @@ export function App(props: AppProps) {
     const workspace = props.workspace
     const entry = currentEntry()
     if (preview === undefined || workspace === undefined || entry === undefined) return undefined
-    return preview.pane === workspace.active_pane && preview.path_bytes_hex === entry.path_bytes_hex
+    const targetPane = quickPreviewOpen()
+      ? workspace.active_pane === "left" ? "right" : "left"
+      : workspace.active_pane
+    return preview.pane === workspace.active_pane && (preview.target_pane ?? preview.pane) === targetPane && preview.path_bytes_hex === entry.path_bytes_hex
       ? preview
       : undefined
   }
@@ -670,6 +880,36 @@ export function App(props: AppProps) {
     if (successNotice !== undefined) setNotice(successNotice)
     return true
   }
+  const requestQuickPreview = () => {
+    if (!quickPreviewOpen()) {
+      quickPreviewIdentity = ""
+      return
+    }
+    const workspace = props.workspace
+    const entry = currentEntry()
+    if (workspace === undefined || entry === undefined) return
+    const source = workspace.active_pane === "left" ? workspace.left : workspace.right
+    const identity = actionContext(source)
+    const targetPane = workspace.active_pane === "left" ? "right" : "left"
+    if (identity === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+      quickPreviewIdentity = ""
+      return
+    }
+    const key = `${workspace.active_pane}:${targetPane}:${source.snapshot_revision}:${entry.path_bytes_hex}`
+    if (key === quickPreviewIdentity) return
+    quickPreviewIdentity = key
+    sendCommand({
+      action: "preview",
+      pane: workspace.active_pane,
+      target_pane: targetPane,
+      ...identity,
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device,
+      inode: entry.inode,
+      ctime_unix_ns: entry.ctime_unix_ns,
+    })
+  }
+  createEffect(requestQuickPreview)
   const quit = () => {
     props.onCancel?.()
     renderer.destroy()
@@ -690,7 +930,14 @@ export function App(props: AppProps) {
       quit()
       return
     }
+    if (action === "quick-view") {
+      setViewerOpen(false)
+      setQuickPreviewOpen((open) => !open)
+      setNotice(undefined)
+      return
+    }
     if (action === "view") {
+      setQuickPreviewOpen(false)
       setViewerOpen((open) => !open)
       setNotice(undefined)
       return
@@ -793,6 +1040,61 @@ export function App(props: AppProps) {
       targets,
     }, `${action === "move" ? "Move" : "Copy"} requested`)
   }
+  const openCurrentFile = () => {
+    const workspace = props.workspace
+    const entry = currentEntry()
+    if (workspace === undefined || entry === undefined || entry.kind === "directory") {
+      setNotice("Open requires a file")
+      return
+    }
+    if (props.capabilities?.includes("open-v1") === true && props.onCommand !== undefined) {
+      const context = actionContext(activeSnapshot()!)
+      if (context === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+        setNotice("Open requires a stable core snapshot")
+        return
+      }
+      sendCommand({
+        action: "open",
+        intent: "open",
+        pane: workspace.active_pane,
+        ...context,
+        path_bytes_hex: entry.path_bytes_hex,
+        device: entry.device,
+        inode: entry.inode,
+        ctime_unix_ns: entry.ctime_unix_ns,
+      }, `Open ${entry.name_display} requested`)
+      return
+    }
+    if (props.onOpen === undefined) {
+      setNotice("System opener unavailable")
+      return
+    }
+    const path = pathFromIdentity(entry.path_bytes_hex)
+    if (path === undefined) {
+      setNotice("Open unavailable for a non-UTF-8 path")
+      return
+    }
+    void Promise.resolve().then(() => props.onOpen!(path)).then(
+      () => setNotice(`Opened ${entry.name_display}`),
+      (error) => setNotice(`Open failed: ${error instanceof Error ? error.message : String(error)}`),
+    )
+  }
+  createEffect(() => {
+    const resolved = props.open
+    if (resolved === undefined || resolved.command_sequence <= handledOpenSequence) return
+    handledOpenSequence = resolved.command_sequence
+    const launch = props.onOpenResolved !== undefined
+      ? () => props.onOpenResolved!(resolved.argv)
+      : () => {
+          const path = pathFromIdentity(resolved.path_bytes_hex)
+          if (path === undefined || props.onOpen === undefined) throw new Error("System opener unavailable")
+          return props.onOpen(path)
+        }
+    void Promise.resolve().then(launch).then(
+      () => setNotice("Opened"),
+      (error) => setNotice(`Open failed: ${error instanceof Error ? error.message : String(error)}`),
+    )
+  })
   const closeDialog = () => setDialog(undefined)
   const submitDialog = (value?: string) => {
     const state = dialog()
@@ -842,13 +1144,19 @@ export function App(props: AppProps) {
       }
       return
     }
+    if (quickPreviewOpen() && escape) {
+      key.preventDefault()
+      key.stopPropagation()
+      setQuickPreviewOpen(false)
+      return
+    }
     if (viewerOpen() && escape) {
       key.preventDefault()
       key.stopPropagation()
       setViewerOpen(false)
       return
     }
-    const result = keymap.handle(key)
+    const result = keymap().handle(key)
     if (result.kind === "unhandled") return
     key.preventDefault()
     key.stopPropagation()
@@ -877,24 +1185,32 @@ export function App(props: AppProps) {
       sendCommand({ action: "activate-tab", pane, tab_id: tab.id })
       return
     }
+    if (result.kind === "command" && result.command.action === "focus-next") {
+      setQuickPreviewOpen(false)
+    }
     if (result.command.action === "enter" && currentEntry()?.kind !== "directory") {
-      dispatchFunction("view")
+      if (props.onOpen !== undefined) openCurrentFile()
+      else dispatchFunction("view")
       return
     }
     sendCommand(result.command)
   })
 
-  return <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.crust} padding={1} gap={1}>
+  const quickPreviewPane = () => quickPreviewOpen() && props.workspace !== undefined ? props.workspace.active_pane : undefined
+  return <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.crust} padding={1}>
     <Show when={dialog()} fallback={
       <Show when={taskCenterOpen()} fallback={props.error !== undefined
         ? <ErrorPanel message={props.error} />
         : viewerOpen()
           ? <Viewer preview={matchingPreview()} />
+          : quickPreviewOpen() && !wide()
+            ? <Viewer preview={matchingPreview()} quick />
           : props.workspace !== undefined
             ? <Workspace
                 workspace={props.workspace}
                 wide={wide()}
                 detailed={detailed()}
+                showOwners={dimensions().width >= 220}
                 iconMode={iconMode()}
                 tabsEnabled={canTabs()}
                 onSortDirection={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }}
@@ -903,11 +1219,13 @@ export function App(props: AppProps) {
                 onActivateTab={(pane, tabId) => { sendCommand({ action: "activate-tab", pane, tab_id: tabId }) }}
                 onCloseTab={(pane, tabId) => { sendCommand({ action: "close-tab", pane, tab_id: tabId }) }}
                 onNewTab={(pane) => { sendCommand({ action: "new-tab", pane }) }}
+                quickPreviewPane={quickPreviewPane()}
+                quickPreview={matchingPreview()}
               />
             : props.loading
               ? <LoadingPanel />
               : <ErrorPanel message="Core returned no workspace" />}>
-        <TaskCenter actionTasks={props.actionTasks} onClose={() => setTaskCenterOpen(false)} />
+        <TaskCenter actionTasks={props.actionTasks} onClose={() => setTaskCenterOpen(false)} onCommand={sendCommand} />
       </Show>
     }>
       {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}

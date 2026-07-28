@@ -11,6 +11,7 @@
 #define VIFM__NEOVIFM__WORKSPACE_SESSION_H__
 
 #include "pane_snapshot.h"
+#include "open_resolver.h"
 #include "../compat/neovifm_fs.h"
 
 #define NV_SESSION_MAX_NAME_BYTES 255U
@@ -47,6 +48,9 @@ typedef enum
 	NV_SESSION_ACTIVATE_TAB,
 	NV_SESSION_CLOSE_TAB,
 	NV_SESSION_TAB_CYCLE,
+	NV_SESSION_PREVIEW,
+	NV_SESSION_OPEN,
+	NV_SESSION_CANCEL_ACTION,
 } nv_session_command_kind_t;
 
 typedef struct
@@ -82,6 +86,32 @@ typedef struct
 	size_t entry_index;
 	int toggle_selection;
 	uint64_t tab_id;
+	uint64_t action_task_id;
+	nv_session_pane_t preview_target_pane;
+	char *preview_cwd_bytes_hex;
+	uint64_t preview_snapshot_revision;
+	uint64_t preview_cwd_device;
+	uint64_t preview_cwd_inode;
+	uint64_t preview_cwd_ctime_unix_ns;
+	char *preview_path_bytes_hex;
+	uint64_t preview_entry_device;
+	uint64_t preview_entry_inode;
+	uint64_t preview_entry_ctime_unix_ns;
+	int owns_preview_fields;
+	nv_open_intent_t open_intent;
+	nv_session_pane_t open_pane;
+	char *open_cwd_bytes_hex;
+	uint64_t open_snapshot_revision;
+	uint64_t open_cwd_device;
+	uint64_t open_cwd_inode;
+	uint64_t open_cwd_ctime_unix_ns;
+	char *open_path_bytes_hex;
+	uint64_t open_entry_device;
+	uint64_t open_entry_inode;
+	uint64_t open_entry_ctime_unix_ns;
+	char **open_association_argv;
+	size_t open_association_argc;
+	int owns_open_fields;
 } nv_session_command_t;
 
 typedef struct

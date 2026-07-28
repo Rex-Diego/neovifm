@@ -56,6 +56,8 @@ noinst_PROGRAMS = neovifm-core-probe neovifm-core-session
 
 neovifm_core_probe_SOURCES = \
 	neovifm/core_probe.c \
+	neovifm/open_resolver.c neovifm/open_resolver.h \
+	neovifm/open_config.c neovifm/open_config.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
@@ -65,6 +67,8 @@ neovifm_core_probe_SOURCES = \
 
 neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
+	neovifm/open_resolver.c neovifm/open_resolver.h \
+	neovifm/open_config.c neovifm/open_config.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
 	neovifm/undo_bridge.c neovifm/undo_bridge.h \

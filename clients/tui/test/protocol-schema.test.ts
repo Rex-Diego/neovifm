@@ -102,6 +102,7 @@ test("v3 schema declares task identity and terminal preview boundaries", () => {
   const taskPayload = objectValue(previewSessionDefinitions.taskPayload)
   expect(taskPayload.required).toEqual(["task_id", "generation", "pane", "kind", "state", "cwd_bytes_hex", "path_bytes_hex"])
   const taskProperties = objectValue(taskPayload.properties)
+  expect(objectValue(taskProperties.target_pane).enum).toEqual(["left", "right"])
   expect(objectValue(taskProperties.state).enum).toEqual(["queued", "running", "done", "failed", "cancelled"])
   const preview = objectValue(previewSessionDefinitions.preview)
   expect(preview.allOf).toBeDefined()
@@ -121,6 +122,24 @@ test("v3 schema exposes the core-owned undo command", () => {
   expect(JSON.stringify(commandPayload)).toContain('"undo"')
 })
 
+test("v3 schema exposes the core-owned open resolution and bounded association argv", () => {
+  const openPayload = objectValue(previewSessionDefinitions.openPayload)
+  expect(openPayload.required).toEqual([
+    "command_sequence",
+    "intent",
+    "source",
+    "state",
+    "path_bytes_hex",
+    "argv",
+  ])
+  const openProperties = objectValue(openPayload.properties)
+  expect(objectValue(openProperties.argv).maxItems).toBe(32)
+  const commandPayload = objectValue(previewSessionDefinitions.commandPayload)
+  const serialized = JSON.stringify(commandPayload)
+  expect(serialized).toContain('"association_argv"')
+  expect(serialized).toContain('"path_bytes_hex"')
+})
+
 test("v3 schema bounds pane tabs and exposes core-owned tab and mouse commands", () => {
   const paneTabs = objectValue(previewSessionDefinitions.paneTabs)
   expect(paneTabs.minItems).toBe(1)
@@ -137,6 +156,7 @@ test("v3 schema bounds pane tabs and exposes core-owned tab and mouse commands",
   expect(serialized).toContain('"activate-tab"')
   expect(serialized).toContain('"close-tab"')
   expect(serialized).toContain('"tab-cycle"')
+  expect(serialized).toContain('"preview"')
   expect(serialized).toContain('"minimum":-999')
   expect(serialized).toContain('"maximum":999')
 })

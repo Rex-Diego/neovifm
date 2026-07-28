@@ -270,18 +270,24 @@ clone_snapshot(const nv_pane_snapshot_t *source, nv_pane_snapshot_t *clone,
 	for(size_t i = 0U; i < source->entry_count; ++i)
 	{
 		next.entries[i] = source->entries[i];
-		next.entries[i].name_display = NULL;
-		next.entries[i].name_bytes_hex = NULL;
-		next.entries[i].path_display = NULL;
-		next.entries[i].path_bytes_hex = NULL;
-		if(clone_string(&next.entries[i].name_display,
-					source->entries[i].name_display) != 0 ||
-				clone_string(&next.entries[i].name_bytes_hex,
-					source->entries[i].name_bytes_hex) != 0 ||
-				clone_string(&next.entries[i].path_display,
-					source->entries[i].path_display) != 0 ||
-				clone_string(&next.entries[i].path_bytes_hex,
-					source->entries[i].path_bytes_hex) != 0)
+			next.entries[i].name_display = NULL;
+			next.entries[i].name_bytes_hex = NULL;
+			next.entries[i].path_display = NULL;
+			next.entries[i].path_bytes_hex = NULL;
+			next.entries[i].owner_display = NULL;
+			next.entries[i].group_display = NULL;
+			if(clone_string(&next.entries[i].name_display,
+						source->entries[i].name_display) != 0 ||
+					clone_string(&next.entries[i].name_bytes_hex,
+						source->entries[i].name_bytes_hex) != 0 ||
+					clone_string(&next.entries[i].path_display,
+						source->entries[i].path_display) != 0 ||
+					clone_string(&next.entries[i].path_bytes_hex,
+						source->entries[i].path_bytes_hex) != 0 ||
+					clone_string(&next.entries[i].owner_display,
+						source->entries[i].owner_display) != 0 ||
+					clone_string(&next.entries[i].group_display,
+						source->entries[i].group_display) != 0)
 		{
 			next.entry_count = i + 1U;
 			goto failed;
@@ -914,6 +920,9 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_ACTIVATE_TAB:
 		case NV_SESSION_CLOSE_TAB:
 		case NV_SESSION_TAB_CYCLE:
+		case NV_SESSION_PREVIEW:
+		case NV_SESSION_OPEN:
+		case NV_SESSION_CANCEL_ACTION:
 			break;
 	}
 	return set_error(error, "invalid-command", "unsupported session command");
@@ -922,14 +931,30 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 void
 nv_session_command_free(nv_session_command_t *command)
 {
-	if(command == NULL || !command->owns_action_fields) return;
-	free(command->action_cwd_bytes_hex);
-	free(command->action_destination_cwd_bytes_hex);
-	for(size_t i = 0U; i < command->action_target_count; ++i)
+	if(command == NULL) return;
+	if(command->owns_action_fields)
 	{
-		free(command->action_targets[i].path_bytes_hex);
+		free(command->action_cwd_bytes_hex);
+		free(command->action_destination_cwd_bytes_hex);
+		for(size_t i = 0U; i < command->action_target_count; ++i)
+		{
+			free(command->action_targets[i].path_bytes_hex);
+		}
+		free(command->action_targets);
 	}
-	free(command->action_targets);
+	if(command->owns_preview_fields)
+	{
+		free(command->preview_cwd_bytes_hex);
+		free(command->preview_path_bytes_hex);
+	}
+	if(command->owns_open_fields)
+	{
+		free(command->open_cwd_bytes_hex);
+		free(command->open_path_bytes_hex);
+		for(size_t i = 0U; i < command->open_association_argc; ++i)
+			free(command->open_association_argv[i]);
+		free(command->open_association_argv);
+	}
 	memset(command, 0, sizeof(*command));
 }
 

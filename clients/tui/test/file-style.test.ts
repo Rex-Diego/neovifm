@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 
-import { formatFileSize, formatMode, formatMtime, iconForEntry } from "../src/file-style.js"
+import { formatFileSize, formatMode, formatMtime, iconForEntry, mtimeAge, permissionTokens } from "../src/file-style.js"
 import type { SnapshotEntry } from "../src/protocol.js"
 
 const entry = (name: string, kind: SnapshotEntry["kind"] = "file"): SnapshotEntry => ({
@@ -35,4 +35,14 @@ test("uses lsd-style Nerd Font icons by default with an explicit ASCII fallback"
   expect(iconForEntry(entry("README.md"), "fancy")).toBe("󰂺")
   expect(iconForEntry(entry("src", "directory"), "ascii")).toBe("d")
   expect(iconForEntry(entry("run", "executable"), "ascii")).toBe("x")
+})
+
+test("exposes semantic permission tokens and recent-file age buckets", () => {
+  expect(permissionTokens("100755", "file").map((token) => token.kind)).toEqual([
+    "type", "read", "write", "execute", "read", "none", "execute", "read", "none", "execute",
+  ])
+  expect(permissionTokens("104755", "file")[3]?.kind).toBe("sticky")
+  expect(mtimeAge("3600000", 3600000 + 30 * 60 * 1000)).toBe("hour")
+  expect(mtimeAge("0", 2 * 24 * 60 * 60 * 1000)).toBe("older")
+  expect(mtimeAge("not-a-time", 0)).toBe("unknown")
 })

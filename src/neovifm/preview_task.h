@@ -26,6 +26,8 @@ typedef enum
 typedef enum
 {
 	NV_PREVIEW_KIND_TEXT,
+	NV_PREVIEW_KIND_MARKDOWN,
+	NV_PREVIEW_KIND_PDF,
 	NV_PREVIEW_KIND_DIRECTORY,
 } nv_preview_kind_t;
 
@@ -41,6 +43,10 @@ typedef enum
 typedef struct
 {
 	nv_preview_pane_t pane;
+	/* `pane` identifies the source snapshot.  The target is the render lane;
+	 * old callers may omit it and get source-pane rendering. */
+	nv_preview_pane_t target_pane;
+	int has_target_pane;
 	uint64_t generation;
 	const char *cwd_bytes_hex;
 	const char *path_bytes_hex;
@@ -54,6 +60,8 @@ typedef struct
 	uint64_t task_id;
 	uint64_t generation;
 	nv_preview_pane_t pane;
+	nv_preview_pane_t target_pane;
+	int has_target_pane;
 	nv_preview_kind_t kind;
 	nv_preview_task_state_t state;
 	char *cwd_bytes_hex;
@@ -77,7 +85,8 @@ int nv_preview_queue_start(nv_preview_queue_t *queue);
 
 /*
  * Copies a fully explicit, raw-byte-addressed request into the queue.  A newer
- * generation for one pane cancels every older unfinished generation for it.
+ * generation for one render target cancels every older unfinished generation
+ * for that target.  Requests without target_pane retain source-pane behavior.
  */
 int nv_preview_queue_submit(nv_preview_queue_t *queue,
 		const nv_preview_request_t *request, uint64_t *task_id);

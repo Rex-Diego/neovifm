@@ -13,6 +13,7 @@
 #include "pane_snapshot.h"
 #include "preview_task.h"
 #include "action_task.h"
+#include "open_resolver.h"
 
 typedef enum
 {
@@ -57,6 +58,9 @@ char *nv_protocol_preview_json(const nv_preview_event_t *event,
 		unsigned int output_sequence);
 char *nv_protocol_action_task_json(const nv_action_event_t *event,
 		unsigned int output_sequence);
+char *nv_protocol_open_json(const nv_open_resolution_t *resolution,
+		const char path_bytes_hex[], unsigned int output_sequence,
+		unsigned int command_sequence);
 
 void nv_protocol_json_free(char *json);
 

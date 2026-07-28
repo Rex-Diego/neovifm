@@ -26,6 +26,9 @@ const MAX_CAPABILITIES = 64
 const MAX_CAPABILITY_BYTES = 256
 const MAX_ERROR_CODE_BYTES = 128
 const MAX_PREVIEW_TEXT_BYTES = 64 * 1024
+const MAX_OWNER_GROUP_BYTES = 256
+const MAX_OPEN_ARGS = 32
+const MAX_OPEN_ARG_BYTES = 4 * 1024
 const UTF8_ENCODER = new TextEncoder()
 
 export type EntryKind =
@@ -57,6 +60,8 @@ export interface SnapshotEntry {
   readonly ctime_unix_ns?: string
   readonly mode_octal?: string
   readonly attributes_hex?: string
+  readonly owner_display?: string
+  readonly group_display?: string
   readonly selected: boolean
   readonly hidden: boolean
   readonly stat_error?: StatError
@@ -121,13 +126,14 @@ export interface CommandErrorPayload extends ErrorPayload {
   readonly command_sequence: number
 }
 
-export type PreviewKind = "text" | "directory"
+export type PreviewKind = "text" | "markdown" | "pdf" | "directory"
 export type PreviewTaskState = "queued" | "running" | "done" | "failed" | "cancelled"
 
 export interface PreviewTaskPayload {
   readonly task_id: string
   readonly generation: string
   readonly pane: PaneId
+  readonly target_pane?: PaneId
   readonly kind: PreviewKind
   readonly state: PreviewTaskState
   readonly cwd_bytes_hex: string
@@ -155,6 +161,17 @@ export interface ActionTaskPayload {
   readonly partial: boolean
   readonly error_code?: string
   readonly os_error?: number
+}
+
+export type OpenIntent = "open" | "edit" | "preview"
+export type OpenSource = "association" | "platform"
+export interface OpenPayload {
+  readonly command_sequence: number
+  readonly intent: OpenIntent
+  readonly source: OpenSource
+  readonly state: "resolved"
+  readonly path_bytes_hex: string
+  readonly argv: readonly string[]
 }
 
 interface Envelope<Type extends string, Payload, Version extends number> {
@@ -192,6 +209,7 @@ export type PreviewSessionWorkspaceSnapshotRecord = Envelope<
 export type PreviewTaskRecord = Envelope<"task", PreviewTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewRecord = Envelope<"preview", PreviewPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type ActionTaskRecord = Envelope<"action-task", ActionTaskPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
+export type OpenRecord = Envelope<"open", OpenPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionCommandErrorRecord = Envelope<"command-error", CommandErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type PreviewSessionErrorRecord = Envelope<"error", ErrorPayload, typeof PREVIEW_SESSION_PROTOCOL_VERSION>
 export type ErrorRecord = V0ErrorRecord | V1ErrorRecord | SessionErrorRecord | PreviewSessionErrorRecord
@@ -211,6 +229,7 @@ export type ProtocolRecord =
   | PreviewTaskRecord
   | PreviewRecord
   | ActionTaskRecord
+  | OpenRecord
   | PreviewSessionCommandErrorRecord
   | PreviewSessionErrorRecord
 
@@ -315,18 +334,18 @@ export function sanitizeDisplayText(text: string): string {
   return display
 }
 
-function displayString(value: unknown, path: string, allowEmpty = true): string {
-  const text = boundedString(value, path, MAX_DISPLAY_TEXT_BYTES, allowEmpty)
+function displayString(value: unknown, path: string, allowEmpty = true, maximumBytes = MAX_DISPLAY_TEXT_BYTES): string {
+  const text = boundedString(value, path, maximumBytes, allowEmpty)
   const sanitized = sanitizeDisplayText(text)
-  if (textByteLength(sanitized) > MAX_DISPLAY_TEXT_BYTES) {
-    return invalid(path, `must not exceed ${MAX_DISPLAY_TEXT_BYTES} UTF-8 bytes after sanitization`)
+  if (textByteLength(sanitized) > maximumBytes) {
+    return invalid(path, `must not exceed ${maximumBytes} UTF-8 bytes after sanitization`)
   }
   return sanitized
 }
 
-function optionalDisplayString(object: UnknownObject, key: string, path: string): string | undefined {
+function optionalDisplayString(object: UnknownObject, key: string, path: string, maximumBytes = MAX_DISPLAY_TEXT_BYTES): string | undefined {
   const value = object[key]
-  return value === undefined ? undefined : displayString(value, `${path}.${key}`)
+  return value === undefined ? undefined : displayString(value, `${path}.${key}`, true, maximumBytes)
 }
 
 function optionalPatternString(
@@ -394,6 +413,8 @@ function parseEntry(value: unknown, path: string): SnapshotEntry {
   const ctime = optionalPatternString(object, "ctime_unix_ns", path, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
   const mode = optionalPatternString(object, "mode_octal", path, OCTAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
   const attributes = optionalPatternString(object, "attributes_hex", path, ATTRIBUTES_PATTERN)
+  const owner = optionalDisplayString(object, "owner_display", path, MAX_OWNER_GROUP_BYTES)
+  const group = optionalDisplayString(object, "group_display", path, MAX_OWNER_GROUP_BYTES)
   const statError = parseStatError(object.stat_error, `${path}.stat_error`)
 
   return frozen({
@@ -419,6 +440,8 @@ function parseEntry(value: unknown, path: string): SnapshotEntry {
     ...(ctime === undefined ? {} : { ctime_unix_ns: ctime }),
     ...(mode === undefined ? {} : { mode_octal: mode }),
     ...(attributes === undefined ? {} : { attributes_hex: attributes }),
+    ...(owner === undefined ? {} : { owner_display: owner }),
+    ...(group === undefined ? {} : { group_display: group }),
     selected: booleanValue(object.selected, `${path}.selected`),
     hidden: booleanValue(object.hidden, `${path}.hidden`),
     ...(statError === undefined ? {} : { stat_error: statError }),
@@ -615,7 +638,7 @@ function parseCommandErrorPayload(value: unknown): CommandErrorPayload {
 
 function parsePreviewKind(value: unknown, path: string): PreviewKind {
   const kind = stringValue(value, path)
-  if (kind !== "text" && kind !== "directory") return invalid(path, "must be text or directory")
+  if (kind !== "text" && kind !== "markdown" && kind !== "pdf" && kind !== "directory") return invalid(path, "must be text, markdown, pdf, or directory")
   return kind
 }
 
@@ -629,6 +652,10 @@ function parsePreviewTaskState(value: unknown, path: string): PreviewTaskState {
 
 function parsePreviewTaskPayload(value: unknown, path = "payload"): PreviewTaskPayload {
   const payload = objectValue(value, path)
+  const pane = parsePaneId(payload.pane, `${path}.pane`)
+  const targetPane = payload.target_pane === undefined
+    ? pane
+    : parsePaneId(payload.target_pane, `${path}.target_pane`)
   const errorCode = payload.error_code === undefined
     ? undefined
     : boundedString(payload.error_code, `${path}.error_code`, MAX_ERROR_CODE_BYTES, false)
@@ -636,7 +663,8 @@ function parsePreviewTaskPayload(value: unknown, path = "payload"): PreviewTaskP
   return frozen({
     task_id: patternString(payload.task_id, `${path}.task_id`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
     generation: patternString(payload.generation, `${path}.generation`, UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES),
-    pane: parsePaneId(payload.pane, `${path}.pane`),
+    pane,
+    target_pane: targetPane,
     kind: parsePreviewKind(payload.kind, `${path}.kind`),
     state: parsePreviewTaskState(payload.state, `${path}.state`),
     cwd_bytes_hex: patternString(payload.cwd_bytes_hex, `${path}.cwd_bytes_hex`, HEX_PATTERN),
@@ -701,6 +729,38 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
   })
 }
 
+function parseOpenPayload(value: unknown): OpenPayload {
+  const payload = objectValue(value, "payload")
+  const intent = stringValue(payload.intent, "payload.intent")
+  if (intent !== "open" && intent !== "edit" && intent !== "preview") {
+    return invalid("payload.intent", "is not a supported open intent")
+  }
+  const source = stringValue(payload.source, "payload.source")
+  if (source !== "association" && source !== "platform") {
+    return invalid("payload.source", "is not a supported open source")
+  }
+  if (payload.state !== "resolved") return invalid("payload.state", "must be resolved")
+  if (!Array.isArray(payload.argv) || payload.argv.length === 0 || payload.argv.length > MAX_OPEN_ARGS) {
+    return invalid("payload.argv", `must contain between 1 and ${MAX_OPEN_ARGS} arguments`)
+  }
+  const argv = payload.argv.map((argument, index) => boundedString(
+    argument,
+    `payload.argv[${index}]`,
+    MAX_OPEN_ARG_BYTES,
+    false,
+  ))
+  const pathBytesHex = patternString(payload.path_bytes_hex, "payload.path_bytes_hex", HEX_PATTERN)
+  if (pathBytesHex.length === 0) return invalid("payload.path_bytes_hex", "must not be empty")
+  return frozen({
+    command_sequence: integerValue(payload.command_sequence, "payload.command_sequence", 1),
+    intent,
+    source,
+    state: "resolved",
+    path_bytes_hex: pathBytesHex,
+    argv: frozen(argv),
+  })
+}
+
 export function parseProtocolRecord(value: unknown): ProtocolRecord {
   const envelope = objectValue(value, "record")
   if (envelope.protocol !== PROTOCOL_NAME) {
@@ -722,6 +782,7 @@ export function parseProtocolRecord(value: unknown): ProtocolRecord {
       case "task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewTaskPayload(envelope.payload) })
       case "preview": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parsePreviewPayload(envelope.payload) })
       case "action-task": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseActionTaskPayload(envelope.payload) })
+      case "open": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseOpenPayload(envelope.payload) })
       case "command-error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseCommandErrorPayload(envelope.payload) })
       case "error": return frozen({ protocol: PROTOCOL_NAME, version, type, sequence, payload: parseErrorPayload(envelope.payload) })
       default: return invalid("record.type", `is unsupported for v3: ${type}`)

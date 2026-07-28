@@ -96,13 +96,7 @@ test("real keyboard navigation, tabs, actions, and mkdir undo update the C-owned
     setup.mockInput.pressKey(" ")
     await waitFor(() => {
       const current = state()
-      return current.phase === "ready" && "workspace" in current && current.workspace.active_pane === "right"
-    })
-
-    setup.mockInput.pressTab()
-    await waitFor(() => {
-      const current = state()
-      return current.phase === "ready" && "workspace" in current && current.workspace.active_pane === "left"
+      return current.phase === "ready" && "session" in current && current.preview?.target_pane === "right"
     })
 
     setup.mockInput.pressTab()

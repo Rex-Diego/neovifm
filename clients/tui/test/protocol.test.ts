@@ -58,6 +58,35 @@ describe("JSONL protocol", () => {
     })).toThrow("selection_count")
   })
 
+  test("accepts additive owner and group display fields", () => {
+    const record = parseProtocolRecord({
+      protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1,
+      payload: {
+        cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
+        cursor: 0, entry_count: 1, entries: [{
+          name_display: "note", name_bytes_hex: "6e6f7465", path_display: "/tmp/note", path_bytes_hex: "2f746d702f6e6f7465",
+          kind: "file", size_bytes: "1", mtime_unix_ms: "0", owner_display: "rex", group_display: "staff",
+          selected: false, hidden: false,
+        }],
+      },
+    })
+    if (record.type !== "snapshot") throw new Error("expected snapshot")
+    expect(record.payload.entries[0]).toMatchObject({ owner_display: "rex", group_display: "staff" })
+    expect(Object.isFrozen(record.payload.entries[0])).toBe(true)
+
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 0, type: "snapshot", sequence: 1,
+      payload: {
+        cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
+        cursor: 0, entry_count: 1, entries: [{
+          name_display: "note", name_bytes_hex: "6e6f7465", path_display: "/tmp/note", path_bytes_hex: "2f746d702f6e6f7465",
+          kind: "file", size_bytes: "1", mtime_unix_ms: "0", owner_display: "x".repeat(257),
+          selected: false, hidden: false,
+        }],
+      },
+    })).toThrow("owner_display")
+  })
+
   test("requires an explicit v2 snapshot trigger and preserves watch updates", () => {
     const pane = {
       cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0",
@@ -132,16 +161,32 @@ describe("JSONL protocol", () => {
     const task = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "task", sequence: 2,
       payload: {
-        task_id: "42", generation: "7", pane: "left", kind: "text", state: "running",
+        task_id: "42", generation: "7", pane: "left", target_pane: "right", kind: "text", state: "running",
         cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f7465",
       },
     })
     const preview = parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: {
-        task_id: "42", generation: "7", pane: "left", kind: "text", state: "done",
+        task_id: "42", generation: "7", pane: "left", target_pane: "right", kind: "text", state: "done",
         cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f7465",
         content: "note", truncated: false,
+      },
+    })
+    const markdown = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 5,
+      payload: {
+        task_id: "43", generation: "8", pane: "left", target_pane: "left", kind: "markdown", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f726561646d652e6d64",
+        content: "# heading", truncated: false,
+      },
+    })
+    const pdf = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "preview", sequence: 6,
+      payload: {
+        task_id: "44", generation: "9", pane: "left", target_pane: "left", kind: "pdf", state: "done",
+        cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f74652e706466",
+        content: "PDF page", truncated: false,
       },
     })
     const actionTask = parseProtocolRecord({
@@ -153,14 +198,42 @@ describe("JSONL protocol", () => {
       },
     })
 
-    expect(task).toMatchObject({ version: 3, type: "task", payload: { generation: "7", state: "running" } })
-    expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", truncated: false } })
+    expect(task).toMatchObject({ version: 3, type: "task", payload: { generation: "7", target_pane: "right", state: "running" } })
+    expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", target_pane: "right", truncated: false } })
+    expect(markdown).toMatchObject({ type: "preview", payload: { kind: "markdown", content: "# heading" } })
+    expect(pdf).toMatchObject({ type: "preview", payload: { kind: "pdf", content: "PDF page" } })
     expect(Object.isFrozen(preview)).toBe(true)
     expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true } })
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },
     })).toThrow("terminal")
+  })
+
+  test("accepts a v3 core-owned open resolution with structured argv", () => {
+    const record = parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "open", sequence: 5,
+      payload: {
+        command_sequence: 4, intent: "open", source: "association", state: "resolved",
+        path_bytes_hex: "2f746d702f6e6f74652e6d64", argv: ["viewer", "--wait", "/tmp/note.md"],
+      },
+    })
+    expect(record).toMatchObject({
+      version: 3,
+      type: "open",
+      payload: { command_sequence: 4, intent: "open", source: "association", state: "resolved" },
+    })
+    if (record.type !== "open") throw new Error("expected open result")
+    expect(record.payload.argv).toEqual(["viewer", "--wait", "/tmp/note.md"])
+    expect(Object.isFrozen(record.payload)).toBe(true)
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "open", sequence: 5,
+      payload: { ...record.payload, argv: [] },
+    })).toThrow("payload.argv")
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "open", sequence: 5,
+      payload: { ...record.payload, path_bytes_hex: "" },
+    })).toThrow("payload.path_bytes_hex")
   })
 
   test("decodes records split across arbitrary chunks", () => {

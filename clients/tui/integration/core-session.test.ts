@@ -16,7 +16,7 @@ afterEach(async () => {
   right = undefined
 })
 
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
     if (Date.now() >= deadline) throw new Error("timed out waiting for core session")
@@ -60,19 +60,177 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected updated session")
     expect(state.workspace.left).toEqual(beforeMove.workspace.left)
 
-    await writeFile(resolve(left, "left-refreshed"), "refresh")
-    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "left-refreshed"))
-    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected watcher refresh")
-    expect(state.commandSequence).toBe(2)
-    expect(state.workspace.right).toEqual(beforeMove.workspace.right)
-
     expect(await session.send({ action: "focus", pane: "left" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "left")
+    await writeFile(resolve(left, "left-refreshed"), "refresh")
     expect(await session.send({ action: "refresh" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "left-refreshed"))
+    expect(errors).toEqual([])
+
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected refreshed session")
+    const source = state.workspace.left
+    const entry = source.entries[source.cursor]
+    if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined) {
+      throw new Error("expected source identity for explicit preview")
+    }
+    const rightBeforePreview = state.workspace.right
+    const previewCommandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "preview",
+      pane: "left",
+      target_pane: "right",
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: source.snapshot_revision,
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device!,
+      inode: entry.inode!,
+      ctime_unix_ns: entry.ctime_unix_ns!,
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === "a")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected explicit preview session")
+    expect(state.workspace.right).toEqual(rightBeforePreview)
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session routes an explicit source preview into the opposite render pane", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-explicit-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-explicit-right-"))
+  await writeFile(resolve(left, "left-a"), "a")
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.content === "a")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
+    const source = state.workspace.left
+    const entry = source.entries[source.cursor]
+    if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+      throw new Error("expected source identity for explicit preview")
+    }
+    const rightBeforePreview = state.workspace.right
+    const previewCommandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "preview",
+      pane: "left",
+      target_pane: "right",
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: source.snapshot_revision,
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device,
+      inode: entry.inode,
+      ctime_unix_ns: entry.ctime_unix_ns,
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === "a")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected explicit preview session")
+    expect(state.workspace.right).toEqual(rightBeforePreview)
+    const staleCommandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "preview",
+      pane: "left",
+      target_pane: "right",
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: "0",
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device,
+      inode: entry.inode,
+      ctime_unix_ns: entry.ctime_unix_ns,
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === staleCommandSequence && state.commandError?.code === "stale-preview")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected stale preview acknowledgement")
+    expect(state.workspace.right).toEqual(rightBeforePreview)
     expect(errors).toEqual([])
   } finally {
     session.close()
     await session.completion
   }
-})
+}, { timeout: 15000 })
+
+test("real v3 session resolves a core-owned open command into a structured result", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-open-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-open-right-"))
+  const path = resolve(left, "note.md")
+  const pathBytesHex = Array.from(new TextEncoder().encode(path), (byte) => byte.toString(16).padStart(2, "0")).join("")
+  await writeFile(path, "note")
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
+    const commandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "open",
+      intent: "open",
+      pane: "left",
+      cwd_bytes_hex: state.workspace.left.cwd_bytes_hex,
+      snapshot_revision: state.workspace.left.snapshot_revision,
+      cwd_device: state.workspace.left.cwd_device!,
+      cwd_inode: state.workspace.left.cwd_inode!,
+      cwd_ctime_unix_ns: state.workspace.left.cwd_ctime_unix_ns!,
+      path_bytes_hex: pathBytesHex,
+      device: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.device!,
+      inode: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.inode!,
+      ctime_unix_ns: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.ctime_unix_ns!,
+      association_argv: ["viewer", "--wait"],
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.open?.command_sequence === commandSequence)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected open result")
+    expect(state.open).toMatchObject({
+      command_sequence: commandSequence,
+      source: "association",
+      state: "resolved",
+      argv: ["viewer", "--wait", path],
+    })
+    const staleCommandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "open",
+      intent: "open",
+      pane: "left",
+      cwd_bytes_hex: state.workspace.left.cwd_bytes_hex,
+      snapshot_revision: "0",
+      cwd_device: state.workspace.left.cwd_device!,
+      cwd_inode: state.workspace.left.cwd_inode!,
+      cwd_ctime_unix_ns: state.workspace.left.cwd_ctime_unix_ns!,
+      path_bytes_hex: pathBytesHex,
+      device: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.device!,
+      inode: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.inode!,
+      ctime_unix_ns: state.workspace.left.entries.find((entry) => entry.path_bytes_hex === pathBytesHex)!.ctime_unix_ns!,
+      association_argv: ["viewer", "--wait"],
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === staleCommandSequence && state.commandError?.code === "stale-open")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 15000 })

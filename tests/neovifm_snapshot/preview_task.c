@@ -91,6 +91,34 @@ TEST(preview_queue_emits_bounded_text_completion_with_raw_identity)
 	remove_dir(dir);
 }
 
+TEST(preview_queue_treats_markdown_as_bounded_text)
+{
+	const char *const dir = SANDBOX_PATH "/preview-markdown";
+	const char *const path = SANDBOX_PATH "/preview-markdown/readme.md";
+	create_dir(dir);
+	make_file(path, "# heading\n\nbody");
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 1U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_MARKDOWN, .max_bytes = 64U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal(NV_PREVIEW_KIND_MARKDOWN, event.kind);
+	assert_string_equal("# heading\n\nbody", event.content);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(path);
+	remove_dir(dir);
+}
+
 TEST(preview_queue_cancels_queued_generation_before_worker_runs_it)
 {
 	const char *const dir = SANDBOX_PATH "/preview-cancel";
@@ -127,6 +155,54 @@ TEST(preview_queue_cancels_queued_generation_before_worker_runs_it)
 	assert_true(pop_terminal_event(queue, &event));
 	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
 	assert_int_equal(2, event.generation);
+	assert_string_equal("latest", event.content);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(first);
+	remove_file(latest);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_cancels_by_render_target_lane_across_source_panes)
+{
+	const char *const dir = SANDBOX_PATH "/preview-target-lane";
+	const char *const first = SANDBOX_PATH "/preview-target-lane/first.txt";
+	const char *const latest = SANDBOX_PATH "/preview-target-lane/latest.txt";
+	create_dir(dir);
+	make_file(first, "first");
+	make_file(latest, "latest");
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc_paused();
+	assert_non_null(queue);
+	char cwd_hex[1024], first_hex[1024], latest_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(first, first_hex, sizeof(first_hex)));
+	assert_success(nv_preview_hex_encode(latest, latest_hex, sizeof(latest_hex)));
+	const nv_preview_request_t first_request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .target_pane = NV_PREVIEW_PANE_RIGHT,
+		.has_target_pane = 1, .generation = 11U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = first_hex,
+		.kind = NV_PREVIEW_KIND_TEXT, .max_bytes = 64U, .timeout_ms = 1000U,
+	};
+	const nv_preview_request_t latest_request = {
+		.pane = NV_PREVIEW_PANE_RIGHT, .target_pane = NV_PREVIEW_PANE_RIGHT,
+		.has_target_pane = 1, .generation = 12U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = latest_hex,
+		.kind = NV_PREVIEW_KIND_TEXT, .max_bytes = 64U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &first_request, NULL));
+	assert_success(nv_preview_queue_submit(queue, &latest_request, NULL));
+	assert_success(nv_preview_queue_start(queue));
+
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_CANCELLED, event.state);
+	assert_int_equal(NV_PREVIEW_PANE_LEFT, event.pane);
+	assert_int_equal(NV_PREVIEW_PANE_RIGHT, event.target_pane);
+	nv_preview_event_free(&event);
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal(NV_PREVIEW_PANE_RIGHT, event.pane);
+	assert_int_equal(NV_PREVIEW_PANE_RIGHT, event.target_pane);
 	assert_string_equal("latest", event.content);
 	nv_preview_event_free(&event);
 	nv_preview_queue_free(queue);

@@ -108,13 +108,13 @@ test("renders two panes by default and degrades to the active pane when narrow",
   expect(compactFrame).not.toContain("60x20")
   expect(compactFrame).toContain("●")
   expect(compactFrame).not.toContain("right.txt")
-  expect(compactFrame).toContain("F3 View")
-  expect(compactFrame).toContain("F4 Edit")
-  expect(compactFrame).toContain("F5 Copy")
-  expect(compactFrame).toContain("F6 Move")
-  expect(compactFrame).toContain("F7 MkDir")
-  expect(compactFrame).toContain("F8 Delete")
-  expect(compactFrame).toContain("F10 Quit")
+  expect(compactFrame).toContain("F3")
+  expect(compactFrame).toContain("F4")
+  expect(compactFrame).toContain("F5")
+  expect(compactFrame).toContain("F6")
+  expect(compactFrame).toContain("F7")
+  expect(compactFrame).toContain("F8")
+  expect(compactFrame).toContain("F10")
 
   let sent: unknown
   setup?.renderer.destroy()
@@ -284,6 +284,35 @@ test("opens F3 preview as a full workspace viewer instead of a third pane", asyn
   expect(setup.captureCharFrame()).not.toContain("preview body")
 })
 
+test("uses Space for an ephemeral opposite-pane preview while Tab still changes focus", async () => {
+  const sent: unknown[] = []
+  setup = await testRender(() => <App workspace={workspace} onCommand={(command) => { sent.push(command) }} preview={{
+    task_id: "1", generation: "2", pane: "left", target_pane: "right", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content: "opposite pane preview", truncated: false,
+  }} />, { width: 120, height: 20 })
+
+  await setup.renderOnce()
+  setup.mockInput.pressKey(" ")
+  await setup.renderOnce()
+  expect(sent).toContainEqual(expect.objectContaining({
+    action: "preview",
+    pane: "left",
+    target_pane: "right",
+    snapshot_revision: "1",
+    path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+  }))
+  const quickFrame = setup.captureCharFrame()
+  expect(quickFrame).toContain("SPACE QUICK VIEW")
+  expect(quickFrame).toContain("opposite pane preview")
+  expect(quickFrame).not.toContain("right.txt")
+
+  setup.mockInput.pressTab()
+  await setup.renderOnce()
+  expect(sent.at(-1)).toEqual({ action: "focus-next" })
+  expect(setup.captureCharFrame()).not.toContain("opposite pane preview")
+})
+
 test("opens a file with l through the same preview path as F3", async () => {
   setup = await testRender(() => <App workspace={workspace} preview={{
     task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
@@ -296,6 +325,42 @@ test("opens a file with l through the same preview path as F3", async () => {
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("F3 VIEW")
   expect(setup.captureCharFrame()).toContain("opened with l")
+})
+
+test("routes l on a regular file to the external opener when configured", async () => {
+  let openedPath: string | undefined
+  setup = await testRender(() => <App workspace={workspace} onOpen={(path) => { openedPath = path }} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  setup.mockInput.pressKey("l")
+  await setup.renderOnce()
+  expect(openedPath).toBe("/tmp/file.txt")
+})
+
+test("routes regular-file Enter through the core open resolver when advertised", async () => {
+  let sent: unknown
+  setup = await testRender(() => <App
+    workspace={workspace}
+    capabilities={[...capabilities, "open-v1"]}
+    onCommand={(command) => { sent = command }}
+    onOpen={() => { throw new Error("client fallback must not run") }}
+  />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  setup.mockInput.pressKey("l")
+  await setup.renderOnce()
+  expect(sent).toEqual({
+    action: "open",
+    intent: "open",
+    pane: "left",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex,
+    snapshot_revision: snapshot.snapshot_revision,
+    cwd_device: snapshot.cwd_device,
+    cwd_inode: snapshot.cwd_inode,
+    cwd_ctime_unix_ns: snapshot.cwd_ctime_unix_ns,
+    path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    device: snapshot.entries[0]!.device,
+    inode: snapshot.entries[0]!.inode,
+    ctime_unix_ns: snapshot.entries[0]!.ctime_unix_ns,
+  })
 })
 
 test("opens a loading viewer instead of rendering a stale preview from another pane or cursor identity", async () => {
@@ -444,7 +509,8 @@ test("opens a clickable task center with queue and history", async () => {
       completed_count: 1, total_count: 1, partial: false,
     },
   ]
-  setup = await testRender(() => <App workspace={workspace} actionTasks={tasks} />, { width: 100, height: 20 })
+  const sent: unknown[] = []
+  setup = await testRender(() => <App workspace={workspace} actionTasks={tasks} onCommand={(command) => { sent.push(command) }} />, { width: 100, height: 20 })
   await setup.renderOnce()
   const entry = setup.renderer.root.findDescendantById("tasks-entry")
   expect(entry).toBeDefined()
@@ -455,12 +521,81 @@ test("opens a clickable task center with queue and history", async () => {
   expect(frame).toContain("QUEUE (1)")
   expect(frame).toContain("HISTORY (1)")
   expect(frame).toContain("copy #4 running 1/3")
-  expect(frame).toContain("move #3 done 1/1")
+  expect(frame).not.toContain("move #3 done 1/1")
+  const historyTab = setup.renderer.root.findDescendantById("task-history-tab")
+  expect(historyTab).toBeDefined()
+  await setup.mockMouse.click(historyTab!.x, historyTab!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("move #3 done 1/1")
+  const cancelEntry = setup.renderer.root.findDescendantById("task-row-4")
+  expect(cancelEntry).toBeUndefined()
+  const queueTab = setup.renderer.root.findDescendantById("task-queue-tab")
+  expect(queueTab).toBeDefined()
+  await setup.mockMouse.click(queueTab!.x, queueTab!.y)
+  await setup.renderOnce()
+  const queueEntry = setup.renderer.root.findDescendantById("task-row-4")
+  expect(queueEntry).toBeDefined()
+  await setup.mockMouse.click(queueEntry!.x, queueEntry!.y)
+  expect(sent.at(-1)).toEqual({ action: "cancel-action", task_id: "4" })
   const closeEntry = setup.renderer.root.findDescendantById("tasks-entry")
   expect(closeEntry).toBeDefined()
   await setup.mockMouse.click(closeEntry!.x, closeEntry!.y)
   await setup.renderOnce()
   expect(setup.captureCharFrame()).not.toContain("TASK CENTER")
+})
+
+test("shows terminal task details and keeps retry disabled without retained action identity", async () => {
+  const tasks: ActionTaskPayload[] = [
+    {
+      task_id: "7", command_sequence: 6, pane: "left", action: "copy", state: "failed",
+      completed_count: 1, total_count: 2, failed_index: 1, partial: true,
+      error_code: "destination-exists", os_error: 17,
+    },
+    {
+      task_id: "8", command_sequence: 7, pane: "right", action: "delete", state: "cancelled",
+      completed_count: 0, total_count: 1, failed_index: 0, partial: false,
+      error_code: "cancelled",
+    },
+  ]
+  const sent: unknown[] = []
+  setup = await testRender(() => <App workspace={workspace} actionTasks={tasks} onCommand={(command) => { sent.push(command) }} />, { width: 100, height: 24 })
+  await setup.renderOnce()
+
+  const entry = setup.renderer.root.findDescendantById("tasks-entry")
+  expect(entry).toBeDefined()
+  await setup.mockMouse.click(entry!.x, entry!.y)
+  await setup.renderOnce()
+  const historyTab = setup.renderer.root.findDescendantById("task-history-tab")
+  expect(historyTab).toBeDefined()
+  await setup.mockMouse.click(historyTab!.x, historyTab!.y)
+  await setup.renderOnce()
+
+  const failedRow = setup.renderer.root.findDescendantById("task-row-7")
+  expect(failedRow).toBeDefined()
+  await setup.mockMouse.click(failedRow!.x, failedRow!.y)
+  await setup.renderOnce()
+  let frame = setup.captureCharFrame()
+  expect(frame).toContain("TASK DETAILS")
+  expect(frame).toContain("Task 7")
+  expect(frame).toContain("copy · failed · left")
+  expect(frame).toContain("Progress 1/2")
+  expect(frame).toContain("Failed item 2")
+  expect(frame).toContain("destination-exists")
+  expect(frame).toContain("Retry unavailable")
+
+  const retry = setup.renderer.root.findDescendantById("task-retry-7")
+  expect(retry).toBeDefined()
+  await setup.mockMouse.click(retry!.x, retry!.y)
+  expect(sent).toHaveLength(0)
+
+  const cancelledRow = setup.renderer.root.findDescendantById("task-row-8")
+  expect(cancelledRow).toBeDefined()
+  await setup.mockMouse.click(cancelledRow!.x, cancelledRow!.y)
+  await setup.renderOnce()
+  frame = setup.captureCharFrame()
+  expect(frame).toContain("Task 8")
+  expect(frame).toContain("delete · cancelled · right")
+  expect(frame).toContain("Retry unavailable")
 })
 
 test("renders a core error without a snapshot", async () => {
@@ -526,6 +661,21 @@ test("cycles the compact metadata column between size, time, and permissions", a
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("Permissions ▲")
   expect(setup.captureCharFrame()).toContain("-rw-r--r--")
+})
+
+test("shows owner and group columns only when the wide layout has metadata", async () => {
+  const ownerWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: { ...workspace.left, entries: [{ ...workspace.left.entries[0]!, owner_display: "rex", group_display: "staff" }] },
+    right: { ...workspace.right, entries: [{ ...workspace.right.entries[0]!, owner_display: "root", group_display: "wheel" }] },
+  }
+  setup = await testRender(() => <App workspace={ownerWorkspace} />, { width: 240, height: 20 })
+  await setup.renderOnce()
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("Owner")
+  expect(frame).toContain("Group")
+  expect(frame).toContain("rex")
+  expect(frame).toContain("staff")
 })
 
 test("keeps the workspace operable without Nerd Font or powerline glyphs", async () => {

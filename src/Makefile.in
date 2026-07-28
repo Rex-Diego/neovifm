@@ -135,6 +135,8 @@ am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(bindir)" \
 PROGRAMS = $(bin_PROGRAMS) $(noinst_PROGRAMS)
 am__dirstamp = $(am__leading_dot)dirstamp
 am_neovifm_core_probe_OBJECTS = neovifm/core_probe.$(OBJEXT) \
+	neovifm/open_resolver.$(OBJEXT) \
+	neovifm/open_config.$(OBJEXT) \
 	neovifm/pane_snapshot.$(OBJEXT) \
 	neovifm/workspace_session.$(OBJEXT) \
 	neovifm/snapshot_json.$(OBJEXT) compat/neovifm_fs.$(OBJEXT) \
@@ -142,6 +144,8 @@ am_neovifm_core_probe_OBJECTS = neovifm/core_probe.$(OBJEXT) \
 neovifm_core_probe_OBJECTS = $(am_neovifm_core_probe_OBJECTS)
 neovifm_core_probe_LDADD = $(LDADD)
 am_neovifm_core_session_OBJECTS = neovifm/core_session.$(OBJEXT) \
+	neovifm/open_resolver.$(OBJEXT) \
+	neovifm/open_config.$(OBJEXT) \
 	neovifm/pane_snapshot.$(OBJEXT) \
 	neovifm/workspace_session.$(OBJEXT) \
 	neovifm/undo_bridge.$(OBJEXT) neovifm/undo_compat.$(OBJEXT) \
@@ -398,6 +402,8 @@ am__depfiles_remade = ./$(DEPDIR)/args.Po ./$(DEPDIR)/background.Po \
 	neovifm/$(DEPDIR)/classic_pane_adapter.Po \
 	neovifm/$(DEPDIR)/core_probe.Po \
 	neovifm/$(DEPDIR)/core_session.Po \
+	neovifm/$(DEPDIR)/open_resolver.Po \
+	neovifm/$(DEPDIR)/open_config.Po \
 	neovifm/$(DEPDIR)/pane_snapshot.Po \
 	neovifm/$(DEPDIR)/preview_task.Po \
 	neovifm/$(DEPDIR)/snapshot_json.Po \
@@ -833,6 +839,8 @@ dist_pkgdata_SCRIPTS = ../data/vifm-media@DATA_SUFFIX@
 nodist_pkgdata_DATA = ../data/vifm-help.txt
 neovifm_core_probe_SOURCES = \
 	neovifm/core_probe.c \
+	neovifm/open_resolver.c neovifm/open_resolver.h \
+	neovifm/open_config.c neovifm/open_config.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
@@ -842,6 +850,8 @@ neovifm_core_probe_SOURCES = \
 
 neovifm_core_session_SOURCES = \
 	neovifm/core_session.c \
+	neovifm/open_resolver.c neovifm/open_resolver.h \
+	neovifm/open_config.c neovifm/open_config.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
 	neovifm/undo_bridge.c neovifm/undo_bridge.h \
@@ -1267,6 +1277,10 @@ neovifm/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) neovifm/$(DEPDIR)
 	@: >>neovifm/$(DEPDIR)/$(am__dirstamp)
 neovifm/core_probe.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/open_resolver.$(OBJEXT): neovifm/$(am__dirstamp) \
+	neovifm/$(DEPDIR)/$(am__dirstamp)
+neovifm/open_config.$(OBJEXT): neovifm/$(am__dirstamp) \
 	neovifm/$(DEPDIR)/$(am__dirstamp)
 neovifm/pane_snapshot.$(OBJEXT): neovifm/$(am__dirstamp) \
 	neovifm/$(DEPDIR)/$(am__dirstamp)
@@ -1970,6 +1984,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/classic_pane_adapter.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/core_probe.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/core_session.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/open_resolver.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/open_config.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/pane_snapshot.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/preview_task.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@neovifm/$(DEPDIR)/snapshot_json.Po@am__quote@ # am--include-marker
@@ -3054,6 +3070,8 @@ distclean: distclean-am
 	-rm -f neovifm/$(DEPDIR)/classic_pane_adapter.Po
 	-rm -f neovifm/$(DEPDIR)/core_probe.Po
 	-rm -f neovifm/$(DEPDIR)/core_session.Po
+	-rm -f neovifm/$(DEPDIR)/open_resolver.Po
+	-rm -f neovifm/$(DEPDIR)/open_config.Po
 	-rm -f neovifm/$(DEPDIR)/pane_snapshot.Po
 	-rm -f neovifm/$(DEPDIR)/preview_task.Po
 	-rm -f neovifm/$(DEPDIR)/snapshot_json.Po
@@ -3336,6 +3354,8 @@ maintainer-clean: maintainer-clean-am
 	-rm -f neovifm/$(DEPDIR)/classic_pane_adapter.Po
 	-rm -f neovifm/$(DEPDIR)/core_probe.Po
 	-rm -f neovifm/$(DEPDIR)/core_session.Po
+	-rm -f neovifm/$(DEPDIR)/open_resolver.Po
+	-rm -f neovifm/$(DEPDIR)/open_config.Po
 	-rm -f neovifm/$(DEPDIR)/pane_snapshot.Po
 	-rm -f neovifm/$(DEPDIR)/preview_task.Po
 	-rm -f neovifm/$(DEPDIR)/snapshot_json.Po

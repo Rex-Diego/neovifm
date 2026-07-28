@@ -23,7 +23,8 @@ static JSON_Value *snapshot_payload(const nv_pane_snapshot_t *snapshot);
 static JSON_Value *entry_value(const nv_pane_entry_t *entry);
 static char *hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
-		const char quaternary_capability[], unsigned int sequence);
+		const char quaternary_capability[], const char quinary_capability[],
+		unsigned int sequence);
 static char *error_json(unsigned int version, const nv_snapshot_error_t *error,
 		unsigned int sequence);
 static int snapshot_model_is_valid(const nv_pane_snapshot_t *snapshot);
@@ -35,6 +36,7 @@ static JSON_Value *preview_task_payload(const nv_preview_event_t *event);
 static const char *preview_pane_name(nv_preview_pane_t pane);
 static const char *preview_kind_name(nv_preview_kind_t kind);
 static const char *preview_state_name(nv_preview_task_state_t state);
+static JSON_Value *open_argv_value(const nv_open_resolution_t *resolution);
 
 static int
 set_i64_string(JSON_Object *object, const char name[], int64_t value)
@@ -117,7 +119,11 @@ entry_model_is_valid(const nv_pane_entry_t *entry)
 		string_fits(entry->name_display, NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES) &&
 		hex_string_is_valid(entry->name_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) &&
 		string_fits(entry->path_display, NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES) &&
-		hex_string_is_valid(entry->path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES);
+		hex_string_is_valid(entry->path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) &&
+		(entry->owner_display == NULL || string_fits(entry->owner_display,
+			NV_PANE_SNAPSHOT_MAX_OWNER_BYTES)) &&
+		(entry->group_display == NULL || string_fits(entry->group_display,
+			NV_PANE_SNAPSHOT_MAX_OWNER_BYTES));
 }
 
 static const char *
@@ -223,7 +229,8 @@ serialize_payload(const char type[], unsigned int version, unsigned int sequence
 static char *
 hello_json(unsigned int version, const char capability[],
 		const char secondary_capability[], const char tertiary_capability[],
-		const char quaternary_capability[], unsigned int sequence)
+		const char quaternary_capability[], const char quinary_capability[],
+		unsigned int sequence)
 {
 	JSON_Value *const payload_value = json_value_init_object();
 	JSON_Value *const capabilities_value = json_value_init_array();
@@ -248,6 +255,9 @@ hello_json(unsigned int version, const char capability[],
 			(quaternary_capability != NULL &&
 			 json_array_append_string(capabilities, quaternary_capability) !=
 			 JSONSuccess) ||
+			(quinary_capability != NULL &&
+			 json_array_append_string(capabilities, quinary_capability) !=
+			 JSONSuccess) ||
 			json_object_set_value(payload, "capabilities",
 					capabilities_value) != JSONSuccess)
 	{
@@ -269,19 +279,19 @@ hello_json(unsigned int version, const char capability[],
 char *
 nv_protocol_hello_json(unsigned int sequence)
 {
-	return hello_json(0U, "snapshot-v0", NULL, NULL, NULL, sequence);
+	return hello_json(0U, "snapshot-v0", NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_workspace_hello_json(unsigned int sequence)
 {
-	return hello_json(1U, "workspace-v1", NULL, NULL, NULL, sequence);
+	return hello_json(1U, "workspace-v1", NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
 nv_protocol_session_hello_json(unsigned int sequence)
 {
-	return hello_json(2U, "workspace-session-v2", NULL, NULL, NULL, sequence);
+	return hello_json(2U, "workspace-session-v2", NULL, NULL, NULL, NULL, sequence);
 }
 
 char *
@@ -289,10 +299,10 @@ nv_protocol_preview_session_hello_json(unsigned int sequence)
 {
 	#ifdef __APPLE__
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			"pane-tabs-v1", "file-actions-v1", sequence);
+			"pane-tabs-v1", "file-actions-v1", "open-v1", sequence);
 	#else
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
-			"pane-tabs-v1", NULL, sequence);
+			"pane-tabs-v1", NULL, "open-v1", sequence);
 	#endif
 }
 
@@ -307,6 +317,8 @@ static const char *
 preview_kind_name(nv_preview_kind_t kind)
 {
 	return kind == NV_PREVIEW_KIND_TEXT ? "text" :
+		kind == NV_PREVIEW_KIND_MARKDOWN ? "markdown" :
+		kind == NV_PREVIEW_KIND_PDF ? "pdf" :
 		kind == NV_PREVIEW_KIND_DIRECTORY ? "directory" : NULL;
 }
 
@@ -327,8 +339,11 @@ preview_state_name(nv_preview_task_state_t state)
 static JSON_Value *
 preview_task_payload(const nv_preview_event_t *event)
 {
+	const nv_preview_pane_t target_pane = event != NULL && event->has_target_pane ?
+		event->target_pane : event == NULL ? NV_PREVIEW_PANE_LEFT : event->pane;
 	if(event == NULL || event->task_id == 0U || event->generation == 0U ||
 			preview_pane_name(event->pane) == NULL ||
+			preview_pane_name(target_pane) == NULL ||
 			preview_kind_name(event->kind) == NULL ||
 			preview_state_name(event->state) == NULL ||
 			!hex_string_is_valid(event->cwd_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) ||
@@ -344,6 +359,7 @@ preview_task_payload(const nv_preview_event_t *event)
 	if(set_u64_string(payload, "task_id", event->task_id) != JSONSuccess ||
 			set_u64_string(payload, "generation", event->generation) != JSONSuccess ||
 			json_object_set_string(payload, "pane", preview_pane_name(event->pane)) != JSONSuccess ||
+			json_object_set_string(payload, "target_pane", preview_pane_name(target_pane)) != JSONSuccess ||
 			json_object_set_string(payload, "kind", preview_kind_name(event->kind)) != JSONSuccess ||
 			json_object_set_string(payload, "state", preview_state_name(event->state)) != JSONSuccess ||
 			json_object_set_string(payload, "cwd_bytes_hex", event->cwd_bytes_hex) != JSONSuccess ||
@@ -464,6 +480,66 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 		NV_PROTOCOL_JSON_OK ? json : NULL;
 }
 
+char *
+nv_protocol_open_json(const nv_open_resolution_t *resolution,
+		const char path_bytes_hex[], unsigned int output_sequence,
+		unsigned int command_sequence)
+{
+	if(resolution == NULL || command_sequence == 0U ||
+			nv_open_intent_name(resolution->intent) == NULL ||
+			nv_open_source_name(resolution->source) == NULL ||
+			!hex_string_is_valid(path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES) ||
+			path_bytes_hex[0] == '\0' ||
+			resolution->argc == 0U || resolution->argc > NV_OPEN_MAX_ARGS ||
+			resolution->argv == NULL)
+	{
+		return NULL;
+	}
+	JSON_Value *const payload_value = json_value_init_object();
+	JSON_Value *const argv_value = open_argv_value(resolution);
+	if(payload_value == NULL || argv_value == NULL)
+	{
+		json_value_free(payload_value);
+		json_value_free(argv_value);
+		return NULL;
+	}
+	JSON_Object *const payload = json_value_get_object(payload_value);
+	if(json_object_set_number(payload, "command_sequence", command_sequence) != JSONSuccess ||
+			json_object_set_string(payload, "intent",
+				nv_open_intent_name(resolution->intent)) != JSONSuccess ||
+			json_object_set_string(payload, "source",
+				nv_open_source_name(resolution->source)) != JSONSuccess ||
+			json_object_set_string(payload, "state", "resolved") != JSONSuccess ||
+			json_object_set_string(payload, "path_bytes_hex", path_bytes_hex) != JSONSuccess ||
+			json_object_set_value(payload, "argv", argv_value) != JSONSuccess)
+	{
+		if(json_value_get_parent(argv_value) == NULL) json_value_free(argv_value);
+		json_value_free(payload_value);
+		return NULL;
+	}
+	char *json = NULL;
+	return serialize_payload("open", 3U, output_sequence, payload_value,
+			&json) == NV_PROTOCOL_JSON_OK ? json : NULL;
+}
+
+static JSON_Value *
+open_argv_value(const nv_open_resolution_t *resolution)
+{
+	JSON_Value *const value = json_value_init_array();
+	if(value == NULL) return NULL;
+	JSON_Array *const array = json_value_get_array(value);
+	for(size_t i = 0U; i < resolution->argc; ++i)
+	{
+		if(!string_fits(resolution->argv[i], NV_OPEN_MAX_ARG_BYTES) ||
+				json_array_append_string(array, resolution->argv[i]) != JSONSuccess)
+		{
+			json_value_free(value);
+			return NULL;
+		}
+	}
+	return value;
+}
+
 static int
 set_stat_error(JSON_Object *object, int error_number)
 {
@@ -505,6 +581,13 @@ set_optional_stat(JSON_Object *object, const nv_pane_entry_t *entry)
 			set_u64_string(object, "ctime_unix_ns", entry->ctime_unix_ns) !=
 				JSONSuccess ||
 			json_object_set_string(object, "mode_octal", mode) != JSONSuccess)
+	{
+		return JSONFailure;
+	}
+	if((entry->owner_display != NULL && json_object_set_string(object,
+			"owner_display", entry->owner_display) != JSONSuccess) ||
+		(entry->group_display != NULL && json_object_set_string(object,
+			"group_display", entry->group_display) != JSONSuccess))
 	{
 		return JSONFailure;
 	}

@@ -126,6 +126,36 @@ export type CoreSessionCommand =
       name: string
     }>
   | Readonly<{ action: "undo" }>
+  | Readonly<{ action: "cancel-action"; task_id: string }>
+  | Readonly<{
+      action: "preview"
+      pane: "left" | "right"
+      target_pane: "left" | "right"
+      cwd_bytes_hex: string
+      snapshot_revision: string
+      cwd_device: string
+      cwd_inode: string
+      cwd_ctime_unix_ns: string
+      path_bytes_hex: string
+      device: string
+      inode: string
+      ctime_unix_ns: string
+    }>
+  | Readonly<{
+      action: "open"
+      intent: "open"
+      pane: "left" | "right"
+      cwd_bytes_hex: string
+      snapshot_revision: string
+      cwd_device: string
+      cwd_inode: string
+      cwd_ctime_unix_ns: string
+      path_bytes_hex: string
+      device: string
+      inode: string
+      ctime_unix_ns: string
+      association_argv?: readonly string[]
+    }>
   | Readonly<{ action: "enter" | "parent" | "toggle-selection" | "refresh" }>
 
 export interface CoreSessionRequest {

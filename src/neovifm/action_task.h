@@ -55,6 +55,8 @@ int nv_action_queue_submit(nv_action_queue_t *queue,
 		nv_session_prepared_action_t *action, unsigned int command_sequence,
 		uint64_t *task_id);
 void nv_action_queue_cancel_all(nv_action_queue_t *queue);
+/* Marks one queued/running task cancelled; terminal state is emitted by the worker. */
+int nv_action_queue_cancel(nv_action_queue_t *queue, uint64_t task_id);
 int nv_action_queue_busy(nv_action_queue_t *queue);
 int nv_action_queue_failed(nv_action_queue_t *queue);
 int nv_action_queue_pop(nv_action_queue_t *queue, nv_action_event_t *event);

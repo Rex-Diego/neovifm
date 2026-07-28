@@ -82,6 +82,12 @@ TEST(snapshot_owns_basic_file_and_directory_metadata)
 	assert_int_equal(3, file->size_bytes);
 	assert_false(file->hidden);
 	assert_false(file->selected);
+#ifndef _WIN32
+	assert_non_null(file->owner_display);
+	assert_non_null(file->group_display);
+	assert_true(strlen(file->owner_display) <= NV_PANE_SNAPSHOT_MAX_OWNER_BYTES);
+	assert_true(strlen(file->group_display) <= NV_PANE_SNAPSHOT_MAX_OWNER_BYTES);
+#endif
 
 	const nv_pane_entry_t *dir = find_entry(&snapshot, "subdir");
 	assert_non_null(dir);
@@ -116,6 +122,60 @@ TEST(initial_name_sort_places_cursor_on_first_sorted_entry)
 	nv_snapshot_error_free(&error);
 	remove_file(SANDBOX_PATH "/content/z-file");
 	remove_file(SANDBOX_PATH "/content/a-file");
+	remove_dir(CONTENT_DIR);
+}
+
+TEST(directory_entries_stay_before_files_in_both_name_directions)
+{
+	nv_pane_snapshot_t snapshot = {};
+	nv_snapshot_error_t error = {};
+
+	create_dir(CONTENT_DIR);
+	create_dir(SANDBOX_PATH "/content/a-dir");
+	create_dir(SANDBOX_PATH "/content/z-dir");
+	create_file(SANDBOX_PATH "/content/0-file");
+	create_file(SANDBOX_PATH "/content/z-file");
+
+	assert_success(nv_pane_snapshot_build(CONTENT_DIR, &snapshot, &error));
+	nv_pane_snapshot_sort(&snapshot, NV_SORT_NAME, 0);
+	assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[0].kind);
+	assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[1].kind);
+	assert_string_equal("a-dir", snapshot.entries[0].name_display);
+	assert_string_equal("z-dir", snapshot.entries[1].name_display);
+	assert_string_equal("0-file", snapshot.entries[2].name_display);
+
+	nv_pane_snapshot_sort(&snapshot, NV_SORT_NAME, 1);
+	assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[0].kind);
+	assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[1].kind);
+	assert_string_equal("z-dir", snapshot.entries[0].name_display);
+	assert_string_equal("a-dir", snapshot.entries[1].name_display);
+	assert_string_equal("z-file", snapshot.entries[2].name_display);
+	assert_string_equal("0-file", snapshot.entries[3].name_display);
+
+	static const nv_pane_sort_key_t keys[] = {
+		NV_SORT_NAME, NV_SORT_EXTENSION, NV_SORT_SIZE, NV_SORT_CTIME,
+		NV_SORT_MTIME, NV_SORT_MODE, NV_SORT_TYPE, NV_SORT_OTHER,
+	};
+	for(size_t i = 0U; i < sizeof(keys)/sizeof(keys[0]); ++i)
+	{
+		nv_pane_snapshot_sort(&snapshot, keys[i], 0);
+		assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[0].kind);
+		assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[1].kind);
+		assert_true(snapshot.entries[2].kind != NV_ENTRY_DIRECTORY);
+		assert_true(snapshot.entries[3].kind != NV_ENTRY_DIRECTORY);
+		nv_pane_snapshot_sort(&snapshot, keys[i], 1);
+		assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[0].kind);
+		assert_int_equal(NV_ENTRY_DIRECTORY, snapshot.entries[1].kind);
+		assert_true(snapshot.entries[2].kind != NV_ENTRY_DIRECTORY);
+		assert_true(snapshot.entries[3].kind != NV_ENTRY_DIRECTORY);
+	}
+
+	nv_pane_snapshot_free(&snapshot);
+	nv_snapshot_error_free(&error);
+	remove_dir(SANDBOX_PATH "/content/a-dir");
+	remove_dir(SANDBOX_PATH "/content/z-dir");
+	remove_file(SANDBOX_PATH "/content/0-file");
+	remove_file(SANDBOX_PATH "/content/z-file");
 	remove_dir(CONTENT_DIR);
 }
 

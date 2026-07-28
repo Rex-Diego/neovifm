@@ -18,6 +18,7 @@
 #define NV_PANE_SNAPSHOT_MAX_ENTRIES 4096U
 #define NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES (16U*1024U)
 #define NV_PANE_SNAPSHOT_MAX_HEX_BYTES (32U*1024U)
+#define NV_PANE_SNAPSHOT_MAX_OWNER_BYTES 256U
 
 typedef enum
 {
@@ -50,6 +51,8 @@ typedef struct
 	char *name_bytes_hex;
 	char *path_display;
 	char *path_bytes_hex;
+	char *owner_display;
+	char *group_display;
 	nv_entry_kind_t kind;
 	uint64_t size_bytes;
 	int64_t mtime_unix_ms;

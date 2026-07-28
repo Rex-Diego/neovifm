@@ -29,3 +29,91 @@
 - identity 测试改用与产品实现一致的 macOS/Linux 纳秒级 ctime；core-only `undo_compat.c` 改用 `nv_lstat`，普通测试对象图继续使用 Vifm 原有 utility 实现。
 - 当前 slice 验收完成：core session build、focused C `9116 checks / 57 tests`、TUI unit `111 tests / 393 expects`、coverage `85.95% functions / 97.65% lines`、typecheck、audit、schema、真实 integration `8 tests / 60 expects`、串行 `env -u VIFM -u MYVIFMRC make check` 和 `git diff --check` 全部通过；待独立提交。
 - 已知限制：undo 仍是单个 `core_session` 进程内的 classic 全局栈；仅支持 mkdir，记录失败只写 stderr，尚未向 task event 发布 undo availability；copy/move/delete、redo、取消/重试和 Vifm background facade 继续留在后续切片。
+- 使用 `planning-with-files` 接收新一轮交互反馈，本轮仅更新计划文件，没有修改产品源码、测试、依赖或 Git 历史。
+- 新增 Phase 1A：Space 从 Tab 语义中拆出，改为不污染目标 pane 状态的对面 pane 临时预览；同时规划目录优先排序、三行底栏、单 cell 滚动条、右上 active 标记、低对比 active sort、明显的新增 tab 按钮、彩色权限、owner/group 和近期修改色。
+- 新增 Phase 1B：明确现有后缀/MIME 打开方式由 Vifm `filetype/filextype/fileviewer` 与 `running` 管理；OpenTUI 不新增平行映射，macOS 未显式配置时通过结构化 argv 交给 `/usr/bin/open`。
+- 为两个新阶段分别写明 TDD、协议/安全边界、60/80/100/160 列与 ASCII/低色彩降级、真实 core/PTTY 验收和独立提交门槛；实现状态保持 pending。
+- UI Phase 1A 首个实现切片已落在共享工作树：`clients/tui` 已分离 Space/Tab，加入临时对面 pane preview、三行底栏、单 cell scrollbar、右上 active 标记、低对比 sort header、明显新增 tab、权限语义色、近期修改色和可选 owner/group 列；相关 TUI tests/typecheck/audit/diff-check 通过。
+- 该 UI 切片仍未宣称 Phase 1A 完成：core 尚未发布独立的 source-pane/target-pane preview intent，目录优先排序也仍需在 C comparator 完成；因此继续保持 pending。
+
+## 2026-07-28 Phase 1A TUI slice
+
+- TUI keymap now keeps Tab as `focus-next` and maps Space to a UI-local `quick-view` action; Space no longer aliases pane switching.
+- Added ephemeral opposite-pane quick preview rendering. The source pane remains active and the destination pane's tabs/cwd/selection/snapshot are untouched; Tab or Esc closes the temporary render. Narrow layouts fall back to the existing full-workspace viewer.
+- Added stable status/divider/function-bar bottom layout, removed the root spacer, configured one-cell OpenTUI scroll thumbs without arrows, moved active markers to the pane header right edge, softened active sort backgrounds with rounded side borders, and enlarged the new-tab plus target with an ASCII fallback.
+- Added semantic permission tokens, hour/day/older mtime buckets, recent-name/mtime colors, additive bounded owner/group display fields, and responsive owner/group columns for wide detailed layouts.
+- Added RED/GREEN coverage for Space/Tab, quick preview lifecycle, owner/group protocol fields, semantic permission tokens, mtime buckets, and wide owner/group rendering.
+- TUI verification passed: `bun run typecheck`; `bun test ./test/` (115 tests, 409 expects); `git diff --check`.
+- Remaining Phase 1A boundary: the C session currently auto-previews only the active pane. Space consumes the matching active preview as a safe temporary render, but a dedicated source-pane/target-pane preview intent and core generation routing remain pending for the full protocol slice.
+
+## 2026-07-28 Phase 1B opening fallback slice
+
+- Added `clients/tui/src/open-file.ts` as a structured argv boundary. macOS uses absolute `/usr/bin/open`; Linux and BSD-like platforms use `xdg-open`; Windows uses `explorer.exe`.
+- Added optional `openCommandForAssociation()` for a future core-resolved Vifm association. The client appends the target as one argv item and rejects empty/NUL-containing arguments; it never invokes a shell or interprets an extension map.
+- Wired `App`/`index` so `l`/Enter on regular files uses the injected opener when available; standalone renderer tests retain the F3 preview fallback when no opener is supplied. Directories still go through the core `enter` command.
+- Added RED/GREEN tests for platform argv, association argv, invalid paths, opener spawn/exit behavior, and App Enter routing. `bun run typecheck` and `bun run test:coverage` pass: 121 tests / 419 expects, 85.30% functions / 97.42% lines.
+- Phase 1B remains pending: Vifm `filetype/filextype/fileviewer` matching, macro expansion, archive/remote enter capability and core-owned association resolver are not yet wired into the session protocol.
+
+## 2026-07-28 Phase 1A core/protocol and task-center slice
+
+- Added RED/GREEN coverage for directory-first sorting. `nv_pane_snapshot_sort()` now compares a direction-invariant real-directory group before the selected Name/Size/Time/etc. key; descending order only reverses entries within each group. Symlinks remain non-directory until core publishes an enterable-directory capability.
+- Extended preview task/request/event DTOs with additive `target_pane`. Existing callers that omit it normalize target to source; queue cancellation is keyed by render target so source-left -> target-right and source-right -> target-right generations supersede each other without cancelling source-lane previews.
+- Added v3 `preview` command with explicit source pane, target pane, cwd/entry raw identities, snapshot revision and stat identities. Core validates the immutable source snapshot, acknowledges the command with an unchanged workspace snapshot, then queues a new generation without mutating target cwd/tab/selection/history.
+- TUI protocol parser defaults missing target fields to source for compatibility and probe-state generation filtering uses target lanes. App Space quick-view now submits the command and re-submits when source snapshot/cursor identity changes; the opposite pane remains ephemeral and narrow layouts keep the full viewer fallback.
+- Task Center queue/running rows now expose a mouse cancel target and send the core-owned `cancel-action` command; history rows remain non-cancelable.
+- RED/GREEN verification: `make -C tests neovifm_snapshot` passed 9262 checks / 63 tests; `make -C src neovifm-core-session` passed; TUI focused app/protocol/probe/keymap tests passed 102 tests / 247 expects; full TUI coverage passed 123 tests / 429 expects at 86.56% functions and 97.43% lines; audit, typecheck, core-session integration (2 tests / 17 expects), serial `env -u VIFM -u MYVIFMRC make check`, and `git diff --check` passed. A previous watcher-only assertion was removed from the core-session fixture because piped stdin cannot register kqueue; explicit refresh still covers the same snapshot update path.
+
+## 2026-07-28 Phase 1B core open resolver/session slice
+
+- Added a C-owned `nv_open_resolve()` boundary with bounded structured argv. An explicit association prefix wins; an empty association selects macOS `/usr/bin/open` or the platform `xdg-open` fallback. The resolver intentionally does not duplicate Vifm extension/MIME tables.
+- Added v3 `open-v1` hello capability, `open` resolved records, schema definitions, TypeScript validation/reducer support, and an integration test that sends a real session command and observes the structured association result.
+- Added resolver and JSON protocol unit tests. Focused C verification passed `9263 checks / 63 tests`; focused TypeScript/protocol/reducer/open-file tests passed `60 tests / 146 expects`; real core-session integration passed `3 tests / 20 expects`.
+- The shared UI edits that originally blocked `bun run typecheck` have since been reconciled; the current client typecheck passes. Current shared-worktree `git diff --check` passes.
+- Remaining Phase 1B boundary: load and match Vifm `filetype/filextype/fileviewer` rules with macro expansion, validate snapshot/pane identity for open targets, launch/monitor external programs through the background lifecycle, and add archive/remote enterable-resource capabilities.
+
+## 2026-07-28 Integration regression repair
+
+- The first full TUI integration run exposed two post-Phase-1A mismatches: the compact function bar hid `F3 View`/`F10 Quit` after a resize, and the keyboard integration still asserted the old Space-as-pane-switch behavior.
+- Function labels now derive their narrow form reactively after terminal resize; 60-column output keeps `F3 View` and `F10 Quit` readable while abbreviating middle buttons.
+- The real keyboard integration now asserts the new contract: Space requests an opposite-pane preview without changing `active_pane`, and Tab performs the pane switch. Multi-key keymap state is held through a stable memo so asynchronous preview/task records cannot reset Vifm prefixes.
+- Focused verification passed: compact core-probe integration, real keyboard session integration, app/keymap tests, and TUI typecheck.
+
+## 2026-07-28 Core open result client bridge and PTY repair
+
+- Connected the v3 core-owned `open` record to the OpenTUI app. Regular-file `l`/Enter now sends a structured `open` intent when `open-v1` is advertised, and the client launches only the resolved argv; the injected platform opener remains the renderer-test fallback.
+- Added client coverage for resolved argv execution, NUL validation, and App routing. The core record is deduplicated by `command_sequence` and reports launch failure through the existing notice path.
+- The post-layout production PTY regression was caused by the status line moving up after removing the spacer; mouse status targets now use the new row. Standalone production PTY and the real keyboard integration pass after the coordinate update.
+- Verification after this slice: `bun run typecheck`, focused app/keymap/open-file tests, compact core-probe integration, real keyboard integration, and standalone production PTY all pass. Full integration and the next C metadata slice remain to be rerun.
+
+## 2026-07-28 Bounded owner/group metadata slice
+
+- Added additive `owner_display` and `group_display` fields to the immutable pane entry DTO, C snapshot ownership/free paths, JSON serialization, v0/v3 schemas, and TypeScript validation. Values are capped at 256 UTF-8 bytes and sanitized before display.
+- Core metadata lookup deliberately avoids NSS/Directory Services in the snapshot path. It performs a bounded local `/etc/passwd` or `/etc/group` lookup and falls back to numeric uid/gid when the identity is remote, unavailable, malformed, or overlong.
+- Added C snapshot/protocol assertions and a TypeScript upper-bound regression. `make -C src neovifm-core-session` and `bun run typecheck` pass; the focused protocol suite passes 20 tests / 51 expects. A full C test rerun is pending because earlier diagnostic processes are stuck in macOS uninterruptible I/O.
+
+## 2026-07-28 Markdown and PDF preview slice
+
+- Added additive preview kinds `markdown` and `pdf`. Markdown reuses the bounded cancellable text reader and renders through OpenTUI's `MarkdownRenderable`, so headings, lists, fenced code, and tables are no longer shown as an unformatted blob.
+- PDF preview is a first-page text extraction path using a detected absolute `pdftotext` helper. The core worker passes argv directly, caps output, polls for cancellation/deadline, terminates the helper on cancellation/timeout, and publishes helper-unavailable/non-zero errors as structured preview failures.
+- Added v3 schema/parser coverage for both kinds. `make -C src neovifm-core-session`, `bun run typecheck`, and the focused protocol suite (20 tests / 53 expects) pass. Image protocol rendering, PDF graphical pages, and audio/video metadata remain Phase 6 follow-up slices.
+
+## 2026-07-28 Task history visibility cleanup
+
+- Task Center now offers a clickable `Clear` action for completed/failed/cancelled rows. It only filters the current overlay view; core task events and the session reducer remain intact, so no task facts are deleted or hidden from a future refresh.
+- The queue remains cancelable through the core-owned `cancel-action` command. Retry still requires preserving validated action identities beyond terminal acknowledgement and remains intentionally pending.
+
+## 2026-07-28 task center details and open target identity
+
+- Task Center Queue/History now supports selecting a terminal row and rendering a bounded details panel with task id, command sequence, action, pane, state, progress, failed item, error code and OS error. Failed/cancelled rows expose an explicit disabled `Retry unavailable` state because the current core protocol does not retain enough immutable source/destination identity for a safe retry; no fabricated retry command is sent.
+- OpenTUI `open` commands now carry source pane, cwd/snapshot identity and entry device/inode/ctime. `core_session` validates those fields before resolving or publishing an external argv, rejects stale targets with `stale-open`, and refuses directories with `enter-required`.
+- Added the bounded caller-supplied Vifm association resolver slice in `src/neovifm/open_resolver.c`: ordered filetype/filextype/fileviewer rules, basename/full-path globs, quoted argv tokenization, `%f/%c/%%` expansion and shell/control/macro validation. It is deliberately not presented as full Vifm config integration; the caller still needs to load the classic association source.
+- A stale-open integration case now proves that changing `snapshot_revision` cannot trigger an external association. The production PTY preview assertion uses the stable `ins` content fragment because ANSI incremental redraw streams can consume a literal `i` as a control-sequence terminator; the navigation and preview content assertion remains intact.
+- Verification after these slices: `make -C tests neovifm_snapshot` 9309 checks / 68 tests; serial `env -u VIFM -u MYVIFMRC make check` passed; TUI unit 128 tests / 461 expects, coverage 86.71% functions / 97.17% lines, typecheck and audit passed; full `bun run test:integration` passed 10 tests / 69 expects after explicit per-test scheduling budgets for PTY/core-session; `git diff --check` and JSON schema validation pass.
+- The latest shared worktree remains uncommitted by request. Archive-as-directory, SSH/sshfs, full Vifm association loading/lifecycle, destructive undo/retry and full low-color/width matrix remain pending rather than being marked complete.
+
+## 2026-07-28 MYVIFMRC bounded association loading
+
+- Extended the core open resolver with a bounded `MYVIFMRC` loader for `filetype`, `filextype`, and `fileviewer`. It preserves declaration order, supports continuation lines and brace-separated glob patterns, skips MIME selectors, and keeps the first comma-separated command candidate.
+- `nv_open_resolve()` now loads the configured file when no explicit association argv is supplied; explicit structured argv remains higher precedence. Missing/oversized/malformed configuration is reported as a structured resolver error rather than silently executing an unintended fallback.
+- The loader owns copied rule strings and keeps the existing shell-free argv tokenizer and `%f/%c/%%` boundary. Complex Vifm shell commands, MIME matching, later candidates and unsupported macros remain explicit follow-up work.
+- Added focused config/env/error coverage and wired `open_config.c/.h` into the core build. This slice is still bounded configuration adaptation, not full parity with classic `filetype.c` and `running.c`.

@@ -8,7 +8,7 @@ export interface KeyLike {
   readonly meta: boolean
 }
 
-export type FunctionAction = "view" | "edit" | "copy" | "move" | "mkdir" | "delete" | "quit"
+export type FunctionAction = "view" | "quick-view" | "edit" | "copy" | "move" | "mkdir" | "delete" | "quit"
 
 export type KeymapResult =
   | Readonly<{ kind: "command"; command: CoreSessionCommand }>
@@ -132,7 +132,8 @@ export class VifmKeymap {
     if (name === "l" || name === "return") return command({ action: "enter" })
     if (name === "left") return command({ action: "sort-cycle", delta: -1 })
     if (name === "right") return command({ action: "sort-cycle", delta: 1 })
-    if (name === "space" || name === "tab") return command({ action: "focus-next" })
+    if (name === "space") return { kind: "function", action: "quick-view" }
+    if (name === "tab") return command({ action: "focus-next" })
     if (name === "t") return command({ action: "toggle-selection" })
     return { kind: "unhandled" }
   }

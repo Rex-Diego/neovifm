@@ -92,6 +92,8 @@
         "ctime_unix_ns": { "$ref": "#/$defs/unsignedDecimalString", "maxLength": 32 },
         "mode_octal": { "type": "string", "pattern": "^[0-7]+$", "maxLength": 32 },
         "attributes_hex": { "type": "string", "pattern": "^[0-9a-f]+$", "maxLength": 32768 },
+        "owner_display": { "type": "string", "maxLength": 256 },
+        "group_display": { "type": "string", "maxLength": 256 },
         "selected": { "type": "boolean" },
         "hidden": { "type": "boolean" },
         "stat_error": {

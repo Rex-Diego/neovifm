@@ -46,3 +46,61 @@
 - The protocol action is core-owned `{"action":"undo"}` and is intentionally limited to `u`/undo. Copy/move/delete currently return an explicit `undo-empty` result rather than claiming unsupported undo; redo and destructive-action undo remain outside this slice.
 - Each mkdir record carries its source pane/tab location. Undo refreshes that exact tab, so creating a directory in an inactive tab and undoing from another tab cannot leave a stale snapshot behind.
 - If the post-action undo record allocation or classic-group registration fails, the mkdir remains successful and the bridge reports the failure only to stderr; this slice does not yet publish undo availability in the task event. The limitation is explicit and must be removed before destructive actions claim stable undo support.
+
+## 2026-07-28 双栏交互、信息层与文件打开关联
+
+- 当前 `clients/tui/src/keymap.ts` 将 `space` 与 `tab` 都映射为 `focus-next`，用户判断准确；计划中保留 Tab 切换 pane，把 Space 改为对面 pane 临时预览。
+- 对面 pane 预览必须是独立 render state，不能替换目标 pane 的 immutable directory snapshot。源 cursor 变化只更新 preview generation；退出预览后目标 pane 的 cwd、tab、selection 和 history 应与进入前完全相同。
+- 当前排序已有 entry kind，可先在 core comparator 建立 `parent -> directory -> non-directory` 的稳定一级分组，再在组内应用 Name/Size/Modified 等字段与方向。客户端不得为判断 symlink-to-directory 再做一次隐式 stat。
+- OpenTUI 底栏目前包含 spacer。目标布局固定为 status、divider、function bar 三行；这样既消除空行，也给 F3--F10 与右下角 Tasks 入口建立稳定边界。
+- 终端没有 CSS 式像素圆角。scroll thumb、active sort 和新增 tab 按钮的“圆角”应通过 Unicode/Nerd Font 端帽字形实现，并提供不改变功能或宽度的 ASCII fallback。
+- 权限彩色显示应使用 read/write/execute/sticky/no-access 等语义 token，而不是把整串权限涂成一个颜色。owner/group 解析属于 core 元数据能力；TypeScript 只消费 bounded display 字段，解析失败显示 uid/gid。
+- lsd 的时间表达适合借鉴为 hour-old/day-old/older 三档主题语义。近期修改项可以提高亮度，但 cursor/selection/error 等状态必须拥有更高颜色优先级，避免一行出现互相争夺的样式。
+- Vifm 已经由 `src/filetype.c` 管理 `filetype`、`filextype`、`fileviewer` association，并由 `src/running.c` 负责打开/执行生命周期；`data/vifmrc` 也给出 macOS 未知文件使用 `open` 的 fallback 示例。
+- NeoVifm 不应在 TypeScript 中再维护“后缀 -> 命令”表。正确边界是 OpenTUI 发出 preview/edit/open intent，C core 复用 Vifm resolver；普通文件没有显式关联时，macOS 以结构化 argv 调用 `/usr/bin/open`。
+- `preview`、`edit`、`open` 必须分离：F3/Space 不启动桌面应用，F4 不走 viewer，Enter/显式 open 普通文件才允许平台 opener；目录、archive、remote 的 enter capability 在 opener 之前判断。
+- 外部程序调用必须传 argv、cwd 和 cancellation/生命周期信息，不拼接 shell 字符串；包含空格、引号、前导连字符和 non-UTF-8 名称都需要边界测试。
+
+## 2026-07-28 core open result client bridge
+
+- OpenTUI now treats the core `open-v1` record as the source of truth for regular-file `l`/Enter. The app does not reconstruct a suffix map; it launches the validated argv once per `command_sequence` and keeps the platform-injected opener only as a test/compatibility fallback.
+- A real PTY status-row click needed to move with the three-line bottom layout. The updated production fixture confirms the stable row contract after the spacer was removed.
+- The remaining open-association work is still core-side: parse Vifm `filetype/filextype/fileviewer`, expand macros with bounded identity validation, and connect external process lifecycle to background/task events.
+
+## 2026-07-28 owner/group lookup boundary
+
+- Synchronous `getpwuid_r`/`getgrgid_r` is unsafe for the core snapshot path on this macOS host: a direct lookup blocked for more than ten seconds, which would violate the non-blocking UI requirement.
+- The snapshot now uses bounded local-file parsing for `/etc/passwd` and `/etc/group`, with a numeric id fallback for directory-service users or any malformed/overlong record. This keeps the protocol field bounded without shelling out or contacting remote NSS providers.
+
+## 2026-07-28 preview helper boundary
+
+- Markdown can use the core text reader safely because the content is already bounded, cancellable, and sanitized; the client can render it with OpenTUI's built-in MarkdownRenderable.
+- PDF cannot be treated as ordinary text. The first helper slice uses absolute-path `pdftotext` candidates, `posix_spawn` argv, a non-blocking pipe, deadline polling, cancellation termination, and a 64 KiB output cap. Missing helpers and non-zero exits are structured preview errors.
+- Image pass-through, terminal graphics capability negotiation, and Vifm `fileviewer`/`previewprg` precedence remain open; adding a fake textual image preview would violate the requested behavior.
+
+## 2026-07-28 Phase 1A core boundary audit
+
+- `src/neovifm/pane_snapshot.c` currently applies one comparator to all entries and reverses the complete result for descending order. Directory-first behavior therefore needs a direction-invariant group comparison before the selected sort key; otherwise descending mode would put files before directories. The current snapshot model has no explicit parent-entry flag, so this slice only groups real `NV_ENTRY_DIRECTORY` entries and leaves any future synthetic parent pinning to a separate capability.
+- `src/neovifm/core_session.c` accepts only workspace-mutating session actions plus async file actions. `submit_active_preview()` derives one request from the active pane and uses `nv_preview_request_t.pane` both as source identity and cancellation lane. A source-to-opposite preview intent needs an explicit render target field and target-lane cancellation while preserving `pane` as the source field for protocol compatibility.
+- Preview requests/events are immutable copied records in `preview_task.[ch]`; JSON serialization in `snapshot_json.c` can add a required `target_pane` field without changing path identity encoding. Existing auto previews should set `target_pane == pane`, while an explicit quick-view command can target the opposite pane without mutating workspace snapshots.
+- The safe core command shape is an additive `preview` action carrying source `pane`, independent `target_pane`, raw `cwd_bytes_hex`/`path_bytes_hex`, source `snapshot_revision` and entry identity fields. The core must validate the supplied source snapshot before queueing, acknowledge the command without changing pane cwd/tab/selection, and increment the preview generation itself.
+
+## 2026-07-28 core-owned open resolver
+
+- 打开关联的边界现在由 `src/neovifm/open_resolver.c` 承担：输入是 intent、目标路径和已经由 core 配置层解析好的 argv 前缀，输出是拥有所有权的 argv。这样 OpenTUI 不需要维护后缀/MIME 映射，也不会把配置拼成 shell command。
+- resolver 的优先级是显式 association 优先；无 association 时 macOS 固定使用 `/usr/bin/open`，Linux/BSD/Solaris/AIX 使用 `xdg-open`。当前只实现 `open` intent 的平台解析，`edit`/`preview` 明确返回 unsupported，避免把 F3/F4 viewer/editor 语义伪装成桌面 opener。
+- v3 `open-v1` capability 与 `open` resolved record 只发布 `command_sequence`、intent/source/state、原始 `path_bytes_hex` 和结构化 argv。C session 不执行外部程序，客户端仍负责平台启动策略；协议 schema 与 TypeScript validator 对 argv 数量、参数非空和字节长度设上限。
+- 本切片通过真实 core session 验证 association 优先路径；当前未接入 Vifm `filetype/filextype/fileviewer` 的 pattern/MIME 匹配、宏展开、terminal/GUI 生命周期，也未将 open command 绑定到 snapshot revision/device/inode/ctime identity。上述内容是 Phase 1B 的剩余工作，不能把当前 resolver 称作完整 Vifm association 兼容层。
+
+## 2026-07-28 open target identity and task details
+
+- `open` 与 file actions/preview 一样必须携带 source pane 的 cwd/snapshot identity 以及 entry device/inode/ctime。只验证 raw `path_bytes_hex` 会允许旧列表中的 path 在替换后被外部 opener 执行；core 现在在 resolver 前返回 `stale-open`，目录返回 `enter-required`。
+- `nv_open_resolve_rules()` 是适配边界而不是配置存储：调用方传入已经按 Vifm precedence 排序的有限规则，resolver 不维护后缀表，也不读取全局状态。完整主线仍需要把 classic `filetype/filextype/fileviewer` 加载过程桥接到这一 DTO，并保留 terminal/graphical viewer 生命周期。
+- TaskCenter 终态详情可以安全展示已有 action event 字段，但 retry 不能只凭 task id 重建 copy/move/delete。没有源/目标 raw identity、snapshot revision 和冲突策略时，UI 必须显示 disabled，而不是发送一个可能作用于错误目录的“重试”命令。
+- macOS PTY 的 production test 在和其他 integration suite 连续运行时可能遇到 ANSI incremental redraw 的控制序列与普通内容字符边界，导致严格的 `inside` 文本断言误报；改为等待稳定的 `ins` 内容片段后仍验证目录进入和 preview 输出，同时保留独立 C session 的完整内容断言。
+
+## 2026-07-28 bounded MYVIFMRC association source
+
+- `MYVIFMRC` is now an optional, bounded input source for the open resolver. The parser accepts the three Vifm association namespaces, continuation lines, brace glob sets and the first command candidate while skipping MIME selectors; it does not claim full `filetype.c` semantics.
+- Explicit core-provided association argv continues to win over the environment-loaded rules. An unset environment variable leaves platform fallback available; a configured but unreadable or malformed file returns a structured error so configuration failures remain visible.
+- The loaded rule set owns copied pattern/command strings and is freed as one object. The resolver still rejects shell operators, unsupported macros and control bytes before producing a structured argv.

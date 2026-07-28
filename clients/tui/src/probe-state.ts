@@ -2,6 +2,7 @@ import type {
   ActionTaskPayload,
   ErrorPayload,
   HelloPayload,
+  OpenPayload,
   PreviewPayload,
   PreviewTaskPayload,
   ProtocolRecord,
@@ -17,7 +18,7 @@ export type ProbeState =
   | Readonly<{
       phase: "ready"; hello: HelloPayload; workspace: WorkspaceSnapshotPayload; sequence: number
       session: true; version: 2 | 3; commandSequence: number; commandError?: ErrorPayload
-      tasks?: readonly PreviewTaskPayload[]; actionTasks?: readonly ActionTaskPayload[]; preview?: PreviewPayload
+      tasks?: readonly PreviewTaskPayload[]; actionTasks?: readonly ActionTaskPayload[]; preview?: PreviewPayload; open?: OpenPayload
     }>
   | Readonly<{ phase: "failed"; hello: HelloPayload; error: ErrorPayload; sequence: number }>
 
@@ -62,7 +63,8 @@ export function reduceProbeState(state: ProbeState, record: ProtocolRecord): Pro
     if (state.version === 3 && record.type === "task") {
       const prior = state.tasks ?? []
       const tasks = frozen([...prior.filter((task) => task.task_id !== record.payload.task_id), record.payload].slice(-256))
-		const preview = state.preview !== undefined && state.preview.pane === record.payload.pane
+		const previewTarget = state.preview?.target_pane ?? state.preview?.pane
+		const preview = state.preview !== undefined && previewTarget === record.payload.target_pane
 			&& BigInt(record.payload.generation) > BigInt(state.preview.generation)
 			? undefined : state.preview
       return frozen({ ...state, sequence: record.sequence, tasks, ...(preview === undefined ? {} : { preview }) })
@@ -75,10 +77,14 @@ export function reduceProbeState(state: ProbeState, record: ProtocolRecord): Pro
     }
     if (state.version === 3 && record.type === "preview") {
       const current = state.preview
-      const isStale = current !== undefined && current.pane === record.payload.pane
+      const isStale = current !== undefined && (current.target_pane ?? current.pane) === record.payload.target_pane
         && BigInt(record.payload.generation) < BigInt(current.generation)
       if (isStale) return frozen({ ...state, sequence: record.sequence })
       return frozen({ ...state, sequence: record.sequence, preview: record.payload })
+    }
+    if (state.version === 3 && record.type === "open") {
+      if (record.payload.command_sequence <= state.commandSequence) throw new ProbeStateError("Open result references an unacknowledged command")
+      return frozen({ ...state, sequence: record.sequence, commandSequence: record.payload.command_sequence, open: record.payload })
     }
     if (record.type === "error") return frozen({ phase: "failed", hello: state.hello, error: record.payload, sequence: record.sequence })
     throw new ProbeStateError("Unexpected record in session")

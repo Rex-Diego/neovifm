@@ -21,9 +21,9 @@ test("keeps Vifm h/j/k/l while reserving horizontal arrows for btop-style sort s
   expect(map.handle(key("right", { sequence: "\u001b[C" }))).toEqual({ kind: "command", command: { action: "sort-cycle", delta: 1 } })
 })
 
-test("maps Vifm pane switching aliases instead of selecting on Space", () => {
+test("keeps Tab for pane switching and reserves Space for opposite-pane preview", () => {
   const map = new VifmKeymap()
-  expect(map.handle(key("space", { sequence: " " }))).toEqual({ kind: "command", command: { action: "focus-next" } })
+  expect(map.handle(key("space", { sequence: " " }))).toEqual({ kind: "function", action: "quick-view" })
   expect(map.handle(key("tab", { sequence: "\t" }))).toEqual({ kind: "command", command: { action: "focus-next" } })
   expect(map.handle(key("n", { ctrl: true }))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
   expect(map.handle(key("p", { ctrl: true }))).toEqual({ kind: "command", command: { action: "move", delta: -1 } })

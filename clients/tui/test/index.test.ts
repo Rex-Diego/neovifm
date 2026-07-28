@@ -7,10 +7,12 @@ import {
   editorCommand,
   exitCodeFor,
   main,
+  openFile,
   renderUntilDestroyed,
   type MainDependencies,
   toUiErrorMessage,
 } from "../src/index.js"
+import type { OpenProcess, OpenSpawnOptions } from "../src/open-file.js"
 import { initialProbeState, reduceProbeState } from "../src/probe-state.js"
 import { parseProtocolRecord } from "../src/protocol.js"
 
@@ -104,6 +106,24 @@ test("builds a direct editor argv without invoking a shell", () => {
   expect(editorCommand("/tmp/file", { EDITOR: "'nvim' -f" })).toEqual([
     "nvim", "-f", "--", "/tmp/file",
   ])
+})
+
+test("opens a file through a structured platform argv without invoking a shell", async () => {
+  let options: OpenSpawnOptions | undefined
+  const process: OpenProcess = { exited: Promise.resolve(0) }
+  await openFile("/tmp/file name.pdf", {
+    platform: "darwin",
+    spawn: (value) => {
+      options = value
+      return process
+    },
+  })
+  expect(options).toEqual({
+    cmd: ["/usr/bin/open", "/tmp/file name.pdf"],
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "pipe",
+  })
 })
 
 test("preserves structured core error context without rendering stderr", () => {

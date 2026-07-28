@@ -4,7 +4,7 @@
 
 把当前已经可用的 OpenTUI 双栏界面推进为 NeoVifm 的正式主线：优先继承 Vifm/ViATc 的 Vim 快捷键与成熟文件管理语义，在同一主线中加入压缩包/SSH 目录化、F3 富媒体预览，以及不会阻塞界面的文件任务队列与可见历史。
 
-用户已授权执行。Phase 0 已完成验收并独立提交；当前继续按验收门槛推进 Phase 1 快捷键兼容与 Phase 3 后台任务队列首切片，未完成阶段仍保持 pending。
+用户已授权执行。Phase 0 已完成验收并独立提交；当前继续按验收门槛推进 Phase 1 快捷键兼容，并把双栏快速预览、目录优先排序、信息层视觉优化和 Vifm 文件打开关联作为紧随其后的主线切片。未完成阶段仍保持 pending。
 
 ## 主线定义
 
@@ -17,12 +17,13 @@
 
 ## 优先级
 
-1. 收口当前未提交的 tab/鼠标/路径交互，验收后独立提交。
-2. 建立并分批实现 Vifm/ViATc 快捷键兼容矩阵。
-3. 复用 Vifm 文件操作/undo/background，建立后台任务队列和任务中心弹窗。
-4. 先让 ZIP/常见 archive 像目录一样打开，再接 SSH/sshfs 目录。
-5. 以 F3 为统一入口完成图片、PDF、Markdown、代码和媒体预览。
-6. 最后做跨能力联调、回归和各阶段独立提交；安装发布继续后置。
+1. 完成 Vifm/ViATc 快捷键兼容矩阵的当前切片。
+2. 落地 Space 对面 pane 快速预览、目录优先排序、底栏/滚动条/tab/header/权限与时间信息层优化。
+3. 复用 Vifm `filetype/filextype/fileviewer` 建立统一打开 resolver，macOS 无显式关联时交给系统 `open`。
+4. 复用 Vifm 文件操作/undo/background，继续补齐后台任务队列和任务中心弹窗。
+5. 先让 ZIP/常见 archive 像目录一样打开，再接 SSH/sshfs 目录。
+6. 以 F3 全屏查看和 Space 对面 pane 快速查看两种入口，共享图片、PDF、Markdown、代码和媒体 preview pipeline。
+7. 最后做跨能力联调、回归和各阶段独立提交；安装发布继续后置。
 
 ## 阶段
 
@@ -47,6 +48,40 @@
 - **阶段验收：** 日常快捷键闭环在 unit、integration 和正式 PTY 中一致；经典 Vifm 行为不回归；形成独立提交。
 - **状态：** in_progress。
 
+### Phase 1A：双栏快速预览、排序与信息层优化
+
+- [x] 先写交互契约和 RED tests，将 `Space` 从当前与 `Tab` 相同的 `focus-next` 映射中拆出；`Tab` 只负责切换活动 pane，`Space` 切换“在对面 pane 快速预览当前项”。
+- [x] Space 快速预览不得修改对面 pane 的 cwd、tab、selection、history 或 snapshot：源 pane 保持 active，移动源 cursor 时用 generation cancellation 更新预览；再次按 Space 或 Esc 恢复对面 pane 原视图，Tab 切 pane 前先关闭临时预览。
+- [ ] 双栏宽度不足或退化为单 pane 时，Space 使用与 F3 相同的全屏 viewer fallback；目录显示只读目录摘要/列表，普通文件走统一 preview resolver，archive/remote 不因预览而触发 mount/enter。
+- [x] 将目录优先设为所有排序字段的稳定一级分组：parent entry（若存在）固定最前，真实目录在文件之前，升/降序只改变各组内部顺序；symlink 不在客户端追踪，只有 core 发布 enterable-directory capability 时才进入目录组。
+- [x] 把底部固定为恰好三行：status line、单行 divider、`F3--F10` function bar；删除空白 spacer，保证 60/80/100/160 列都不遮挡状态和任务入口。
+- [x] 将滚动条占宽限制为一个 terminal cell，缩短/变细 thumb；Nerd/Unicode 模式用圆角端帽字形，ASCII/低能力模式使用直线 glyph。若 OpenTUI 原生 scrollbar 不能稳定满足，封装局部 scrollbar adapter，不修改列表滚动语义。
+- [x] 将 active pane 标记移到 pane header 右上角并预留固定宽度；Nerd/Unicode 显示圆点，ASCII 显示 `*`，切换 active 不得造成 tab/header 抖动。
+- [x] 为当前排序字段增加低对比度语义背景和固定宽度端帽；Nerd/Unicode 模式以字形模拟圆角，ASCII 模式使用括号/平直背景，不能因激活态改变列宽。
+- [x] 强化新建 tab 的 `+`：保留固定点击区域、提高前景/背景对比、提供 normal/hover/pressed/disabled 状态；Unicode 与 ASCII 均必须一眼可辨且不挤压 tab 标题。
+- [x] 参考 lsd 的语义而非复制实现，为权限字符分别提供 read/write/execute/sticky/no-access 等主题 token；selected/cursor 状态优先级最高，低色彩模式合并为可辨识的有限色板。
+- [x] 在版本化 snapshot 中以 additive capability 提供 bounded/sanitized owner 与 group display（解析失败使用 uid/gid）；解析与缓存属于 C core，不在 TypeScript 中 shell-out，并避免 NSS/远程解析阻塞 UI 主循环。
+- [x] 按 pane 可用宽度响应式显示 owner/group；窄 pane 保留名称、大小、时间和权限。时间采用 hour-old/day-old/older 三档语义色，近期修改项更亮，但不得覆盖 cursor、selection、错误和 executable 等更高优先级状态。
+- [ ] 为 keymap、排序 comparator、协议边界、响应式 column、主题降级和 preview 生命周期分别补 unit/integration；正式 PTY 覆盖 Space/Tab 分离、快速移动 cursor、双 pane 状态不变、鼠标滚动以及 60/80/100/160 列。
+- **阶段验收：** 上述九项视觉/交互需求在 Unicode、ASCII、低色彩和窄宽终端均有稳定行为；经典 Vifm 排序和 OpenTUI 既有 tab/pane 操作无回归；形成一个独立提交。
+- **状态：** in_progress（Space/Tab、source-pane/target-pane preview intent、target-lane generation cancellation、目录优先 comparator、三行底栏、滚动条/active marker/sort/plus/权限时间/owner-group 信息层和 TaskCenter 取消/详情入口已落地；unit、真实 core session、PTY、ASCII/compact 基线已复验，完整低色彩与 60/80/100/160 列矩阵和阶段独立提交仍待补齐）。
+
+### Phase 1B：Vifm 文件打开关联与 macOS 默认 opener
+
+- [ ] 以 `src/filetype.c`、`src/running.c`、`data/vifmrc` 和 Vifm 文档建立 resolver 行为矩阵，记录 pattern/MIME 匹配、候选程序选择、宏展开、terminal/graphical/viewer 区分及无匹配 fallback。
+- [ ] 保持 Vifm 配置为唯一来源：用户继续通过 `:filetype`、`:filextype`、`:fileviewer`（以及现有 Lua/config 入口）管理关联；OpenTUI 只发送结构化 intent 并呈现解析结果，不维护按后缀硬编码的第二张表。
+- [ ] 明确三个互不混淆的 intent：`preview` 供 F3/Space 使用 `fileviewer` pipeline，`edit` 供 F4 使用编辑器语义，`open` 供 Enter/显式打开普通文件使用 `filetype/filextype` 与平台 fallback。
+- [ ] 解析优先级固定为：用户显式 association -> Vifm 内建/兼容规则 -> 平台默认 opener -> 结构化 unsupported；目录、archive 和 remote 的 enterable-resource 判断必须先于普通文件 opener，不能把 ZIP 错交给桌面应用。
+- [ ] macOS 在没有显式 association 时，以 argv 方式调用绝对路径 `/usr/bin/open` 并传入规范化的绝对目标路径；Linux/Windows fallback 单独 capability 化，不把 shell command 拼接进客户端或协议。
+- [x] 建立 core-owned `open-v1` intent/result 边界：显式 structured association argv 优先，macOS/Linux/BSD 平台 opener 作为 fallback，v3 session 发布可校验的 resolved `open` record；当前不复制 Vifm 后缀表。
+- [x] 为 `open` command 携带 source pane、cwd/snapshot/entry stat identity；core 在 resolver 前拒绝 stale target，目录继续要求走 enter/resource path。
+- [x] 增加 bounded caller-supplied `filetype/filextype/fileviewer` rule resolver：有序 glob、argv tokenizer、`%f/%c/%%` 宏和 shell-syntax 拒绝；并在无显式 association 时有界读取 `MYVIFMRC`，显式 argv 仍优先。
+- [ ] 复用 Vifm running/background 的 cwd、前后台、终端暂停/恢复、退出码和错误处理语义；GUI opener 不阻塞 UI，terminal program 必须有显式 suspend/restore 生命周期，失败在状态栏/任务事件中可见。
+- [ ] 所有目标、宏和外部程序在 core 边界校验：open target identity、NUL、记录大小、结构化 argv 和有界 `MYVIFMRC` 读取已完成；仍需补齐完整 MIME/宏集合、配置语义、终端生命周期和敏感远程参数审查。
+- [x] 先写 resolver/argv RED tests，覆盖显式规则优先、macOS fallback、未知文件、空格/引号、shell syntax、宏边界、open target stale identity 和真实 core session；archive 优先进入、缺失 opener 和 helper 生命周期仍待补齐。
+- **阶段验收：** 同一份 Vifm 配置在 classic 与 OpenTUI 中得到可解释的一致关联；macOS 普通未知文件默认交给系统应用，F3/Space/F4/目录/archive 不被误路由；形成一个独立提交。
+- **状态：** in_progress（已完成结构化平台 opener、bounded rule resolver、`MYVIFMRC` 有界加载、App `l`/Enter 注入和 stale target identity；完整 MIME/宏/候选语义、running/background 生命周期、archive/remote capability 和完整阶段验收仍待完成）。
+
 ### Phase 2：文件操作语义回归 Vifm core
 
 - [ ] 盘点当前 `src/neovifm/action_task` 与 Vifm `ops`、`undo`、`fops_cpmv_bg`、`fops_put`、`background` 的重叠，形成保留/适配/移除清单。
@@ -67,12 +102,13 @@
 - [ ] 队列模型至少发布：id、kind、source、destination、queued/running/succeeded/failed/cancelled/partial、items/bytes progress、当前文件、错误、开始/结束时间和 undo availability。
 - [x] 当前会话内的 queued/running 与 completed/failed/cancelled action 历史由 v3 reducer 保留，并在任务中心覆盖层中可滚动查看；跨重启持久化另设明确的数据格式、隐私和 retention 决策，不偷偷引入 daemon。
 - [x] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端仍保留短标签与数字，不遮挡 F3--F10。
-- [ ] 点击入口打开覆盖式弹窗；使用 Queue/History 两个 tab，支持查看详情、取消 pending/running、重试 failed/cancelled、清理已完成历史和关闭弹窗。
+- [x] 点击入口打开覆盖式弹窗；Queue/History 两个 tab 支持查看终态详情、取消 pending/running、清理当前视图历史和关闭弹窗。
+- [ ] 为 failed/cancelled 保留经验证的 source/destination identity 并实现安全 retry；当前只显示明确的 Retry unavailable 禁用态。
 - [ ] 主界面在大目录 copy/move 期间必须继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求。
 - [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** in_progress（FIFO、历史可见和 Tasks 入口首切片已完成；取消/重试、完整 undo 状态与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
+- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口和取消已完成；安全 retry、完整 undo 状态与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
 
 ### Phase 4：压缩包作为目录打开
 
@@ -98,9 +134,10 @@
 ### Phase 6：F3 统一富媒体预览
 
 - [ ] 以 Vifm `previewprg -> fileviewer -> builtin fallback` 的优先级作为 viewer resolver，桥接 `quickview/vcache/background`、`%px/%py/%pw/%ph`、`%pc` 清理和 `%pd` pass-through 语义。
-- [ ] F3 继续打开全工作区 viewer，不恢复常驻第三 pane；Esc/F3 返回文件列表，cursor 变化用 generation cancellation 防止旧内容覆盖。
-- [ ] 明确主线语义：F3 是“查看”且使用 overlay viewer；`l` 对普通文件进入同一查看路径，对目录/archive/remote 则执行 enter；不得把 classic quickview 的第三栏布局与 OpenTUI overlay 混为一套 UI。
-- [ ] 第一批：纯文本、代码高亮、Markdown 终端渲染、PDF 文本/首页、图片。
+- [ ] F3 继续打开全工作区 viewer，Space 使用 Phase 1A 定义的对面 pane 临时 viewer；两者共享 resolver/cache/cancellation，不恢复常驻第三 pane，也不修改目标 pane 的目录模型。
+- [ ] 明确主线语义：F3 是全屏“查看”，Space 是双栏快速查看；`l` 对普通文件进入查看路径，对目录/archive/remote 则执行 enter；不得把 classic quickview 的第三栏布局与 OpenTUI 临时渲染层混为一套 UI。
+- [x] 第一批切片：纯文本、Markdown 终端渲染、PDF 首页文本抽取；当前仍未接入 Vifm fileviewer 优先级。
+- [ ] 第一批剩余：代码高亮、PDF 图形/首页渲染、图片。
 - [ ] 第二批：视频首帧、音频 metadata/封面、archive listing、二进制/hex fallback。
 - [ ] 图片能力顺序由终端 capability 决定：可用协议渲染、`chafa` 降级、纯文本 metadata 最终降级；无 Nerd Font/低色彩仍可读。
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
@@ -137,6 +174,9 @@
 - archive/SSH 挂载在异常退出、tab 关闭或 helper 崩溃后泄漏。
 - remote/archive 写操作缺少本地文件系统等价的原子性和 undo，却被 UI 错误启用。
 - 图形 preview 的终端序列清理失败，残留覆盖 TUI；旧 generation 反向覆盖新 selection。
+- Space 快速预览如果直接替换对面 pane snapshot，会污染 cwd/tab/history；必须保持临时 render state 与 pane model 分离。
+- owner/group 名称解析可能经 NSS 或远程 provider 变慢；无缓存地放进 snapshot/UI 主循环会重新引入卡顿。
+- 在 TypeScript 中维护扩展名到命令的映射，会与 Vifm association 配置漂移，并扩大 shell 注入与平台差异风险。
 - 直接复制 ViATc/Yazi/preview repo 实现，带来语言不适配和许可证问题。
 
 ## 错误记录

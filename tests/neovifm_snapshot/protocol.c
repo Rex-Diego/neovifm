@@ -7,6 +7,7 @@
 #include <test-utils.h>
 
 #include "../../src/neovifm/pane_snapshot.h"
+#include "../../src/neovifm/open_resolver.h"
 #include "../../src/neovifm/preview_task.h"
 #include "../../src/neovifm/snapshot_json.h"
 #include "../../src/utils/parson.h"
@@ -46,14 +47,17 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	#ifdef __APPLE__
 	assert_string_equal("file-actions-v1", json_array_get_string(capabilities,
 			3U));
+	assert_string_equal("open-v1", json_array_get_string(capabilities, 4U));
 	#else
-	assert_int_equal(3, json_array_get_count(capabilities));
+	assert_int_equal(4, json_array_get_count(capabilities));
+	assert_string_equal("open-v1", json_array_get_string(capabilities, 3U));
 	#endif
 	json_value_free(value);
 	nv_protocol_json_free(hello);
 
 	nv_preview_event_t event = {
 		.task_id = 42U, .generation = 7U, .pane = NV_PREVIEW_PANE_RIGHT,
+		.target_pane = NV_PREVIEW_PANE_LEFT, .has_target_pane = 1,
 		.kind = NV_PREVIEW_KIND_TEXT, .state = NV_PREVIEW_TASK_DONE,
 		.cwd_bytes_hex = "2f746d70", .path_bytes_hex = "2f746d702f6e6f7465",
 		.content = "note", .truncated = 0,
@@ -69,6 +73,7 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_string_equal("42", json_object_get_string(payload, "task_id"));
 	assert_string_equal("7", json_object_get_string(payload, "generation"));
 	assert_string_equal("right", json_object_get_string(payload, "pane"));
+	assert_string_equal("left", json_object_get_string(payload, "target_pane"));
 	assert_string_equal("done", json_object_get_string(payload, "state"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
@@ -93,6 +98,40 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_true(json_object_get_boolean(payload, "partial"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
+}
+
+TEST(open_result_publishes_intent_source_and_structured_argv)
+{
+	const char *const association[] = { "viewer", "--wait" };
+	nv_open_resolution_t resolution = {};
+	nv_open_error_t error = {};
+	assert_success(nv_open_resolve(NV_OPEN_INTENT_OPEN, "/tmp/note.md",
+			association, 2U, &resolution, &error));
+	char *const line = nv_protocol_open_json(&resolution, "2f746d702f6e6f74652e6d64",
+			8U, 4U);
+	assert_non_null(line);
+	JSON_Value *const value = json_parse_string(line);
+	assert_non_null(value);
+	JSON_Object *const root = json_object(value);
+	assert_int_equal(3, json_object_get_number(root, "version"));
+	assert_string_equal("open", json_object_get_string(root, "type"));
+	JSON_Object *const payload = json_object_get_object(root, "payload");
+	assert_int_equal(4, json_object_get_number(payload, "command_sequence"));
+	assert_string_equal("open", json_object_get_string(payload, "intent"));
+	assert_string_equal("association", json_object_get_string(payload, "source"));
+	assert_string_equal("resolved", json_object_get_string(payload, "state"));
+	assert_string_equal("2f746d702f6e6f74652e6d64",
+			json_object_get_string(payload, "path_bytes_hex"));
+	JSON_Array *const argv = json_object_get_array(payload, "argv");
+	assert_int_equal(3, json_array_get_count(argv));
+	assert_string_equal("viewer", json_array_get_string(argv, 0U));
+	assert_string_equal("--wait", json_array_get_string(argv, 1U));
+	assert_string_equal("/tmp/note.md", json_array_get_string(argv, 2U));
+	json_value_free(value);
+	nv_protocol_json_free(line);
+	assert_null(nv_protocol_open_json(&resolution, "", 8U, 4U));
+	nv_open_resolution_free(&resolution);
+	nv_open_error_free(&error);
 }
 
 TEST(preview_workspace_record_publishes_stable_per_pane_tabs)
@@ -338,6 +377,8 @@ TEST(snapshot_record_serializes_all_entry_kinds_and_stat_errors)
 		entries[i].kind = kinds[i];
 		entries[i].has_stat = 1;
 	}
+	entries[0].owner_display = "rex";
+	entries[0].group_display = "staff";
 	entries[2].has_stat = 0;
 	entries[2].stat_error = EACCES;
 	entries[8].has_stat = 0;
@@ -361,6 +402,10 @@ TEST(snapshot_record_serializes_all_entry_kinds_and_stat_errors)
 			json_array_get_count(serialized));
 	assert_string_equal("directory",
 			json_object_get_string(json_array_get_object(serialized, 0U), "kind"));
+	assert_string_equal("rex", json_object_get_string(json_array_get_object(
+			serialized, 0U), "owner_display"));
+	assert_string_equal("staff", json_object_get_string(json_array_get_object(
+			serialized, 0U), "group_display"));
 	assert_string_equal("unknown",
 			json_object_get_string(json_array_get_object(serialized, 8U), "kind"));
 	assert_non_null(json_object_get_object(json_array_get_object(serialized, 2U),

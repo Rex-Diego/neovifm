@@ -248,6 +248,31 @@ nv_action_queue_cancel_all(nv_action_queue_t *queue)
 }
 
 int
+nv_action_queue_cancel(nv_action_queue_t *queue, uint64_t task_id)
+{
+	if(queue == NULL || task_id == 0U)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	pthread_mutex_lock(&queue->mutex);
+	nv_action_task_t *task = queue->pending;
+	while(task != NULL && task->id != task_id) task = task->next;
+	if(task == NULL && queue->running != NULL && queue->running->id == task_id)
+		task = queue->running;
+	if(task == NULL)
+	{
+		pthread_mutex_unlock(&queue->mutex);
+		errno = ENOENT;
+		return -1;
+	}
+	task->cancelled = 1;
+	pthread_cond_broadcast(&queue->ready);
+	pthread_mutex_unlock(&queue->mutex);
+	return 0;
+}
+
+int
 nv_action_queue_busy(nv_action_queue_t *queue)
 {
 	if(queue == NULL) return 0;

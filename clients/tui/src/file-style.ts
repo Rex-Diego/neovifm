@@ -79,6 +79,46 @@ export function formatMode(modeOctal: string | undefined, kind: EntryKind): stri
   return `${type}${permissions.join("")}`
 }
 
+export type PermissionTokenKind = "type" | "read" | "write" | "execute" | "sticky" | "none" | "unknown"
+
+export interface PermissionToken {
+  readonly character: string
+  readonly kind: PermissionTokenKind
+}
+
+/**
+ * Keeps permission coloring semantic: the renderer can choose a palette without
+ * having to parse the display string or duplicate setuid/sticky handling.
+ */
+export function permissionTokens(modeOctal: string | undefined, kind: EntryKind): readonly PermissionToken[] {
+  const text = formatMode(modeOctal, kind)
+  if (text.includes("?")) {
+    return Array.from(text, (character, index) => ({
+      character,
+      kind: index === 0 ? "type" : "unknown",
+    }))
+  }
+  return Array.from(text, (character, index) => {
+    if (index === 0) return { character, kind: "type" as const }
+    if (character === "-") return { character, kind: "none" as const }
+    if (character === "r") return { character, kind: "read" as const }
+    if (character === "w") return { character, kind: "write" as const }
+    if (character === "x") return { character, kind: "execute" as const }
+    return { character, kind: "sticky" as const }
+  })
+}
+
+export type MtimeAge = "hour" | "day" | "older" | "unknown"
+
+export function mtimeAge(mtimeUnixMs: string, nowUnixMs = Date.now()): MtimeAge {
+  const value = Number(mtimeUnixMs)
+  if (!Number.isFinite(value)) return "unknown"
+  const age = nowUnixMs - value
+  if (age < 0 || age <= 60 * 60 * 1000) return "hour"
+  if (age <= 24 * 60 * 60 * 1000) return "day"
+  return "older"
+}
+
 export function formatFileSize(sizeBytes: string): string {
   let bytes: bigint
   try {

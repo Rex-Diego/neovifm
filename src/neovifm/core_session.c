@@ -8,6 +8,7 @@
  */
 
 #include <errno.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,10 @@ static int write_command_error(const nv_snapshot_error_t *error,
 		unsigned int output_sequence, unsigned int command_sequence);
 static int parse_command(const char line[], unsigned int previous_sequence,
 		unsigned int *sequence, nv_session_command_t *command);
+static int parse_open_command(JSON_Object *payload,
+		nv_session_command_t *command);
+static int open_intent_from_string(const char intent[], nv_open_intent_t *result);
+static char *open_hex_decode(const char hex[]);
 static int discard_command_tail(void);
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		const char message[]);
@@ -59,6 +64,18 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		nv_pending_action_context_t **pending_actions);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
+static int validate_preview_identity(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_entry_kind_t *kind,
+		const char **entry_name,
+		nv_snapshot_error_t *error);
+static int validate_open_identity(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_snapshot_error_t *error);
+static int submit_requested_preview(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_entry_kind_t kind,
+		const char entry_name[],
+		nv_preview_queue_t *queue, uint64_t *generation);
+static nv_preview_kind_t preview_kind_for_entry(nv_entry_kind_t kind,
+		const char name[]);
 static int drain_preview_events(nv_preview_queue_t *queue,
 		unsigned int *output_sequence);
 static int drain_action_events(nv_action_queue_t *queue,
@@ -178,6 +195,87 @@ sort_key_from_string(const char key[], nv_pane_sort_key_t *result)
 }
 
 static int
+open_intent_from_string(const char intent[], nv_open_intent_t *result)
+{
+	if(intent == NULL || result == NULL) return -1;
+	if(strcmp(intent, "open") == 0) *result = NV_OPEN_INTENT_OPEN;
+	else if(strcmp(intent, "edit") == 0) *result = NV_OPEN_INTENT_EDIT;
+	else if(strcmp(intent, "preview") == 0) *result = NV_OPEN_INTENT_PREVIEW;
+	else return -1;
+	return 0;
+}
+
+static int
+open_hex_string_valid(const char value[])
+{
+	if(value == NULL || value[0] == '\0' || strlen(value) >
+			NV_PANE_SNAPSHOT_MAX_HEX_BYTES || strlen(value) % 2U != 0U)
+		return 0;
+	for(const char *character = value; *character != '\0'; ++character)
+	{
+		if(!((*character >= '0' && *character <= '9') ||
+				(*character >= 'a' && *character <= 'f')))
+			return 0;
+	}
+	return 1;
+}
+
+static int copy_action_string(JSON_Object *payload, const char field[],
+		char **result);
+static int parse_u64_field(JSON_Object *object, const char field[],
+		uint64_t *result);
+
+static int
+parse_open_command(JSON_Object *payload, nv_session_command_t *command)
+{
+	const char *const intent = json_object_get_string(payload, "intent");
+	const char *const path = json_object_get_string(payload, "path_bytes_hex");
+	command->owns_open_fields = 1;
+	if(open_intent_from_string(intent, &command->open_intent) != 0 ||
+			pane_from_string(json_object_get_string(payload, "pane"),
+				&command->open_pane) != 0 ||
+			copy_action_string(payload, "cwd_bytes_hex",
+				&command->open_cwd_bytes_hex) != 0 ||
+			parse_u64_field(payload, "snapshot_revision",
+				&command->open_snapshot_revision) != 0 ||
+			parse_u64_field(payload, "cwd_device", &command->open_cwd_device) != 0 ||
+			parse_u64_field(payload, "cwd_inode", &command->open_cwd_inode) != 0 ||
+			parse_u64_field(payload, "cwd_ctime_unix_ns",
+				&command->open_cwd_ctime_unix_ns) != 0 ||
+			path == NULL || !open_hex_string_valid(path) ||
+			copy_action_string(payload, "path_bytes_hex",
+				&command->open_path_bytes_hex) != 0 ||
+			parse_u64_field(payload, "device", &command->open_entry_device) != 0 ||
+			parse_u64_field(payload, "inode", &command->open_entry_inode) != 0 ||
+			parse_u64_field(payload, "ctime_unix_ns",
+				&command->open_entry_ctime_unix_ns) != 0)
+	{
+		return -1;
+	}
+	JSON_Value *const association_value = json_object_get_value(payload,
+			"association_argv");
+	if(association_value == NULL) return 0;
+	if(json_value_get_type(association_value) != JSONArray)
+		return -1;
+	JSON_Array *const association = json_value_get_array(association_value);
+	const size_t count = json_array_get_count(association);
+	if(count > NV_OPEN_MAX_ARGS - 1U) return -1;
+	if(count == 0U) return 0;
+	command->open_association_argv = calloc(count, sizeof(*command->open_association_argv));
+	if(command->open_association_argv == NULL) return -1;
+	command->open_association_argc = count;
+	for(size_t i = 0U; i < count; ++i)
+	{
+		const char *const argument = json_array_get_string(association, i);
+		if(argument == NULL || argument[0] == '\0' ||
+				strlen(argument) > NV_OPEN_MAX_ARG_BYTES ||
+				(command->open_association_argv[i] = strdup(argument)) == NULL)
+			return -1;
+	}
+	return 0;
+}
+
+static int
 copy_action_string(JSON_Object *payload, const char field[], char **result)
 {
 	const char *const value = json_object_get_string(payload, field);
@@ -292,6 +390,35 @@ parse_action_identity(JSON_Object *payload, nv_session_command_t *command,
 }
 
 static int
+parse_preview_identity(JSON_Object *payload, nv_session_command_t *command)
+{
+	command->owns_preview_fields = 1;
+	if(pane_from_string(json_object_get_string(payload, "pane"),
+			&command->pane) != 0 || pane_from_string(json_object_get_string(
+			payload, "target_pane"), &command->preview_target_pane) != 0 ||
+			copy_action_string(payload, "cwd_bytes_hex",
+				&command->preview_cwd_bytes_hex) != 0 ||
+			parse_u64_field(payload, "snapshot_revision",
+				&command->preview_snapshot_revision) != 0 ||
+			parse_u64_field(payload, "cwd_device",
+				&command->preview_cwd_device) != 0 ||
+			parse_u64_field(payload, "cwd_inode",
+				&command->preview_cwd_inode) != 0 ||
+			parse_u64_field(payload, "cwd_ctime_unix_ns",
+				&command->preview_cwd_ctime_unix_ns) != 0 ||
+			copy_action_string(payload, "path_bytes_hex",
+				&command->preview_path_bytes_hex) != 0 ||
+			parse_u64_field(payload, "device", &command->preview_entry_device) != 0 ||
+			parse_u64_field(payload, "inode", &command->preview_entry_inode) != 0 ||
+			parse_u64_field(payload, "ctime_unix_ns",
+				&command->preview_entry_ctime_unix_ns) != 0)
+	{
+		return -1;
+	}
+	return 0;
+}
+
+static int
 parse_command(const char line[], unsigned int previous_sequence,
 		unsigned int *sequence, nv_session_command_t *command)
 {
@@ -326,6 +453,26 @@ parse_command(const char line[], unsigned int previous_sequence,
 			return -1;
 		}
 	}
+	else if(strcmp(action, "preview") == 0)
+	{
+		command->kind = NV_SESSION_PREVIEW;
+		if(parse_preview_identity(payload, command) != 0)
+		{
+			nv_session_command_free(command);
+			json_value_free(value);
+			return -1;
+		}
+	}
+	else if(strcmp(action, "open") == 0)
+	{
+		command->kind = NV_SESSION_OPEN;
+		if(parse_open_command(payload, command) != 0)
+		{
+			nv_session_command_free(command);
+			json_value_free(value);
+			return -1;
+		}
+	}
 	else if(strcmp(action, "focus-next") == 0) command->kind = NV_SESSION_FOCUS_NEXT;
 	else if(strcmp(action, "move") == 0)
 	{
@@ -354,6 +501,16 @@ parse_command(const char line[], unsigned int previous_sequence,
 	else if(strcmp(action, "toggle-selection") == 0) command->kind = NV_SESSION_TOGGLE_SELECTION;
 	else if(strcmp(action, "refresh") == 0) command->kind = NV_SESSION_REFRESH;
 	else if(strcmp(action, "undo") == 0) command->kind = NV_SESSION_UNDO;
+	else if(strcmp(action, "cancel-action") == 0)
+	{
+		if(parse_u64_field(payload, "task_id", &command->action_task_id) != 0 ||
+				command->action_task_id == 0U)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_CANCEL_ACTION;
+	}
 	else if(strcmp(action, "sort-cycle") == 0)
 	{
 		const double delta = json_object_get_number(payload, "delta");
@@ -623,7 +780,84 @@ process_command_line(nv_workspace_session_t *session, char line[],
 	}
 	else
 	{
-		if(command_is_action(command.kind))
+		if(command.kind == NV_SESSION_PREVIEW)
+		{
+			nv_entry_kind_t kind = NV_ENTRY_UNKNOWN;
+			const char *entry_name = NULL;
+			if(validate_preview_identity(session, &command, &kind, &entry_name,
+					&error) == 0)
+			{
+				*command_sequence = next_sequence;
+				const int result = write_workspace(session,
+						(*output_sequence)++, *command_sequence, "command");
+				if(result == 0 && submit_requested_preview(session, &command,
+						kind, entry_name, preview_queue, preview_generation) != 0)
+				{
+					fputs("neovifm-core-session: failed to queue requested preview\n",
+						stderr);
+				}
+				nv_snapshot_error_free(&error);
+				nv_session_command_free(&command);
+				return result;
+			}
+		}
+		else if(command.kind == NV_SESSION_OPEN)
+		{
+			char *const path = open_hex_decode(command.open_path_bytes_hex);
+			nv_open_resolution_t resolution = {};
+			nv_open_error_t open_error = {};
+			const int identity_valid = validate_open_identity(session, &command,
+				&error);
+			const int resolved = path == NULL || identity_valid != 0 ? -1 : nv_open_resolve(
+					command.open_intent, path,
+					(const char *const *)command.open_association_argv,
+					command.open_association_argc, &resolution, &open_error);
+			if(resolved == 0)
+			{
+				*command_sequence = next_sequence;
+				char *const open = nv_protocol_open_json(&resolution,
+						command.open_path_bytes_hex, (*output_sequence)++,
+						*command_sequence);
+				const int result = open == NULL || write_line(open) != 0 ? -1 : 0;
+				nv_protocol_json_free(open);
+				nv_open_resolution_free(&resolution);
+				nv_open_error_free(&open_error);
+				free(path);
+				nv_session_command_free(&command);
+				return result;
+			}
+			if(identity_valid == 0)
+			{
+				set_error(&error, open_error.code == NULL ? "open-failed" :
+						open_error.code, open_error.message == NULL ?
+						"failed to resolve open intent" : open_error.message);
+			}
+			nv_open_resolution_free(&resolution);
+			nv_open_error_free(&open_error);
+			free(path);
+		}
+		else if(command.kind == NV_SESSION_CANCEL_ACTION)
+		{
+			if(action_queue == NULL || nv_action_queue_cancel(action_queue,
+					command.action_task_id) != 0)
+			{
+				set_error(&error, action_queue == NULL ? "unsupported-action" :
+						errno == ENOENT ? "action-not-found" : "action-cancel-failed",
+						action_queue == NULL ? "file actions are unavailable on this platform" :
+						errno == ENOENT ? "file action is no longer queued" :
+						"failed to cancel file action");
+			}
+			else
+			{
+				*command_sequence = next_sequence;
+				const int result = write_workspace(session, (*output_sequence)++,
+						*command_sequence, "command");
+				nv_snapshot_error_free(&error);
+				nv_session_command_free(&command);
+				return result;
+			}
+		}
+		else if(command_is_action(command.kind))
 		{
 			nv_session_prepared_action_t action = {};
 			if(action_queue == NULL)
@@ -755,15 +989,157 @@ submit_active_preview(const nv_workspace_session_t *session,
 	const nv_preview_request_t request = {
 		.pane = session->active_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
 			NV_PREVIEW_PANE_RIGHT,
+		.target_pane = session->active_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
+			NV_PREVIEW_PANE_RIGHT,
+		.has_target_pane = 1,
 		.generation = ++*generation,
 		.cwd_bytes_hex = snapshot->cwd_bytes_hex,
 		.path_bytes_hex = entry->path_bytes_hex,
-		.kind = entry->kind == NV_ENTRY_DIRECTORY ? NV_PREVIEW_KIND_DIRECTORY :
-			NV_PREVIEW_KIND_TEXT,
+		.kind = preview_kind_for_entry(entry->kind, entry->name_display),
 		.max_bytes = NV_PREVIEW_MAX_BYTES,
 		.timeout_ms = 2000U,
 	};
 	return nv_preview_queue_submit(queue, &request, NULL);
+}
+
+static int
+validate_preview_identity(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_entry_kind_t *kind,
+		const char **entry_name,
+		nv_snapshot_error_t *error)
+{
+	if(session == NULL || command == NULL || kind == NULL || entry_name == NULL ||
+			error == NULL ||
+			(command->pane != NV_SESSION_LEFT && command->pane != NV_SESSION_RIGHT) ||
+			(command->preview_target_pane != NV_SESSION_LEFT &&
+			 command->preview_target_pane != NV_SESSION_RIGHT))
+	{
+		return set_error(error, "invalid-command", "invalid preview pane");
+	}
+	const nv_pane_snapshot_t *const snapshot = command->pane == NV_SESSION_LEFT ?
+		&session->left : &session->right;
+	if(snapshot->snapshot_revision != command->preview_snapshot_revision ||
+			strcmp(snapshot->cwd_bytes_hex, command->preview_cwd_bytes_hex) != 0 ||
+			!snapshot->has_cwd_stat || snapshot->cwd_device != command->preview_cwd_device ||
+			snapshot->cwd_inode != command->preview_cwd_inode ||
+			snapshot->cwd_ctime_unix_ns != command->preview_cwd_ctime_unix_ns)
+	{
+		return set_error(error, "stale-preview", "source pane changed before preview");
+	}
+	for(size_t i = 0U; i < snapshot->entry_count; ++i)
+	{
+		const nv_pane_entry_t *const entry = &snapshot->entries[i];
+		if(strcmp(entry->path_bytes_hex, command->preview_path_bytes_hex) != 0)
+			continue;
+		if(!entry->has_stat || entry->device != command->preview_entry_device ||
+				entry->inode != command->preview_entry_inode ||
+				entry->ctime_unix_ns != command->preview_entry_ctime_unix_ns)
+		{
+			return set_error(error, "stale-preview", "preview entry changed");
+		}
+		*kind = entry->kind;
+		*entry_name = entry->name_display;
+		return 0;
+	}
+	return set_error(error, "stale-preview", "preview entry no longer exists");
+}
+
+static int
+validate_open_identity(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_snapshot_error_t *error)
+{
+	if(session == NULL || command == NULL || error == NULL ||
+			(command->open_pane != NV_SESSION_LEFT &&
+				command->open_pane != NV_SESSION_RIGHT))
+	{
+		return set_error(error, "invalid-command", "invalid open pane");
+	}
+	const nv_pane_snapshot_t *const snapshot = command->open_pane == NV_SESSION_LEFT ?
+		&session->left : &session->right;
+	if(snapshot->snapshot_revision != command->open_snapshot_revision ||
+			strcmp(snapshot->cwd_bytes_hex, command->open_cwd_bytes_hex) != 0 ||
+			!snapshot->has_cwd_stat || snapshot->cwd_device != command->open_cwd_device ||
+			snapshot->cwd_inode != command->open_cwd_inode ||
+			snapshot->cwd_ctime_unix_ns != command->open_cwd_ctime_unix_ns)
+	{
+		return set_error(error, "stale-open", "source pane changed before open");
+	}
+	for(size_t i = 0U; i < snapshot->entry_count; ++i)
+	{
+		const nv_pane_entry_t *const entry = &snapshot->entries[i];
+		if(strcmp(entry->path_bytes_hex, command->open_path_bytes_hex) != 0)
+			continue;
+		if(!entry->has_stat || entry->device != command->open_entry_device ||
+				entry->inode != command->open_entry_inode ||
+				entry->ctime_unix_ns != command->open_entry_ctime_unix_ns)
+		{
+			return set_error(error, "stale-open", "open entry changed");
+		}
+		if(entry->kind == NV_ENTRY_DIRECTORY)
+		{
+			return set_error(error, "enter-required", "directories must be entered");
+		}
+		return 0;
+	}
+	return set_error(error, "stale-open", "open entry no longer exists");
+}
+
+static int
+submit_requested_preview(const nv_workspace_session_t *session,
+		const nv_session_command_t *command, nv_entry_kind_t kind,
+		const char entry_name[],
+		nv_preview_queue_t *queue, uint64_t *generation)
+{
+	if(session == NULL || command == NULL || queue == NULL || generation == NULL)
+		return -1;
+	const nv_preview_request_t request = {
+		.pane = command->pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
+			NV_PREVIEW_PANE_RIGHT,
+		.target_pane = command->preview_target_pane == NV_SESSION_LEFT ?
+			NV_PREVIEW_PANE_LEFT : NV_PREVIEW_PANE_RIGHT,
+		.has_target_pane = 1,
+		.generation = ++*generation,
+		.cwd_bytes_hex = command->preview_cwd_bytes_hex,
+		.path_bytes_hex = command->preview_path_bytes_hex,
+		.kind = preview_kind_for_entry(kind, entry_name),
+		.max_bytes = NV_PREVIEW_MAX_BYTES,
+		.timeout_ms = 2000U,
+	};
+	return nv_preview_queue_submit(queue, &request, NULL);
+}
+
+static int
+has_suffix_ci(const char name[], const char suffix[])
+{
+	if(name == NULL || suffix == NULL) return 0;
+	const size_t name_length = strlen(name);
+	const size_t suffix_length = strlen(suffix);
+	if(name_length < suffix_length) return 0;
+	for(size_t i = 0U; i < suffix_length; ++i)
+	{
+		const unsigned char left = (unsigned char)name[name_length - suffix_length + i];
+		const unsigned char right = (unsigned char)suffix[i];
+		if(tolower(left) != tolower(right)) return 0;
+	}
+	return 1;
+}
+
+static nv_preview_kind_t
+preview_kind_for_entry(nv_entry_kind_t kind, const char name[])
+{
+	if(kind == NV_ENTRY_DIRECTORY) return NV_PREVIEW_KIND_DIRECTORY;
+	if(kind == NV_ENTRY_FILE || kind == NV_ENTRY_EXECUTABLE)
+	{
+		static const char *const markdown_suffixes[] = {
+			".md", ".markdown", ".mdown", ".mkdn", ".mdwn",
+		};
+		for(size_t i = 0U; i < sizeof(markdown_suffixes)/sizeof(markdown_suffixes[0]); ++i)
+		{
+			if(has_suffix_ci(name, markdown_suffixes[i])) return NV_PREVIEW_KIND_MARKDOWN;
+		}
+		if(has_suffix_ci(name, ".pdf")) return NV_PREVIEW_KIND_PDF;
+	}
+	return NV_PREVIEW_KIND_TEXT;
 }
 
 static int
@@ -901,6 +1277,24 @@ drain_action_events(nv_action_queue_t *queue,
 		nv_action_event_free(&event);
 		if(result != 0 || refresh_failed) return -1;
 	}
+}
+
+static char *
+open_hex_decode(const char hex[])
+{
+	if(!open_hex_string_valid(hex)) return NULL;
+	const size_t length = strlen(hex);
+	char *const decoded = malloc(length/2U + 1U);
+	if(decoded == NULL) return NULL;
+	for(size_t i = 0U; i < length; i += 2U)
+	{
+		const char high_char = hex[i], low_char = hex[i + 1U];
+		const int high = high_char <= '9' ? high_char - '0' : high_char - 'a' + 10;
+		const int low = low_char <= '9' ? low_char - '0' : low_char - 'a' + 10;
+		decoded[i/2U] = (char)((high << 4U) | low);
+	}
+	decoded[length/2U] = '\0';
+	return decoded;
 }
 
 #ifdef __APPLE__

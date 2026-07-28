@@ -12,9 +12,11 @@
 #include <sys/stat.h> /* S_* struct stat */
 
 #include <errno.h> /* E* errno */
+#include <inttypes.h> /* PRIu64 */
 #include <limits.h> /* INT64_MAX INT64_MIN */
 #include <stdint.h> /* SIZE_MAX int64_t */
 #include <stdlib.h> /* free() malloc() qsort() realloc() */
+#include <stdio.h> /* snprintf() */
 #include <string.h> /* memcpy() memset() strcmp() strdup() strlen() strerror() */
 #include <time.h> /* time_t time() */
 #ifndef _WIN32
@@ -40,6 +42,7 @@ static int append_entry(nv_pane_snapshot_t *snapshot,
 static void entry_free(nv_pane_entry_t *entry);
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		int os_error, const char path[]);
+static char *identity_display(uint64_t id, int group);
 
 enum
 {
@@ -134,6 +137,13 @@ entry_protocol_budget(const nv_pane_entry_t *entry, size_t *budget)
 			add_protocol_bytes(budget, strlen(entry->name_bytes_hex)) != 0 ||
 			add_protocol_bytes(budget, path_display_bytes*2U) != 0 ||
 			add_protocol_bytes(budget, strlen(entry->path_bytes_hex)) != 0)
+	{
+		return -1;
+	}
+	if((entry->owner_display != NULL &&
+			add_protocol_bytes(budget, strlen(entry->owner_display)*2U) != 0) ||
+		(entry->group_display != NULL &&
+			add_protocol_bytes(budget, strlen(entry->group_display)*2U) != 0))
 	{
 		return -1;
 	}
@@ -297,6 +307,54 @@ entry_kind(const struct stat *st)
 	return NV_ENTRY_UNKNOWN;
 }
 
+static char *
+identity_display(uint64_t id, int group)
+{
+	char numeric[32];
+	snprintf(numeric, sizeof(numeric), "%" PRIu64, id);
+
+#ifndef _WIN32
+	/* Avoid NSS/Directory Services in snapshot generation. A bounded local
+	 * file lookup is deterministic; remote or unavailable identities use the
+	 * numeric fallback below. */
+	const char *const path = group ? "/etc/group" : "/etc/passwd";
+	FILE *const file = fopen(path, "r");
+	if(file != NULL)
+	{
+		char line[1024];
+		while(fgets(line, sizeof(line), file) != NULL)
+		{
+			if(strchr(line, '\n') == NULL && !feof(file))
+			{
+				int character;
+				while((character = fgetc(file)) != '\n' && character != EOF) { }
+				continue;
+			}
+			char *const newline = strchr(line, '\n');
+			if(newline != NULL) *newline = '\0';
+			char *const first_separator = strchr(line, ':');
+			if(first_separator == NULL || first_separator == line) continue;
+			*first_separator = '\0';
+			char *field = first_separator + 1;
+			const char *const uid_separator = strchr(field, ':');
+			if(uid_separator == NULL) continue;
+			field = (char *)uid_separator + 1;
+			char *end = NULL;
+			errno = 0;
+			const unsigned long long parsed = strtoull(field, &end, 10);
+			if(errno != 0 || end == field || *end != ':' || parsed != id) continue;
+			if(strlen(line) > NV_PANE_SNAPSHOT_MAX_OWNER_BYTES) continue;
+			fclose(file);
+			return display_string(line);
+		}
+		fclose(file);
+	}
+#else
+	(void)group;
+#endif
+	return strdup(numeric);
+}
+
 static void
 set_stat(nv_pane_entry_t *entry, const struct stat *st, int is_symlink)
 {
@@ -308,6 +366,10 @@ set_stat(nv_pane_entry_t *entry, const struct stat *st, int is_symlink)
 	entry->ctime_unix_ns = stat_ctime_ns(st);
 	entry->mode = (uint32_t)st->st_mode;
 	entry->has_stat = 1;
+#ifndef _WIN32
+	entry->owner_display = identity_display((uint64_t)st->st_uid, 0);
+	entry->group_display = identity_display((uint64_t)st->st_gid, 1);
+#endif
 }
 
 static int
@@ -355,6 +417,12 @@ build_entry(nv_dir_t *dir, const char directory[], const char name[],
 	if(nv_dir_lstat(dir, name, &st, &is_symlink) == 0)
 	{
 		set_stat(entry, &st, is_symlink);
+		if(entry->owner_display == NULL || entry->group_display == NULL)
+		{
+			free(raw_path);
+			entry_free(entry);
+			return BUILD_ENTRY_NO_MEMORY;
+		}
 	}
 	else
 	{
@@ -417,6 +485,8 @@ entry_free(nv_pane_entry_t *entry)
 	free(entry->name_bytes_hex);
 	free(entry->path_display);
 	free(entry->path_bytes_hex);
+	free(entry->owner_display);
+	free(entry->group_display);
 	memset(entry, 0, sizeof(*entry));
 }
 
@@ -443,6 +513,17 @@ static int
 compare_int64(int64_t left, int64_t right)
 {
 	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+static int
+compare_entry_group(const nv_pane_entry_t *left, const nv_pane_entry_t *right)
+{
+	/* Keep directories together regardless of the direction of the selected
+	 * secondary sort key.  Symlinks remain in the non-directory group because
+	 * this snapshot does not resolve link targets for presentation sorting. */
+	const int left_group = left != NULL && left->kind == NV_ENTRY_DIRECTORY ? 0 : 1;
+	const int right_group = right != NULL && right->kind == NV_ENTRY_DIRECTORY ? 0 : 1;
+	return compare_int64(left_group, right_group);
 }
 
 static int
@@ -478,12 +559,22 @@ compare_entry_key(const nv_pane_entry_t *left, const nv_pane_entry_t *right,
 	return result == 0 ? compare_name(left, right) : result;
 }
 
+static int
+compare_entries(const nv_pane_entry_t *left, const nv_pane_entry_t *right,
+		nv_pane_sort_key_t key, int descending)
+{
+	const int group = compare_entry_group(left, right);
+	if(group != 0) return group;
+	return descending ? compare_entry_key(right, left, key) :
+		compare_entry_key(left, right, key);
+}
+
 #define DEFINE_ENTRY_COMPARATOR(name, key, descending) \
 	static int name(const void *left, const void *right) \
 	{ \
 		const nv_pane_entry_t *const lhs = left; \
 		const nv_pane_entry_t *const rhs = right; \
-		return compare_entry_key(descending ? rhs : lhs, descending ? lhs : rhs, key); \
+		return compare_entries(lhs, rhs, key, descending); \
 	}
 
 DEFINE_ENTRY_COMPARATOR(compare_name_asc, NV_SORT_NAME, 0)

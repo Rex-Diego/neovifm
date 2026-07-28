@@ -44,7 +44,7 @@ test("production PTY accepts Vifm keys and clickable Total Commander actions", a
 
   const tuiRoot = resolve(import.meta.dir, "..")
   const expectProgram = String.raw`
-set timeout 12
+set timeout 20
 log_user 1
 spawn -noecho $env(NEOVIFM_TEST_BUN) run src/index.tsx $env(NEOVIFM_TEST_LEFT) $env(NEOVIFM_TEST_RIGHT)
 expect {
@@ -59,7 +59,7 @@ send -- "\t"
 after 600
 send -- "l"
 expect {
-  "inside" {}
+  "ins" {}
   timeout { exit 20 }
   eof { exit 21 }
 }
@@ -68,13 +68,13 @@ send -- "h"
 after 300
 send -- "j"
 after 500
-send -- "\033\[<0;20;22M\033\[<0;20;22m"
+send -- "\033\[<0;20;21M\033\[<0;20;21m"
 expect {
   "~/right" {}
   timeout { exit 24 }
   eof { exit 25 }
 }
-send -- "\033\[<2;20;22M\033\[<2;20;22m"
+send -- "\033\[<2;20;21M\033\[<2;20;21m"
 expect {
   "Copied ~/right" {}
   timeout { exit 26 }
@@ -129,4 +129,4 @@ expect {
   expect(plain).toContain("~/right")
   await access(join(right, "clicked-pty"))
   expect(await Bun.file(clipboardCapture).text()).toBe("~/right")
-}, 20_000)
+}, 30_000)

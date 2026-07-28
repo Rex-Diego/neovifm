@@ -16,6 +16,13 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#ifndef _WIN32
+#include <poll.h>
+#include <signal.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#endif
+
 #include "preview_task.h"
 #include "../compat/pthread.h"
 
@@ -71,6 +78,8 @@ static int task_cancelled(nv_preview_queue_t *queue, const nv_preview_task_t *ta
 static int task_expired(const nv_preview_task_t *task);
 static uint64_t now_ms(void);
 static int preview_text(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
@@ -134,7 +143,14 @@ request_valid(const nv_preview_request_t *request)
 	char *cwd = NULL, *path = NULL;
 	const int valid = request != NULL && request->generation != 0U &&
 			(request->pane == NV_PREVIEW_PANE_LEFT || request->pane == NV_PREVIEW_PANE_RIGHT) &&
-			(request->kind == NV_PREVIEW_KIND_TEXT || request->kind == NV_PREVIEW_KIND_DIRECTORY) &&
+			(request->has_target_pane == 0 || request->has_target_pane == 1) &&
+			(!request->has_target_pane ||
+			 (request->target_pane == NV_PREVIEW_PANE_LEFT ||
+			  request->target_pane == NV_PREVIEW_PANE_RIGHT)) &&
+			(request->kind == NV_PREVIEW_KIND_TEXT ||
+			 request->kind == NV_PREVIEW_KIND_MARKDOWN ||
+			 request->kind == NV_PREVIEW_KIND_PDF ||
+			 request->kind == NV_PREVIEW_KIND_DIRECTORY) &&
 			request->max_bytes != 0U && request->max_bytes <= NV_PREVIEW_MAX_BYTES &&
 			request->timeout_ms != 0U && request->timeout_ms <= NV_PREVIEW_MAX_TIMEOUT_MS &&
 			hex_decode(request->cwd_bytes_hex, &cwd) == 0 &&
@@ -255,6 +271,8 @@ queue_event_locked(nv_preview_queue_t *queue, const nv_preview_task_t *task,
 		.task_id = task->id,
 		.generation = task->request.generation,
 		.pane = task->request.pane,
+		.target_pane = task->request.target_pane,
+		.has_target_pane = 1,
 		.kind = task->request.kind,
 		.state = state,
 		.cwd_bytes_hex = strdup(task->cwd_hex),
@@ -295,6 +313,11 @@ nv_preview_queue_submit(nv_preview_queue_t *queue,
 	nv_preview_task_t *const task = calloc(1U, sizeof(*task));
 	if(task == NULL) return -1;
 	task->request = *request;
+	if(!task->request.has_target_pane)
+	{
+		task->request.target_pane = task->request.pane;
+		task->request.has_target_pane = 1;
+	}
 	task->deadline_ms = now_ms() + request->timeout_ms;
 	if(hex_decode(request->cwd_bytes_hex, &task->cwd) != 0 ||
 			hex_decode(request->path_bytes_hex, &task->path) != 0 ||
@@ -313,14 +336,14 @@ nv_preview_queue_submit(nv_preview_queue_t *queue,
 	}
 	for(nv_preview_task_t *older = queue->tasks_head; older != NULL; older = older->next)
 	{
-		if(older->request.pane == request->pane &&
+		if(older->request.target_pane == task->request.target_pane &&
 				older->request.generation < request->generation)
 		{
 			cancel_task_locked(queue, older);
 		}
 	}
 	if(queue->running_task != NULL &&
-			queue->running_task->request.pane == request->pane &&
+			queue->running_task->request.target_pane == task->request.target_pane &&
 			queue->running_task->request.generation < request->generation)
 	{
 		cancel_task_locked(queue, queue->running_task);
@@ -497,6 +520,160 @@ preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 	return 0;
 }
 
+#ifndef _WIN32
+extern char **environ;
+
+static int
+preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const char *helper = NULL;
+	static const char *const candidates[] = {
+		"/usr/local/bin/pdftotext", "/opt/homebrew/bin/pdftotext",
+		"/usr/bin/pdftotext",
+	};
+	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
+	{
+		if(access(candidates[i], X_OK) == 0) { helper = candidates[i]; break; }
+	}
+	if(helper == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	int output_pipe[2];
+	if(pipe(output_pipe) != 0)
+	{
+		*error_code = "preview-helper-pipe-failed";
+		*os_error = errno;
+		return -1;
+	}
+	posix_spawn_file_actions_t actions;
+	if(posix_spawn_file_actions_init(&actions) != 0 ||
+			posix_spawn_file_actions_adddup2(&actions, output_pipe[1], STDOUT_FILENO) != 0 ||
+			posix_spawn_file_actions_addclose(&actions, output_pipe[0]) != 0)
+	{
+		close(output_pipe[0]);
+		close(output_pipe[1]);
+		*error_code = "preview-helper-setup-failed";
+		*os_error = errno;
+		return -1;
+	}
+	char *const argv[] = {
+		(char *)helper, "-f", "1", "-l", "1", task->path, "-", NULL,
+	};
+	pid_t child = 0;
+	const int spawned = posix_spawn(&child, helper, &actions, NULL, argv, environ);
+	(void)posix_spawn_file_actions_destroy(&actions);
+	close(output_pipe[1]);
+	if(spawned != 0)
+	{
+		close(output_pipe[0]);
+		*error_code = "preview-helper-spawn-failed";
+		*os_error = spawned;
+		return -1;
+	}
+	const int flags = fcntl(output_pipe[0], F_GETFL, 0);
+	if(flags < 0 || fcntl(output_pipe[0], F_SETFL, flags | O_NONBLOCK) != 0)
+	{
+		(void)kill(child, SIGTERM);
+		(void)waitpid(child, NULL, 0);
+		close(output_pipe[0]);
+		*error_code = "preview-helper-pipe-failed";
+		*os_error = errno;
+		return -1;
+	}
+	char *const result = malloc(task->request.max_bytes + 1U);
+	if(result == NULL)
+	{
+		(void)kill(child, SIGTERM);
+		(void)waitpid(child, NULL, 0);
+		close(output_pipe[0]);
+		*error_code = "preview-out-of-memory";
+		return -1;
+	}
+	size_t used = 0U;
+	int child_status = 0, child_done = 0, pipe_done = 0;
+	while(!child_done || !pipe_done)
+	{
+		if(task_cancelled(queue, task))
+		{
+			(void)kill(child, SIGTERM);
+			(void)waitpid(child, &child_status, 0);
+			free(result);
+			close(output_pipe[0]);
+			return 1;
+		}
+		if(task_expired(task))
+		{
+			(void)kill(child, SIGTERM);
+			(void)waitpid(child, &child_status, 0);
+			free(result);
+			close(output_pipe[0]);
+			*error_code = "preview-timeout";
+			return -1;
+		}
+		struct pollfd descriptor = { .fd = output_pipe[0], .events = POLLIN };
+		(void)poll(&descriptor, 1U, 50);
+		if(!pipe_done && (descriptor.revents & (POLLIN | POLLHUP | POLLERR)) != 0)
+		{
+			char buffer[4096];
+			for(;;)
+			{
+				const ssize_t count = read(output_pipe[0], buffer, sizeof(buffer));
+				if(count > 0)
+				{
+					const size_t available = task->request.max_bytes - used;
+					const size_t copied = (size_t)count < available ? (size_t)count : available;
+					if(copied != 0U) memcpy(result + used, buffer, copied);
+					used += copied;
+					if((size_t)count > copied) *truncated = 1;
+					if(used == task->request.max_bytes) *truncated = 1;
+					continue;
+				}
+				if(count == 0) pipe_done = 1;
+				if(count < 0 && errno != EAGAIN && errno != EINTR) pipe_done = 1;
+				break;
+			}
+		}
+		if(!child_done)
+		{
+			const pid_t waited = waitpid(child, &child_status, WNOHANG);
+			if(waited == child) child_done = 1;
+			else if(waited < 0)
+			{
+				pipe_done = 1;
+				*error_code = "preview-helper-wait-failed";
+				*os_error = errno;
+			}
+		}
+	}
+	close(output_pipe[0]);
+	if(!WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0)
+	{
+		free(result);
+		*error_code = "preview-helper-failed";
+		*os_error = WIFEXITED(child_status) ? WEXITSTATUS(child_status) : ECHILD;
+		return -1;
+	}
+	sanitize_preview_text(result, used);
+	result[used] = '\0';
+	*content = result;
+	return 0;
+}
+#else
+static int
+preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	(void)queue; (void)task; (void)content; (void)truncated;
+	*error_code = "preview-helper-unavailable";
+	*os_error = ENOSYS;
+	return -1;
+}
+#endif
+
 static void *
 preview_worker(void *data)
 {
@@ -526,9 +703,11 @@ preview_worker(void *data)
 		int truncated = 0, os_error = 0;
 		const char *error_code = NULL;
 		int outcome = task->cancelled ? 1 :
-			(task->request.kind == NV_PREVIEW_KIND_TEXT ?
-				preview_text(queue, task, &content, &truncated, &error_code, &os_error) :
-				preview_directory(queue, task, &content, &truncated, &error_code, &os_error));
+			(task->request.kind == NV_PREVIEW_KIND_DIRECTORY ?
+				preview_directory(queue, task, &content, &truncated, &error_code, &os_error) :
+			 task->request.kind == NV_PREVIEW_KIND_PDF ?
+				preview_pdf(queue, task, &content, &truncated, &error_code, &os_error) :
+				preview_text(queue, task, &content, &truncated, &error_code, &os_error));
 		if(outcome == 0 && task_expired(task))
 		{
 			free(content);

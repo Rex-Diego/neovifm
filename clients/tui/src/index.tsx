@@ -8,6 +8,8 @@ import { CoreClientError, startCoreSession } from "./core-client.js"
 import { initialProbeState, reduceProbeState, type ProbeState } from "./probe-state.js"
 import { sanitizeDisplayText } from "./protocol.js"
 import { copyTextToClipboard } from "./clipboard.js"
+import { openFile as launchOpenFile, openResolvedFile as launchResolvedOpenFile } from "./open-file.js"
+import type { OpenFileDependencies } from "./open-file.js"
 
 export function defaultCoreProbePath(): string {
 	return resolve(import.meta.dir, "../../../src/neovifm-core-session")
@@ -18,6 +20,8 @@ export interface MainDependencies {
   readonly renderApp: (props: () => AppProps) => Promise<void>
   readonly startCoreSession: typeof startCoreSession
   readonly openEditor?: (path: string) => Promise<void>
+  readonly openFile?: (path: string) => Promise<void>
+  readonly openResolved?: (argv: readonly string[]) => Promise<void>
   readonly copyText?: (text: string) => Promise<void> | void
 }
 
@@ -74,6 +78,14 @@ export async function openEditor(path: string): Promise<void> {
   if (exitCode !== 0) throw new Error(`Editor exited with status ${exitCode}`)
 }
 
+export function openFile(path: string, dependencies?: OpenFileDependencies): Promise<void> {
+  return launchOpenFile(path, dependencies)
+}
+
+export function openResolvedFile(argv: readonly string[]): Promise<void> {
+  return launchResolvedOpenFile(argv)
+}
+
 export async function copyText(text: string): Promise<void> {
   await copyTextToClipboard(text)
 }
@@ -116,6 +128,7 @@ export function appPropsFor(state: ProbeState, clientError?: string): AppProps {
     preview: session?.preview,
     tasks: session?.tasks,
     actionTasks: session?.actionTasks,
+    open: session?.open,
     commandError: session?.commandError?.message,
     capabilities: state.phase === "ready" ? state.hello.capabilities : undefined,
   }
@@ -153,6 +166,8 @@ export async function main(
           onCancel: () => { session.close() },
           onCommand: (command) => session.send(command),
           onEdit: dependencies.openEditor ?? openEditor,
+          onOpen: dependencies.openFile ?? openFile,
+          onOpenResolved: dependencies.openResolved ?? openResolvedFile,
           onCopyText: dependencies.copyText ?? copyText,
         }
       )

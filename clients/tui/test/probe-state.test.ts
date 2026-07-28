@@ -74,6 +74,29 @@ describe("probe state reducer", () => {
     expect(complete).toMatchObject({ commandSequence: 1, actionTasks: [{ task_id: "3", state: "done" }] })
   })
 
+  test("retains a core-owned open result and advances its command sequence", () => {
+    const pane = { cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0", cursor: -1, entry_count: 0, entries: [] }
+    const hello = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "hello", sequence: 0, payload: { implementation: "session", capabilities: ["preview-session-v3", "open-v1"] } })
+    const initial = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 1, payload: { command_sequence: 0, trigger: "initial", active_pane: "left", left: pane, right: pane } })
+    const open = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "open", sequence: 2, payload: { command_sequence: 1, intent: "open", source: "platform", state: "resolved", path_bytes_hex: "2f746d702f6e6f7465", argv: ["/usr/bin/open", "/tmp/note"] } })
+    const ready = reduceProbeState(reduceProbeState(initialProbeState(), hello), initial)
+    const updated = reduceProbeState(ready, open)
+    expect(updated).toMatchObject({ commandSequence: 1, open: { source: "platform", state: "resolved" } })
+  })
+
+  test("keeps a target-pane preview while an unrelated source render lane advances", () => {
+    const pane = { cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0", cursor: -1, entry_count: 0, entries: [] }
+    const hello3 = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "hello", sequence: 0, payload: { implementation: "session", capabilities: ["preview-session-v3"] } })
+    const initial = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 1, payload: { command_sequence: 0, trigger: "initial", active_pane: "left", left: pane, right: pane } })
+    const targetTask = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "task", sequence: 2, payload: { task_id: "1", generation: "2", pane: "left", target_pane: "right", kind: "text", state: "running", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f61" } })
+    const targetPreview = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "preview", sequence: 3, payload: { task_id: "1", generation: "2", pane: "left", target_pane: "right", kind: "text", state: "done", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f61", content: "right render", truncated: false } })
+    const sourceTask = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "task", sequence: 4, payload: { task_id: "2", generation: "3", pane: "left", target_pane: "left", kind: "text", state: "running", cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f62" } })
+    const ready = reduceProbeState(reduceProbeState(initialProbeState(), hello3), initial)
+    const current = reduceProbeState(reduceProbeState(reduceProbeState(ready, targetTask), targetPreview), sourceTask)
+
+    expect(current).toMatchObject({ preview: { target_pane: "right", content: "right render" }, sequence: 4 })
+  })
+
   test("requires a v1 workspace atomically after the workspace capability", () => {
     const workspaceHello = parseProtocolRecord({
       protocol: "neovifm-core",
