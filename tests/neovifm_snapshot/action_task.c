@@ -120,12 +120,6 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	assert_false(event.partial);
 	assert_int_equal(0, event.os_error);
 	assert_true(nv_action_queue_busy(queue));
-	nv_session_prepared_action_t blocked = {};
-	assert_success(nv_workspace_session_prepare_action(&session, &command,
-			&blocked, &error));
-	assert_failure(nv_action_queue_submit(queue, &blocked, 8U, NULL));
-	assert_int_equal(EBUSY, errno);
-	nv_session_prepared_action_free(&blocked);
 	nv_action_queue_ack_terminal(queue, event.task_id);
 	assert_false(nv_action_queue_busy(queue));
 	assert_success(access(SANDBOX_PATH "/action-queue-right/file", F_OK));
@@ -140,7 +134,7 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	remove_dir(right);
 }
 
-TEST(action_queue_rejects_a_second_unfinished_action_without_losing_it)
+TEST(action_queue_accepts_multiple_pending_actions_in_submission_order)
 {
 	const char *const left = SANDBOX_PATH "/action-capacity-left";
 	const char *const right = SANDBOX_PATH "/action-capacity-right";
@@ -159,11 +153,20 @@ TEST(action_queue_rejects_a_second_unfinished_action_without_losing_it)
 			&second, &error));
 	nv_action_queue_t *const queue = nv_action_queue_alloc_paused();
 	assert_non_null(queue);
-	assert_success(nv_action_queue_submit(queue, &first, 1U, NULL));
-	assert_failure(nv_action_queue_submit(queue, &second, 2U, NULL));
-	assert_int_equal(EBUSY, errno);
-	assert_non_null(second.source_directory);
-	nv_session_prepared_action_free(&second);
+	uint64_t first_id = 0U, second_id = 0U;
+	assert_success(nv_action_queue_submit(queue, &first, 1U, &first_id));
+	assert_success(nv_action_queue_submit(queue, &second, 2U, &second_id));
+	assert_true(first_id < second_id);
+	nv_action_event_t event = {};
+	assert_int_equal(1, nv_action_queue_pop(queue, &event));
+	assert_int_equal(NV_ACTION_TASK_QUEUED, event.state);
+	assert_int_equal(first_id, event.task_id);
+	nv_action_event_free(&event);
+	assert_int_equal(1, nv_action_queue_pop(queue, &event));
+	assert_int_equal(NV_ACTION_TASK_QUEUED, event.state);
+	assert_int_equal(second_id, event.task_id);
+	nv_action_event_free(&event);
+	assert_int_equal(0, nv_action_queue_pop(queue, &event));
 	nv_action_queue_free(queue);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);

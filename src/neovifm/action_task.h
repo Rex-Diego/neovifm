@@ -47,9 +47,9 @@ nv_action_queue_t *nv_action_queue_alloc_paused(void);
 int nv_action_queue_start(nv_action_queue_t *queue);
 
 /*
- * Transfers the already deep-copied immutable action into the single-worker
- * queue on success and clears action.  The queue intentionally admits only
- * one unfinished action so repeated clicks cannot build an unbounded backlog.
+ * Transfers the already deep-copied immutable action into the bounded
+ * single-worker FIFO on success and clears action.  Queued actions retain
+ * their immutable snapshot identities until they reach a terminal event.
  */
 int nv_action_queue_submit(nv_action_queue_t *queue,
 		nv_session_prepared_action_t *action, unsigned int command_sequence,

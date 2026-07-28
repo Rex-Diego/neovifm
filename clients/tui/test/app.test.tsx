@@ -4,7 +4,7 @@ import { testRender } from "@opentui/solid"
 import { MouseButtons } from "@opentui/core/testing"
 
 import { App, type AppProps } from "../src/app.js"
-import type { SnapshotPayload, WorkspaceSnapshotPayload } from "../src/protocol.js"
+import type { ActionTaskPayload, SnapshotPayload, WorkspaceSnapshotPayload } from "../src/protocol.js"
 
 const snapshot: SnapshotPayload = {
   cwd_display: "/tmp",
@@ -406,6 +406,61 @@ test("reports a closed core channel instead of pretending a click succeeded", as
   await setup.mockMouse.click(copyButton!.x, copyButton!.y)
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("Core command channel is unavailable")
+})
+
+test("keeps file actions available while an earlier action is running", async () => {
+  const sent: unknown[] = []
+  const runningAction: ActionTaskPayload = {
+    task_id: "4",
+    command_sequence: 3,
+    pane: "left",
+    action: "copy",
+    state: "running",
+    completed_count: 0,
+    total_count: 1,
+    partial: false,
+  }
+  setup = await testRender(() => <App
+    workspace={workspace}
+    capabilities={capabilities}
+    actionTasks={[runningAction]}
+    onCommand={(command) => { sent.push(command) }}
+  />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  const copyButton = setup.renderer.root.findDescendantById("function-copy")
+  expect(copyButton).toBeDefined()
+  await setup.mockMouse.click(copyButton!.x, copyButton!.y)
+  expect(sent.at(-1)).toMatchObject({ action: "copy", pane: "left" })
+})
+
+test("opens a clickable task center with queue and history", async () => {
+  const tasks: ActionTaskPayload[] = [
+    {
+      task_id: "4", command_sequence: 3, pane: "left", action: "copy", state: "running",
+      completed_count: 1, total_count: 3, partial: false,
+    },
+    {
+      task_id: "3", command_sequence: 2, pane: "left", action: "move", state: "done",
+      completed_count: 1, total_count: 1, partial: false,
+    },
+  ]
+  setup = await testRender(() => <App workspace={workspace} actionTasks={tasks} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  const entry = setup.renderer.root.findDescendantById("tasks-entry")
+  expect(entry).toBeDefined()
+  await setup.mockMouse.click(entry!.x, entry!.y)
+  await setup.renderOnce()
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("TASK CENTER")
+  expect(frame).toContain("QUEUE (1)")
+  expect(frame).toContain("HISTORY (1)")
+  expect(frame).toContain("copy #4 running 1/3")
+  expect(frame).toContain("move #3 done 1/1")
+  const closeEntry = setup.renderer.root.findDescendantById("tasks-entry")
+  expect(closeEntry).toBeDefined()
+  await setup.mockMouse.click(closeEntry!.x, closeEntry!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("TASK CENTER")
 })
 
 test("renders a core error without a snapshot", async () => {

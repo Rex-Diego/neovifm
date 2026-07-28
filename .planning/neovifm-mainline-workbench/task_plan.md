@@ -4,7 +4,7 @@
 
 把当前已经可用的 OpenTUI 双栏界面推进为 NeoVifm 的正式主线：优先继承 Vifm/ViATc 的 Vim 快捷键与成熟文件管理语义，在同一主线中加入压缩包/SSH 目录化、F3 富媒体预览，以及不会阻塞界面的文件任务队列与可见历史。
 
-用户已授权执行。本轮先完成 Phase 0 的现有工作树验收与独立提交；后续阶段仍保持 pending，按验收结果逐阶段推进。
+用户已授权执行。Phase 0 已完成验收并独立提交；当前继续按验收门槛推进 Phase 1 快捷键兼容与 Phase 3 后台任务队列首切片，未完成阶段仍保持 pending。
 
 ## 主线定义
 
@@ -60,16 +60,16 @@
 ### Phase 3：后台任务队列与任务中心弹窗
 
 - [ ] 复用 Vifm `background.c`、`bg_job_t/bg_op_t`、`:jobs` 与后台文件操作能力，在其上增加可排队、可观察的稳定 task facade；不再新建互不相通的 executor。
-- [ ] copy/move 默认异步入队；初版文件操作 lane 串行执行，preview 使用独立 lane，避免预览挤占复制/移动。
+- [x] copy/move 默认异步入队；当前 action lane 为有界 FIFO 串行执行，preview 使用独立 lane，避免预览挤占复制/移动。
 - [ ] 队列模型至少发布：id、kind、source、destination、queued/running/succeeded/failed/cancelled/partial、items/bytes progress、当前文件、错误、开始/结束时间和 undo availability。
-- [ ] 当前会话内的全部 queued/running 与 completed/failed/cancelled 历史必须可见且可滚动，不因任务完成立即消失；跨重启持久化另设明确的数据格式、隐私和 retention 决策，不偷偷引入 daemon。
-- [ ] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端降级为图标/短标签加数字，不遮挡 F3--F10。
+- [x] 当前会话内的 queued/running 与 completed/failed/cancelled action 历史由 v3 reducer 保留，并在任务中心覆盖层中可滚动查看；跨重启持久化另设明确的数据格式、隐私和 retention 决策，不偷偷引入 daemon。
+- [x] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端仍保留短标签与数字，不遮挡 F3--F10。
 - [ ] 点击入口打开覆盖式弹窗；使用 Queue/History 两个 tab，支持查看详情、取消 pending/running、重试 failed/cancelled、清理已完成历史和关闭弹窗。
 - [ ] 主界面在大目录 copy/move 期间必须继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求。
 - [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** pending。
+- **状态：** in_progress（FIFO、历史可见和 Tasks 入口首切片已完成；取消/重试/undo 与 Vifm background facade 仍待补齐）。
 
 ### Phase 4：压缩包作为目录打开
 

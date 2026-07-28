@@ -25,14 +25,16 @@
 
 #define NV_SESSION_MAX_COMMAND_BYTES (16U*1024U)
 
-typedef struct
+typedef struct nv_pending_action_context_t
 {
+	uint64_t task_id;
 	int active;
 	nv_session_pane_t source_pane;
 	uint64_t source_tab_id;
 	int has_destination;
 	nv_session_pane_t destination_pane;
 	uint64_t destination_tab_id;
+	struct nv_pending_action_context_t *next;
 } nv_pending_action_context_t;
 
 static int write_line(const char json[]);
@@ -51,7 +53,7 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
-		nv_pending_action_context_t *pending_action);
+		nv_pending_action_context_t **pending_actions);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
 static int drain_preview_events(nv_preview_queue_t *queue,
@@ -60,7 +62,7 @@ static int drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
 		uint64_t *preview_generation,
-		nv_pending_action_context_t *pending_action);
+		nv_pending_action_context_t **pending_actions);
 static int command_is_action(nv_session_command_kind_t kind);
 
 #ifdef __APPLE__
@@ -519,7 +521,7 @@ process_command_line(nv_workspace_session_t *session, char line[],
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
-		nv_pending_action_context_t *pending_action)
+		nv_pending_action_context_t **pending_actions)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
@@ -557,12 +559,23 @@ process_command_line(nv_workspace_session_t *session, char line[],
 			else if(nv_workspace_session_prepare_action(session, &command, &action,
 					&error) == 0)
 			{
-				const nv_pending_action_context_t context =
-					pending_action_context(session, &command);
-				if(nv_action_queue_submit(action_queue, &action, next_sequence,
-						NULL) == 0)
+				nv_pending_action_context_t *const context =
+					calloc(1U, sizeof(*context));
+				uint64_t task_id = 0U;
+				if(context == NULL)
 				{
-					*pending_action = context;
+					set_error(&error, "action-queue-failed",
+							"failed to allocate action context");
+					error.os_error = ENOMEM;
+					error.retryable = 1;
+				}
+				else if(nv_action_queue_submit(action_queue, &action, next_sequence,
+						&task_id) == 0)
+				{
+					*context = pending_action_context(session, &command);
+					context->task_id = task_id;
+					context->next = *pending_actions;
+					*pending_actions = context;
 					*command_sequence = next_sequence;
 					const int result = write_workspace(session,
 							(*output_sequence)++, *command_sequence, "command");
@@ -571,13 +584,17 @@ process_command_line(nv_workspace_session_t *session, char line[],
 					nv_session_command_free(&command);
 					return result;
 				}
-				const int submit_error = errno;
-				set_error(&error, submit_error == EBUSY ? "action-queue-full" :
-						"action-queue-failed", submit_error == EBUSY ?
-						"another file action is still running" :
-						"failed to queue file action");
-				error.os_error = submit_error;
-				error.retryable = submit_error == EBUSY;
+				else
+				{
+					const int submit_error = errno;
+					free(context);
+					set_error(&error, submit_error == EBUSY ? "action-queue-full" :
+							"action-queue-failed", submit_error == EBUSY ?
+							"file action queue is full" :
+							"failed to queue file action");
+					error.os_error = submit_error;
+					error.retryable = submit_error == EBUSY;
+				}
 			}
 			nv_session_prepared_action_free(&action);
 		}
@@ -697,7 +714,7 @@ drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
 		uint64_t *preview_generation,
-		nv_pending_action_context_t *pending_action)
+		nv_pending_action_context_t **pending_actions)
 {
 	if(queue == NULL) return 0;
 	if(nv_action_queue_failed(queue))
@@ -716,18 +733,28 @@ drain_action_events(nv_action_queue_t *queue,
 		if(action_terminal(event.state))
 		{
 			nv_snapshot_error_t error = {};
-			if(pending_action != NULL && pending_action->active)
+			nv_pending_action_context_t *previous = NULL;
+			nv_pending_action_context_t *context = pending_actions == NULL ? NULL :
+				*pending_actions;
+			while(context != NULL && context->task_id != event.task_id)
+			{
+				previous = context;
+				context = context->next;
+			}
+			if(context != NULL && context->active)
 			{
 				refresh_failed = refresh_action_tab(session,
-						pending_action->source_pane, pending_action->source_tab_id,
+						context->source_pane, context->source_tab_id,
 						&error) != 0;
-				if(!refresh_failed && pending_action->has_destination)
+				if(!refresh_failed && context->has_destination)
 				{
 					refresh_failed = refresh_action_tab(session,
-							pending_action->destination_pane,
-							pending_action->destination_tab_id, &error) != 0;
+							context->destination_pane, context->destination_tab_id,
+							&error) != 0;
 				}
-				*pending_action = (nv_pending_action_context_t){};
+				if(previous == NULL) *pending_actions = context->next;
+				else previous->next = context->next;
+				free(context);
 			}
 			else
 			{
@@ -952,6 +979,10 @@ main(int argc, char *argv[])
 		fputs("neovifm-core-session: expected left and right directory arguments\n", stderr);
 		return 2;
 	}
+	/* The macOS watcher loop uses select(2) before fgets().  Keep stdin
+	 * unbuffered so a second command already present in the pipe is not hidden
+	 * inside stdio after select reports the descriptor as drained. */
+	(void)setvbuf(stdin, NULL, _IONBF, 0);
 	nv_workspace_session_t session = {};
 	nv_snapshot_error_t error = {};
 	if(nv_workspace_session_init(argv[1], argv[2], &session, &error) != 0)
@@ -998,7 +1029,7 @@ main(int argc, char *argv[])
 	char line[NV_SESSION_MAX_COMMAND_BYTES + 2U];
 	unsigned int output_sequence = 2U;
 	unsigned int command_sequence = 0U;
-	nv_pending_action_context_t pending_action = {};
+	nv_pending_action_context_t *pending_actions = NULL;
 	int result = 0;
 #ifdef __APPLE__
 	nv_session_watcher_t watcher = {};
@@ -1020,7 +1051,7 @@ main(int argc, char *argv[])
 			}
 			if(drain_action_events(action_queue, &session, &output_sequence,
 					command_sequence, preview_queue, &preview_generation,
-					&pending_action) != 0)
+					&pending_actions) != 0)
 			{
 				result = 1;
 				break;
@@ -1030,7 +1061,7 @@ main(int argc, char *argv[])
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, &directory_changed, preview_queue,
-					&preview_generation, action_queue, &pending_action) != 0)
+					&preview_generation, action_queue, &pending_actions) != 0)
 			{
 				result = 1;
 				break;
@@ -1067,7 +1098,7 @@ main(int argc, char *argv[])
 		if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
 				drain_action_events(action_queue, &session, &output_sequence,
 						command_sequence, preview_queue, &preview_generation,
-						&pending_action) != 0)
+						&pending_actions) != 0)
 		{
 			result = 1;
 			break;
@@ -1075,8 +1106,8 @@ main(int argc, char *argv[])
 		if(!stdin_ready) continue;
 		if(fgets(line, sizeof(line), stdin) == NULL) break;
 		if(process_command_line(&session, line, sizeof(line), &output_sequence,
-				&command_sequence, NULL, preview_queue, &preview_generation,
-				action_queue, &pending_action) != 0)
+					&command_sequence, NULL, preview_queue, &preview_generation,
+					action_queue, &pending_actions) != 0)
 		{
 			result = 1;
 			break;
@@ -1084,10 +1115,16 @@ main(int argc, char *argv[])
 	}
 	nv_action_queue_cancel_all(action_queue);
 	if(drain_action_events(action_queue, &session, &output_sequence,
-			command_sequence, preview_queue, &preview_generation,
-			&pending_action) != 0) result = 1;
+				command_sequence, preview_queue, &preview_generation,
+				&pending_actions) != 0) result = 1;
 	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
 	nv_snapshot_error_free(&error);
+	while(pending_actions != NULL)
+	{
+		nv_pending_action_context_t *const next = pending_actions->next;
+		free(pending_actions);
+		pending_actions = next;
+	}
 	nv_action_queue_free(action_queue);
 	nv_preview_queue_free(preview_queue);
 	nv_workspace_session_free(&session);

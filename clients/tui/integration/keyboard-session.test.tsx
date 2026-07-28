@@ -269,6 +269,79 @@ test("real keyboard h/j/k/l and Tab commands update the C-owned workspace", asyn
   }
 }, 20_000)
 
+test("real core session queues multiple file actions and keeps their history", async () => {
+  if (process.platform !== "darwin") return
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) {
+    throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  }
+  root = await mkdtemp(resolve(tmpdir(), "neovifm-action-queue-"))
+  const left = resolve(root, "left")
+  const right = resolve(root, "right")
+  await mkdir(left)
+  await mkdir(right)
+  await writeFile(resolve(left, "queued-file"), "queued")
+
+  const [state, setState] = createSignal<ProbeState>(initialProbeState())
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => setState((previous) => reduceProbeState(previous, record)),
+    onError: (error) => errors.push(error),
+  })
+  await waitFor(() => state().phase === "ready" && "session" in state())
+  const initial = state()
+  if (!(initial.phase === "ready" && "workspace" in initial)) throw new Error("workspace did not initialize")
+  const source = initial.workspace.left
+  const destination = initial.workspace.right
+  const entry = source.entries[source.cursor]
+  if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined
+    || destination.cwd_device === undefined || destination.cwd_inode === undefined || destination.cwd_ctime_unix_ns === undefined) {
+    throw new Error("core did not publish stable action identities")
+  }
+  const command = {
+    action: "copy" as const,
+    pane: "left" as const,
+    cwd_bytes_hex: source.cwd_bytes_hex,
+    snapshot_revision: source.snapshot_revision,
+    cwd_device: source.cwd_device,
+    cwd_inode: source.cwd_inode,
+    cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+    destination_cwd_bytes_hex: destination.cwd_bytes_hex,
+    destination_snapshot_revision: destination.snapshot_revision,
+    destination_cwd_device: destination.cwd_device,
+    destination_cwd_inode: destination.cwd_inode,
+    destination_cwd_ctime_unix_ns: destination.cwd_ctime_unix_ns,
+    targets: [{
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device!,
+      inode: entry.inode!,
+      ctime_unix_ns: entry.ctime_unix_ns!,
+      kind: entry.kind,
+    }],
+  }
+  try {
+    expect(await session.send(command)).toBe(true)
+    expect(await session.send(command)).toBe(true)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "session" in current && (current.actionTasks?.length ?? 0) >= 2
+        && current.actionTasks?.every((task) => task.state === "done" || task.state === "failed") === true
+    })
+    const completed = state()
+    if (!(completed.phase === "ready" && "session" in completed)) throw new Error("session disappeared after queued actions")
+    expect(completed.actionTasks).toHaveLength(2)
+    expect(completed.actionTasks?.map((task) => task.state)).toEqual(["done", "failed"])
+    expect(completed.actionTasks?.[1]?.error_code).toBe("destination-exists")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, 20_000)
+
 test("real pane tabs, mouse selection, and header buttons stay core-owned", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) {

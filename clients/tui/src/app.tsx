@@ -401,6 +401,36 @@ function ActionDialog(props: {
   </box>
 }
 
+function actionTaskLabel(task: ActionTaskPayload): string {
+  return `${task.action} #${task.task_id} ${task.state} ${task.completed_count}/${task.total_count}${task.partial ? " partial" : ""}${task.error_code === undefined ? "" : ` ${task.error_code}`}`
+}
+
+function TaskCenter(props: {
+  readonly actionTasks?: readonly ActionTaskPayload[]
+  readonly onClose: () => void
+}) {
+  const queue = () => (props.actionTasks ?? []).filter((task) => task.state === "queued" || task.state === "running")
+  const history = () => (props.actionTasks ?? []).filter((task) => task.state !== "queued" && task.state !== "running")
+  const taskRows = (tasks: readonly ActionTaskPayload[], empty: string) => <Show when={tasks.length !== 0} fallback={<text fg={COLORS.overlay1}>{empty}</text>}>
+    <For each={tasks}>{(task) => <text fg={task.state === "failed" || task.state === "cancelled" ? COLORS.red : COLORS.text}>{actionTaskLabel(task)}</text>}</For>
+  </Show>
+  return <box width="100%" height="100%" flexDirection="column" border borderStyle="double" borderColor={COLORS.lavender} backgroundColor={COLORS.base} padding={1} title="TASK CENTER" titleColor={COLORS.lavender} onKeyDown={(key) => {
+    if (key.name.toLowerCase() === "escape" || key.sequence === "\u001b") {
+      key.preventDefault()
+      key.stopPropagation()
+      props.onClose()
+    }
+  }}>
+    <text fg={COLORS.yellow}>QUEUE ({queue().length})</text>
+    <scrollbox flexGrow={1} width="100%">
+      {taskRows(queue(), "No queued or running file actions")}
+      <text height={1} fg={COLORS.yellow}>HISTORY ({history().length})</text>
+      {taskRows(history(), "No completed actions")}
+    </scrollbox>
+    <text height={1} fg={COLORS.subtext0}>Click Tasks or press Esc to close</text>
+  </box>
+}
+
 function StatusBar(props: {
   readonly workspace?: WorkspaceSnapshotPayload
   readonly tasks?: readonly PreviewTaskPayload[]
@@ -412,6 +442,7 @@ function StatusBar(props: {
   readonly homeDirectory?: string
   readonly onTogglePath: () => void
   readonly onCopyPath: (path: string) => void
+  readonly onOpenTasks: () => void
 }) {
   const active = () => props.workspace?.active_pane ?? "left"
   const snapshot = () => active() === "left" ? props.workspace?.left : props.workspace?.right
@@ -425,6 +456,14 @@ function StatusBar(props: {
   }
   const latestTask = () => props.tasks?.at(-1)
   const latestAction = () => props.actionTasks?.at(-1)
+  const queuedActions = () => props.actionTasks?.filter((task) => task.state === "queued" || task.state === "running").length ?? 0
+  const taskCount = () => props.actionTasks?.length ?? 0
+  const taskMouseDown = (event: { button: number; preventDefault(): void; stopPropagation(): void }) => {
+    if (event.button !== MouseButton.LEFT) return
+    event.preventDefault()
+    event.stopPropagation()
+    props.onOpenTasks()
+  }
   const detail = () => props.notice ?? (latestAction() !== undefined
     ? `${latestAction()!.action} ${latestAction()!.state} ${latestAction()!.completed_count}/${latestAction()!.total_count}${latestAction()!.partial ? " partial" : ""}${latestAction()!.error_code === undefined ? "" : ` ${latestAction()!.error_code}`}`
     : latestTask() === undefined ? `${snapshot()?.selection_count ?? 0} selected` : `task ${latestTask()!.state}`)
@@ -435,6 +474,7 @@ function StatusBar(props: {
       <text bg={COLORS.mauve} fg={COLORS.crust}> NORMAL </text>
       <text id="status-path" flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate onMouseDown={pathMouseDown}> {displayedPath()} </text>
       <text bg={COLORS.green} fg={COLORS.crust}> {snapshot()?.entry_count ?? 0} items </text>
+      <text id="tasks-entry" bg={queuedActions() !== 0 ? COLORS.yellow : COLORS.surface1} fg={COLORS.crust} onMouseDown={taskMouseDown}> Tasks {queuedActions()}/{taskCount()} </text>
       <Show when={showDetail()}>
         <text bg={COLORS.surface1} fg={COLORS.text}> {detail()} </text>
       </Show>
@@ -447,6 +487,7 @@ function StatusBar(props: {
     <text id="status-path" flexGrow={1} bg={COLORS.surface0} fg={COLORS.text} truncate onMouseDown={pathMouseDown}> {displayedPath()} </text>
     <text fg={COLORS.surface0} bg={COLORS.green}></text>
     <text bg={COLORS.green} fg={COLORS.crust}> {snapshot()?.entry_count ?? 0} items </text>
+    <text id="tasks-entry" fg={COLORS.crust} bg={queuedActions() !== 0 ? COLORS.yellow : COLORS.surface1} onMouseDown={taskMouseDown}> Tasks {queuedActions()}/{taskCount()} </text>
     <Show when={showDetail()}>
       <text fg={COLORS.green} bg={COLORS.surface1}></text>
       <text bg={COLORS.surface1} fg={COLORS.text}> {detail()} </text>
@@ -526,9 +567,10 @@ function BottomBars(props: {
   readonly homeDirectory?: string
   readonly onTogglePath: () => void
   readonly onCopyPath: (path: string) => void
+  readonly onOpenTasks: () => void
 }) {
   return <box width="100%" height={props.stacked ? 3 : 2} flexDirection="column">
-    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} />
+    <StatusBar workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={props.compact} notice={props.notice} iconMode={props.iconMode} pathMode={props.pathMode} homeDirectory={props.homeDirectory} onTogglePath={props.onTogglePath} onCopyPath={props.onCopyPath} onOpenTasks={props.onOpenTasks} />
     <Show when={props.stacked} fallback={<FunctionRow keys={FUNCTION_KEYS} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />}>
       <FunctionRow keys={FUNCTION_KEYS.slice(0, 4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
       <FunctionRow keys={FUNCTION_KEYS.slice(4)} canView={props.canView} canFileActions={props.canFileActions} iconMode={props.iconMode} onAction={props.onAction} />
@@ -544,10 +586,10 @@ export function App(props: AppProps) {
   const iconMode = (): IconMode => props.iconMode ?? (process.env.NEOVIFM_ICONS === "ascii" ? "ascii" : "fancy")
   const canSort = () => props.capabilities?.includes("workspace-sort-v1") === true
   const canTabs = () => props.capabilities?.includes("pane-tabs-v1") === true
-  const actionBusy = () => props.actionTasks?.some((task) => task.state === "queued" || task.state === "running") === true
-  const canFileActions = () => props.capabilities?.includes("file-actions-v1") === true && !actionBusy()
+  const canFileActions = () => props.capabilities?.includes("file-actions-v1") === true
   const keymap = new VifmKeymap()
   const [viewerOpen, setViewerOpen] = createSignal(false)
+  const [taskCenterOpen, setTaskCenterOpen] = createSignal(false)
   const [notice, setNotice] = createSignal<string | undefined>()
   const [dialog, setDialog] = createSignal<DialogState | undefined>()
   const [pathMode, setPathMode] = createSignal<StatusPathMode>("absolute")
@@ -778,9 +820,10 @@ export function App(props: AppProps) {
   }
 
   useKeyboard((key) => {
+    const escape = key.name.toLowerCase() === "escape" || key.sequence === "\u001b"
     const openDialog = dialog()
     if (openDialog !== undefined) {
-      if (key.name === "escape" || (openDialog.kind === "delete" && key.name.toLowerCase() === "n")) {
+      if (escape || (openDialog.kind === "delete" && key.name.toLowerCase() === "n")) {
         key.preventDefault()
         key.stopPropagation()
         closeDialog()
@@ -791,7 +834,15 @@ export function App(props: AppProps) {
       }
       return
     }
-    if (viewerOpen() && key.name === "escape") {
+    if (taskCenterOpen()) {
+      if (escape) {
+        key.preventDefault()
+        key.stopPropagation()
+        setTaskCenterOpen(false)
+      }
+      return
+    }
+    if (viewerOpen() && escape) {
       key.preventDefault()
       key.stopPropagation()
       setViewerOpen(false)
@@ -834,29 +885,33 @@ export function App(props: AppProps) {
   })
 
   return <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.crust} padding={1} gap={1}>
-    <Show when={dialog()} fallback={props.error !== undefined
-      ? <ErrorPanel message={props.error} />
-      : viewerOpen()
-        ? <Viewer preview={matchingPreview()} />
-        : props.workspace !== undefined
-          ? <Workspace
-              workspace={props.workspace}
-              wide={wide()}
-              detailed={detailed()}
-              iconMode={iconMode()}
-              tabsEnabled={canTabs()}
-              onSortDirection={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }}
-              onSortCycle={(pane, delta) => { sendCommand({ action: "sort-cycle", pane, delta }) }}
-              onSelect={(pane, index, toggle) => { sendCommand({ action: "select-entry", pane, index, toggle }) }}
-              onActivateTab={(pane, tabId) => { sendCommand({ action: "activate-tab", pane, tab_id: tabId }) }}
-              onCloseTab={(pane, tabId) => { sendCommand({ action: "close-tab", pane, tab_id: tabId }) }}
-              onNewTab={(pane) => { sendCommand({ action: "new-tab", pane }) }}
-            />
-          : props.loading
-            ? <LoadingPanel />
-            : <ErrorPanel message="Core returned no workspace" />}>
+    <Show when={dialog()} fallback={
+      <Show when={taskCenterOpen()} fallback={props.error !== undefined
+        ? <ErrorPanel message={props.error} />
+        : viewerOpen()
+          ? <Viewer preview={matchingPreview()} />
+          : props.workspace !== undefined
+            ? <Workspace
+                workspace={props.workspace}
+                wide={wide()}
+                detailed={detailed()}
+                iconMode={iconMode()}
+                tabsEnabled={canTabs()}
+                onSortDirection={(pane, key) => { sendCommand({ action: "sort-by", pane, key }) }}
+                onSortCycle={(pane, delta) => { sendCommand({ action: "sort-cycle", pane, delta }) }}
+                onSelect={(pane, index, toggle) => { sendCommand({ action: "select-entry", pane, index, toggle }) }}
+                onActivateTab={(pane, tabId) => { sendCommand({ action: "activate-tab", pane, tab_id: tabId }) }}
+                onCloseTab={(pane, tabId) => { sendCommand({ action: "close-tab", pane, tab_id: tabId }) }}
+                onNewTab={(pane) => { sendCommand({ action: "new-tab", pane }) }}
+              />
+            : props.loading
+              ? <LoadingPanel />
+              : <ErrorPanel message="Core returned no workspace" />}>
+        <TaskCenter actionTasks={props.actionTasks} onClose={() => setTaskCenterOpen(false)} />
+      </Show>
+    }>
       {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
     </Show>
-    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} />
+    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
   </box>
 }

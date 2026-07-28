@@ -15,7 +15,8 @@
 
 #include "../compat/pthread.h"
 
-#define NV_ACTION_EVENT_LIMIT 8U
+#define NV_ACTION_EVENT_LIMIT 256U
+#define NV_ACTION_QUEUE_LIMIT 64U
 
 typedef struct nv_action_task_t nv_action_task_t;
 typedef struct nv_action_event_node_t nv_action_event_node_t;
@@ -45,8 +46,12 @@ struct nv_action_queue_t
 	int terminal_event_lost;
 	uint64_t next_id;
 	nv_action_task_t *pending;
+	nv_action_task_t *pending_tail;
+	size_t pending_count;
 	nv_action_task_t *running;
 	nv_action_task_t *finishing;
+	nv_action_task_t *finishing_tail;
+	size_t task_count;
 	nv_action_event_node_t *events_head;
 	nv_action_event_node_t *events_tail;
 	size_t event_count;
@@ -201,8 +206,7 @@ nv_action_queue_submit(nv_action_queue_t *queue,
 	task->command_sequence = command_sequence;
 	task->action = *action;
 	pthread_mutex_lock(&queue->mutex);
-	if(queue->stopping || queue->pending != NULL || queue->running != NULL ||
-			queue->finishing != NULL)
+	if(queue->stopping || queue->task_count >= NV_ACTION_QUEUE_LIMIT)
 	{
 		pthread_mutex_unlock(&queue->mutex);
 		free(task);
@@ -218,7 +222,11 @@ nv_action_queue_submit(nv_action_queue_t *queue,
 		errno = ENOMEM;
 		return -1;
 	}
-	queue->pending = task;
+	if(queue->pending_tail == NULL) queue->pending = task;
+	else queue->pending_tail->next = task;
+	queue->pending_tail = task;
+	++queue->pending_count;
+	++queue->task_count;
 	*action = (nv_session_prepared_action_t){};
 	const uint64_t submitted_id = task->id;
 	pthread_cond_signal(&queue->ready);
@@ -232,7 +240,8 @@ nv_action_queue_cancel_all(nv_action_queue_t *queue)
 {
 	if(queue == NULL) return;
 	pthread_mutex_lock(&queue->mutex);
-	if(queue->pending != NULL) queue->pending->cancelled = 1;
+	for(nv_action_task_t *task = queue->pending; task != NULL; task = task->next)
+		task->cancelled = 1;
 	if(queue->running != NULL) queue->running->cancelled = 1;
 	pthread_cond_broadcast(&queue->ready);
 	pthread_mutex_unlock(&queue->mutex);
@@ -243,8 +252,7 @@ nv_action_queue_busy(nv_action_queue_t *queue)
 {
 	if(queue == NULL) return 0;
 	pthread_mutex_lock(&queue->mutex);
-	const int busy = queue->pending != NULL || queue->running != NULL ||
-		queue->finishing != NULL;
+	const int busy = queue->task_count != 0U;
 	pthread_mutex_unlock(&queue->mutex);
 	return busy;
 }
@@ -264,15 +272,22 @@ nv_action_queue_ack_terminal(nv_action_queue_t *queue, uint64_t task_id)
 {
 	if(queue == NULL || task_id == 0U) return;
 	pthread_mutex_lock(&queue->mutex);
-	if(queue->finishing != NULL && queue->finishing->id == task_id)
+	nv_action_task_t *previous = NULL;
+	nv_action_task_t *task = queue->finishing;
+	while(task != NULL && task->id != task_id)
 	{
-		nv_action_task_t *const task = queue->finishing;
-		queue->finishing = NULL;
-		pthread_mutex_unlock(&queue->mutex);
-		task_free(task);
-		return;
+		previous = task;
+		task = task->next;
+	}
+	if(task != NULL)
+	{
+		if(previous == NULL) queue->finishing = task->next;
+		else previous->next = task->next;
+		if(queue->finishing_tail == task) queue->finishing_tail = previous;
+		--queue->task_count;
 	}
 	pthread_mutex_unlock(&queue->mutex);
+	task_free(task);
 }
 
 int
@@ -427,7 +442,10 @@ action_worker(void *data)
 			break;
 		}
 		nv_action_task_t *const task = queue->pending;
-		queue->pending = NULL;
+		queue->pending = task->next;
+		if(queue->pending == NULL) queue->pending_tail = NULL;
+		--queue->pending_count;
+		task->next = NULL;
 		queue->running = task;
 		(void)queue_event_locked(queue, task, NV_ACTION_TASK_RUNNING, 0U, 0,
 				0U, NULL, 0, 0);
@@ -441,7 +459,9 @@ action_worker(void *data)
 
 		pthread_mutex_lock(&queue->mutex);
 		queue->running = NULL;
-		queue->finishing = task;
+		if(queue->finishing_tail == NULL) queue->finishing = task;
+		else queue->finishing_tail->next = task;
+		queue->finishing_tail = task;
 		if(queue_event_locked(queue, task,
 				result == 0 ? NV_ACTION_TASK_DONE :
 				result > 0 ? NV_ACTION_TASK_CANCELLED : NV_ACTION_TASK_FAILED,
@@ -467,8 +487,18 @@ nv_action_queue_free(nv_action_queue_t *queue)
 	pthread_cond_broadcast(&queue->ready);
 	pthread_mutex_unlock(&queue->mutex);
 	if(queue->started) pthread_join(queue->worker, NULL);
-	task_free(queue->pending);
-	task_free(queue->finishing);
+	while(queue->pending != NULL)
+	{
+		nv_action_task_t *const next = queue->pending->next;
+		task_free(queue->pending);
+		queue->pending = next;
+	}
+	while(queue->finishing != NULL)
+	{
+		nv_action_task_t *const next = queue->finishing->next;
+		task_free(queue->finishing);
+		queue->finishing = next;
+	}
 	while(queue->events_head != NULL)
 	{
 		nv_action_event_node_t *const next = queue->events_head->next;

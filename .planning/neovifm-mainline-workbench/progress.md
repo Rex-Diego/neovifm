@@ -13,7 +13,10 @@
 - Phase 0 验证首轮：focused C、TUI unit/coverage/typecheck/audit 全通过；正式 PTY 初次使用 `right-file` 和带方括号的 tab 文本作为同步条件，分别受到初始帧复用、ANSI 增量重绘和 Tcl glob 语义影响。已改为按 core command 顺序发送 `h`/`j`，等待稳定路径/复制结果，并移除脆弱的 tab 文本断言。
 - Phase 0 integration 修复后：`bun run test:integration` 通过，7 tests / 51 expects；下一步运行 schema、focused C、TUI 全套和串行 `make check`，再审阅 diff 并独立提交。
 - Phase 0 全套验收完成：focused C 9082 checks / 55 tests；TUI unit 106 tests / 377 expects，coverage 85.97% functions / 97.73% lines，typecheck 和 audit 通过；真实 C/PTY integration 7/7；串行 `env -u VIFM -u MYVIFMRC make check` 通过。首次全量回归的 `selection_multi_run` 仅因 macOS shell/error-pipe 回收超过 500ms 测试窗口失败，已将测试 helper 等待上限调整为 5s 并复跑通过；`git diff --check` 通过。
-- Phase 0 当前已完成验收并准备独立提交；Phase 1--7 新功能保持未实现、pending。
-- Phase 0 独立提交已创建；工作树保持干净，未 push。下一步可从 Phase 1 快捷键/动作兼容矩阵开始。
+- Phase 0 已完成验收并独立提交；Phase 1 已进入快捷键兼容切片，Phase 3 已进入后台任务队列首切片，其余能力仍按阶段推进。
+- Phase 0 独立提交已创建且未 push；后续 Phase 1/3 改动分别保持独立提交，当前工作树状态以最新验收记录为准。
 - Phase 1 已开始：先以现有 `src/modes/normal.c`、`src/engine/keys.c`、ViATc 动作表和当前 `clients/tui/src/keymap.ts` 建立 supported/mapped/conflict/deferred 矩阵，再选择不破坏现有协议的第一批补齐项。
 - Phase 1 首个实现切片：新增 `docs/NEOVIFM_KEYMAP_MATRIX.md`，明确 Vifm/ViATc 来源、当前冲突和 archive/remote/高级编辑等 deferred 边界；为 `p/P/d/D` 增加复用 F5/F6/F8 dispatcher 的客户端别名，并先写 RED 单测再实现。搜索、marks、registers、visual、history 等仍等待 core capability，不在本切片伪造客户端语义。
+- Phase 3 首个实现切片：`nv_action_queue` 改为 64 项有界 FIFO，保留 queued/running/terminal 生命周期并按 task id 维护多个 action refresh context；TUI 不再因已有 action 忙碌而禁用后续 copy/move，右下角 `Tasks` 入口打开可滚动 Queue/History 覆盖层。新增 C queue、TUI、真实 core session 回归，验证两个连续 copy 的 done/failed 历史和 destination-exists 语义。
+- 本切片验收：`make -C tests neovifm_snapshot` 9085 checks / 55 tests；TUI 109 tests / 391 expects，coverage 85.95% functions / 97.65% lines，typecheck、audit、schema、`git diff --check` 通过；真实 integration 8 tests / 57 expects；串行 `env -u VIFM -u MYVIFMRC make check` 通过。Phase 2 的 native undo/background bridge 尚未宣称完成。
+- 真实队列回归暴露 macOS `select()` + buffered `fgets()` 会把已写入管道的第二条命令藏在 stdio 缓冲区，导致 FIFO 测试偶发只处理一个 action；core session 现将 stdin 设为 `_IONBF`，连续命令和 full integration 复跑通过。
