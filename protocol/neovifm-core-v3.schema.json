@@ -111,6 +111,7 @@
         "total_count": { "type": "integer", "minimum": 1, "maximum": 64 },
         "failed_index": { "type": "integer", "minimum": 0, "maximum": 63 },
         "partial": { "type": "boolean" },
+        "retryable": { "type": "boolean" },
         "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
         "os_error": { "type": "integer" }
       }
@@ -225,7 +226,7 @@
         { "type": "object", "required": ["action", "pane", "tab_id"], "properties": { "action": { "enum": ["activate-tab", "close-tab"] }, "pane": { "enum": ["left", "right"] }, "tab_id": { "$ref": "#/$defs/tabId" } } },
         { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "tab-cycle" }, "delta": { "type": "integer", "minimum": -999, "maximum": 999, "not": { "const": 0 } } } },
         { "type": "object", "required": ["action"], "properties": { "action": { "const": "undo" } } },
-        { "type": "object", "required": ["action", "task_id"], "properties": { "action": { "const": "cancel-action" }, "task_id": { "$ref": "neovifm-core-v0.schema.json#/$defs/unsignedDecimalString" } } },
+        { "type": "object", "required": ["action", "task_id"], "properties": { "action": { "enum": ["cancel-action", "retry-action"] }, "task_id": { "$ref": "neovifm-core-v0.schema.json#/$defs/unsignedDecimalString" } } },
         {
           "allOf": [
             { "$ref": "#/$defs/sourceIdentity" },

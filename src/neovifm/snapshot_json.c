@@ -444,7 +444,9 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 			action_state_name(event->state) == NULL ||
 			event->completed_count > event->total_count ||
 			(event->has_failed_index && event->failed_index >= event->total_count) ||
-			(event->error_code != NULL && !string_fits(event->error_code, 128U)))
+			(event->retryable && (event->state != NV_ACTION_TASK_FAILED &&
+				event->state != NV_ACTION_TASK_CANCELLED)) ||
+				(event->error_code != NULL && !string_fits(event->error_code, 128U)))
 	{
 		return NULL;
 	}
@@ -465,6 +467,7 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 			json_object_set_number(payload, "total_count",
 				event->total_count) != JSONSuccess ||
 			json_object_set_boolean(payload, "partial", event->partial) != JSONSuccess ||
+			json_object_set_boolean(payload, "retryable", event->retryable) != JSONSuccess ||
 			(event->has_failed_index && json_object_set_number(payload,
 				"failed_index", event->failed_index) != JSONSuccess) ||
 			(event->error_code != NULL && json_object_set_string(payload,

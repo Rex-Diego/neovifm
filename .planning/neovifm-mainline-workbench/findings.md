@@ -104,3 +104,10 @@
 - `MYVIFMRC` is now an optional, bounded input source for the open resolver. The parser accepts the three Vifm association namespaces, continuation lines, brace glob sets and the first command candidate while skipping MIME selectors; it does not claim full `filetype.c` semantics.
 - Explicit core-provided association argv continues to win over the environment-loaded rules. An unset environment variable leaves platform fallback available; a configured but unreadable or malformed file returns a structured error so configuration failures remain visible.
 - The loaded rule set owns copied pattern/command strings and is freed as one object. The resolver still rejects shell operators, unsupported macros and control bytes before producing a structured argv.
+
+## 2026-07-28 Core-owned safe action retry
+
+- Retry must be core-owned: keeping only a task id or display path is insufficient because the source/destination directories and selected entries may be replaced after the original request. The retained action therefore includes all original raw paths plus cwd/target device, inode and ctime identities.
+- `retry-action` submits that retained prepared action to the same bounded FIFO worker. The worker repeats directory and target validation, so a stale or replaced source fails safely and an existing destination remains a visible `destination-exists` failure rather than being overwritten.
+- Only copy, move and delete terminal failures/cancellations are retryable in this slice. `mkdir` is excluded because its undo/redo semantics are separately bridged and a blind retry would create a different name/resource.
+- Retained actions are capped at 64 per core session. The UI can clear its current history view, but core owns the retry retention and frees evicted identities; no cross-restart persistence or daemon is introduced.

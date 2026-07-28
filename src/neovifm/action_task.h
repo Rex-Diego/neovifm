@@ -36,6 +36,7 @@ typedef struct
 	size_t failed_index;
 	int has_failed_index;
 	int partial;
+	int retryable;
 	char *error_code;
 	int os_error;
 } nv_action_event_t;
@@ -57,6 +58,10 @@ int nv_action_queue_submit(nv_action_queue_t *queue,
 void nv_action_queue_cancel_all(nv_action_queue_t *queue);
 /* Marks one queued/running task cancelled; terminal state is emitted by the worker. */
 int nv_action_queue_cancel(nv_action_queue_t *queue, uint64_t task_id);
+/* Transfers a failed/cancelled task's retained immutable action to the caller.
+ * The task is removed from the queue; the caller owns the returned action. */
+int nv_action_queue_take_terminal_action(nv_action_queue_t *queue,
+		uint64_t task_id, nv_session_prepared_action_t *action);
 int nv_action_queue_busy(nv_action_queue_t *queue);
 int nv_action_queue_failed(nv_action_queue_t *queue);
 int nv_action_queue_pop(nv_action_queue_t *queue, nv_action_event_t *event);

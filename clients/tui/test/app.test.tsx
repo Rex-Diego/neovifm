@@ -484,6 +484,7 @@ test("keeps file actions available while an earlier action is running", async ()
     completed_count: 0,
     total_count: 1,
     partial: false,
+    retryable: false,
   }
   setup = await testRender(() => <App
     workspace={workspace}
@@ -502,11 +503,11 @@ test("opens a clickable task center with queue and history", async () => {
   const tasks: ActionTaskPayload[] = [
     {
       task_id: "4", command_sequence: 3, pane: "left", action: "copy", state: "running",
-      completed_count: 1, total_count: 3, partial: false,
+      completed_count: 1, total_count: 3, partial: false, retryable: false,
     },
     {
       task_id: "3", command_sequence: 2, pane: "left", action: "move", state: "done",
-      completed_count: 1, total_count: 1, partial: false,
+      completed_count: 1, total_count: 1, partial: false, retryable: false,
     },
   ]
   const sent: unknown[] = []
@@ -544,17 +545,17 @@ test("opens a clickable task center with queue and history", async () => {
   expect(setup.captureCharFrame()).not.toContain("TASK CENTER")
 })
 
-test("shows terminal task details and keeps retry disabled without retained action identity", async () => {
+test("shows terminal task details and sends only core-owned safe retry", async () => {
   const tasks: ActionTaskPayload[] = [
     {
       task_id: "7", command_sequence: 6, pane: "left", action: "copy", state: "failed",
       completed_count: 1, total_count: 2, failed_index: 1, partial: true,
-      error_code: "destination-exists", os_error: 17,
+      error_code: "destination-exists", os_error: 17, retryable: true,
     },
     {
       task_id: "8", command_sequence: 7, pane: "right", action: "delete", state: "cancelled",
       completed_count: 0, total_count: 1, failed_index: 0, partial: false,
-      error_code: "cancelled",
+      error_code: "cancelled", retryable: false,
     },
   ]
   const sent: unknown[] = []
@@ -581,12 +582,12 @@ test("shows terminal task details and keeps retry disabled without retained acti
   expect(frame).toContain("Progress 1/2")
   expect(frame).toContain("Failed item 2")
   expect(frame).toContain("destination-exists")
-  expect(frame).toContain("Retry unavailable")
+  expect(frame).toContain("Retry task")
 
   const retry = setup.renderer.root.findDescendantById("task-retry-7")
   expect(retry).toBeDefined()
   await setup.mockMouse.click(retry!.x, retry!.y)
-  expect(sent).toHaveLength(0)
+  expect(sent).toEqual([{ action: "retry-action", task_id: "7" }])
 
   const cancelledRow = setup.renderer.root.findDescendantById("task-row-8")
   expect(cancelledRow).toBeDefined()

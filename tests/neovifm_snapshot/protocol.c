@@ -96,6 +96,7 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_string_equal("failed", json_object_get_string(payload, "state"));
 	assert_int_equal(1, json_object_get_number(payload, "completed_count"));
 	assert_true(json_object_get_boolean(payload, "partial"));
+	assert_false(json_object_get_boolean(payload, "retryable"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
 }

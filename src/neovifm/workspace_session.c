@@ -923,6 +923,7 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_PREVIEW:
 		case NV_SESSION_OPEN:
 		case NV_SESSION_CANCEL_ACTION:
+		case NV_SESSION_RETRY_ACTION:
 			break;
 	}
 	return set_error(error, "invalid-command", "unsupported session command");

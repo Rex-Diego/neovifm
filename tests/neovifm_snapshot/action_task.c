@@ -118,6 +118,7 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	assert_int_equal(1, event.completed_count);
 	assert_int_equal(1, event.total_count);
 	assert_false(event.partial);
+	assert_false(event.retryable);
 	assert_int_equal(0, event.os_error);
 	assert_true(nv_action_queue_busy(queue));
 	nv_action_queue_ack_terminal(queue, event.task_id);
@@ -244,6 +245,52 @@ TEST(action_move_never_falls_back_to_copy_delete_across_filesystems)
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	remove_file(SANDBOX_PATH "/action-exdev-left/file");
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(action_queue_retains_a_failed_identity_for_safe_retry)
+{
+	const char *const left = SANDBOX_PATH "/action-retry-left";
+	const char *const right = SANDBOX_PATH "/action-retry-right";
+	const char *const source = SANDBOX_PATH "/action-retry-left/file";
+	const char *const destination = SANDBOX_PATH "/action-retry-right/file";
+	create_dir(left);
+	create_dir(right);
+	make_file(source, "content");
+	make_file(destination, "existing");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	nv_session_command_t command = command_for(&session, NV_SESSION_LEFT,
+			NV_SESSION_COPY);
+	nv_session_prepared_action_t action = {};
+	assert_success(nv_workspace_session_prepare_action(&session, &command,
+			&action, &error));
+	nv_action_queue_t *const queue = nv_action_queue_alloc();
+	assert_non_null(queue);
+	uint64_t task_id = 0U;
+	assert_success(nv_action_queue_submit(queue, &action, 9U, &task_id));
+	int saw_queued = 0, saw_running = 0;
+	nv_action_event_t event = {};
+	assert_true(pop_terminal(queue, &event, &saw_queued, &saw_running));
+	assert_int_equal(NV_ACTION_TASK_FAILED, event.state);
+	assert_true(event.retryable);
+	nv_action_event_free(&event);
+
+	nv_session_prepared_action_t retry = {};
+	assert_success(nv_action_queue_take_terminal_action(queue, task_id, &retry));
+	assert_int_equal(NV_SESSION_COPY, retry.kind);
+	assert_non_null(retry.source_directory);
+	assert_non_null(retry.destination_directory);
+	assert_int_equal(1, retry.target_count);
+	assert_string_equal(source, retry.targets[0].path);
+	nv_session_prepared_action_free(&retry);
+	nv_action_queue_free(queue);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(source);
+	remove_file(destination);
 	remove_dir(left);
 	remove_dir(right);
 }

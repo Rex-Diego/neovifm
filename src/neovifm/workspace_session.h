@@ -51,6 +51,7 @@ typedef enum
 	NV_SESSION_PREVIEW,
 	NV_SESSION_OPEN,
 	NV_SESSION_CANCEL_ACTION,
+	NV_SESSION_RETRY_ACTION,
 } nv_session_command_kind_t;
 
 typedef struct

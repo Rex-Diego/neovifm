@@ -117,3 +117,10 @@
 - `nv_open_resolve()` now loads the configured file when no explicit association argv is supplied; explicit structured argv remains higher precedence. Missing/oversized/malformed configuration is reported as a structured resolver error rather than silently executing an unintended fallback.
 - The loader owns copied rule strings and keeps the existing shell-free argv tokenizer and `%f/%c/%%` boundary. Complex Vifm shell commands, MIME matching, later candidates and unsupported macros remain explicit follow-up work.
 - Added focused config/env/error coverage and wired `open_config.c/.h` into the core build. This slice is still bounded configuration adaptation, not full parity with classic `filetype.c` and `running.c`.
+
+## 2026-07-28 Core-owned safe action retry
+
+- Added a terminal `retryable` action-task field. Failed and cancelled copy/move/delete tasks retain their already validated source directory, destination directory, target paths, snapshot identities and stat identities inside the core session; mkdir remains non-retryable.
+- Added the versioned `retry-action` command and a bounded 64-entry retry history. Retrying transfers the immutable prepared action back to the single FIFO worker, so the UI never reconstructs a request from display paths and stale/no-follow checks run again in the worker.
+- Task Center now exposes a clickable `Retry task` only when core says the identity is retained; unavailable terminal rows remain visibly disabled. Queue acknowledgement and history cleanup preserve the existing event stream and avoid retaining unbounded action data.
+- RED/GREEN evidence: the initial TUI app/protocol tests failed before the field/command implementation; after implementation focused TUI tests passed 51 tests / 231 expects, C action snapshot tests passed 9363 checks / 72 tests, real v3 integration passed 11 tests / 73 expects, full TUI coverage passed 128 tests / 461 expects at 86.70% functions and 97.11% lines, typecheck/audit passed, and serial `env -u VIFM -u MYVIFMRC make check` passed.

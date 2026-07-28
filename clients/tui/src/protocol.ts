@@ -159,6 +159,7 @@ export interface ActionTaskPayload {
   readonly total_count: number
   readonly failed_index?: number
   readonly partial: boolean
+  readonly retryable: boolean
   readonly error_code?: string
   readonly os_error?: number
 }
@@ -706,10 +707,14 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
     : integerValue(payload.failed_index, "payload.failed_index", 0)
   if (failedIndex !== undefined && failedIndex >= total) return invalid("payload.failed_index", "must identify an action target")
   const partial = booleanValue(payload.partial, "payload.partial")
+  const retryable = payload.retryable === undefined
+    ? false
+    : booleanValue(payload.retryable, "payload.retryable")
   if (state === "done" && partial) return invalid("payload.partial", "must be false for a completed action")
   if (state === "done" && completed !== total) return invalid("payload.completed_count", "must equal total_count for done")
   if ((state === "queued" || state === "running") && completed !== 0) return invalid("payload.completed_count", "must be zero before completion")
   if ((state === "failed" || state === "cancelled") && failedIndex === undefined) return invalid("payload.failed_index", "is required for a terminal incomplete action")
+  if (retryable && state !== "failed" && state !== "cancelled") return invalid("payload.retryable", "requires a failed or cancelled action")
   const errorCode = payload.error_code === undefined
     ? undefined
     : boundedString(payload.error_code, "payload.error_code", MAX_ERROR_CODE_BYTES, false)
@@ -724,6 +729,7 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
     total_count: total,
     ...(failedIndex === undefined ? {} : { failed_index: failedIndex }),
     partial,
+    retryable,
     ...(errorCode === undefined ? {} : { error_code: errorCode }),
     ...(osError === undefined ? {} : { os_error: osError }),
   })

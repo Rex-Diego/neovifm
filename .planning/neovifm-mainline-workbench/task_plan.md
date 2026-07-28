@@ -103,12 +103,12 @@
 - [x] 当前会话内的 queued/running 与 completed/failed/cancelled action 历史由 v3 reducer 保留，并在任务中心覆盖层中可滚动查看；跨重启持久化另设明确的数据格式、隐私和 retention 决策，不偷偷引入 daemon。
 - [x] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端仍保留短标签与数字，不遮挡 F3--F10。
 - [x] 点击入口打开覆盖式弹窗；Queue/History 两个 tab 支持查看终态详情、取消 pending/running、清理当前视图历史和关闭弹窗。
-- [ ] 为 failed/cancelled 保留经验证的 source/destination identity 并实现安全 retry；当前只显示明确的 Retry unavailable 禁用态。
+- [x] 为 failed/cancelled 保留经验证的 source/destination/target identity 并实现 core-owned 安全 retry；重试复用原始不可变 action，不从 UI display path 重建请求，并以 64 条历史上限控制内存。
 - [ ] 主界面在大目录 copy/move 期间必须继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求。
 - [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口和取消已完成；安全 retry、完整 undo 状态与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
+- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口、取消和 core-owned 安全 retry 已完成；完整 source/destination/items/bytes DTO、undo availability、退出协作选择与 Vifm background facade 仍待补齐；mkdir undo 已在 Phase 2 单独落地）。
 
 ### Phase 4：压缩包作为目录打开
 

@@ -127,6 +127,9 @@ queue_event_locked(nv_action_queue_t *queue, const nv_action_task_t *task,
 		.failed_index = failed_index,
 		.has_failed_index = has_failed_index,
 		.partial = partial,
+		.retryable = state == NV_ACTION_TASK_FAILED ||
+			state == NV_ACTION_TASK_CANCELLED ?
+			(task->action.kind != NV_SESSION_MKDIR) : 0,
 		.error_code = error_code == NULL ? NULL : strdup(error_code),
 		.os_error = os_error,
 	};
@@ -313,6 +316,41 @@ nv_action_queue_ack_terminal(nv_action_queue_t *queue, uint64_t task_id)
 	}
 	pthread_mutex_unlock(&queue->mutex);
 	task_free(task);
+}
+
+int
+nv_action_queue_take_terminal_action(nv_action_queue_t *queue, uint64_t task_id,
+		nv_session_prepared_action_t *action)
+{
+	if(queue == NULL || task_id == 0U || action == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	*action = (nv_session_prepared_action_t){};
+	pthread_mutex_lock(&queue->mutex);
+	nv_action_task_t *previous = NULL;
+	nv_action_task_t *task = queue->finishing;
+	while(task != NULL && task->id != task_id)
+	{
+		previous = task;
+		task = task->next;
+	}
+	if(task == NULL)
+	{
+		pthread_mutex_unlock(&queue->mutex);
+		errno = ENOENT;
+		return -1;
+	}
+	if(previous == NULL) queue->finishing = task->next;
+	else previous->next = task->next;
+	if(queue->finishing_tail == task) queue->finishing_tail = previous;
+	--queue->task_count;
+	*action = task->action;
+	task->action = (nv_session_prepared_action_t){};
+	pthread_mutex_unlock(&queue->mutex);
+	task_free(task);
+	return 0;
 }
 
 int

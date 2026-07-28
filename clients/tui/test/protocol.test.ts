@@ -194,7 +194,7 @@ describe("JSONL protocol", () => {
       payload: {
         task_id: "9", command_sequence: 3, pane: "left", action: "copy",
         state: "failed", completed_count: 1, total_count: 2, failed_index: 1,
-        partial: true, error_code: "destination-exists", os_error: 17,
+        partial: true, retryable: true, error_code: "destination-exists", os_error: 17,
       },
     })
 
@@ -203,7 +203,7 @@ describe("JSONL protocol", () => {
     expect(markdown).toMatchObject({ type: "preview", payload: { kind: "markdown", content: "# heading" } })
     expect(pdf).toMatchObject({ type: "preview", payload: { kind: "pdf", content: "PDF page" } })
     expect(Object.isFrozen(preview)).toBe(true)
-    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true } })
+    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true } })
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },

@@ -580,7 +580,18 @@ function TaskCenter(props: {
       <text fg={COLORS.red}>OS error {task.os_error}</text>
     </Show>
     <Show when={task.state === "failed" || task.state === "cancelled"}>
-      <text id={`task-retry-${task.task_id}`} fg={COLORS.overlay1}>Retry unavailable: core task identity is not retained</text>
+      <Show when={task.retryable} fallback={<text id={`task-retry-${task.task_id}`} fg={COLORS.overlay1}>Retry unavailable: core task identity is not retained</text>}>
+        <text
+          id={`task-retry-${task.task_id}`}
+          fg={COLORS.yellow}
+          onMouseDown={(event) => {
+            if (event.button !== MouseButton.LEFT) return
+            event.preventDefault()
+            event.stopPropagation()
+            props.onCommand({ action: "retry-action", task_id: task.task_id })
+          }}
+        >Retry task</text>
+      </Show>
     </Show>
   </box>
   const tab = (kind: "queue" | "history", label: string, count: () => number) => <text

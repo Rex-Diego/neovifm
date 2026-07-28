@@ -234,3 +234,60 @@ test("real v3 session resolves a core-owned open command into a structured resul
     await session.completion
   }
 }, { timeout: 15000 })
+
+test("real v3 session retains failed action identity for a safe core retry", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-retry-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-retry-right-"))
+  const sourcePath = resolve(left, "note.txt")
+  const destinationPath = resolve(right, "note.txt")
+  await writeFile(sourcePath, "source")
+  await writeFile(destinationPath, "existing")
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "note.txt"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready session")
+    const source = state.workspace.left
+    const entry = source.entries.find((candidate) => candidate.name_display === "note.txt")
+    if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+      throw new Error("expected source action identity")
+    }
+    expect(await session.send({
+      action: "copy",
+      pane: "left",
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: source.snapshot_revision,
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      destination_cwd_bytes_hex: state.workspace.right.cwd_bytes_hex,
+      destination_snapshot_revision: state.workspace.right.snapshot_revision,
+      destination_cwd_device: state.workspace.right.cwd_device!,
+      destination_cwd_inode: state.workspace.right.cwd_inode!,
+      destination_cwd_ctime_unix_ns: state.workspace.right.cwd_ctime_unix_ns!,
+      targets: [{ path_bytes_hex: entry.path_bytes_hex, device: entry.device, inode: entry.inode, ctime_unix_ns: entry.ctime_unix_ns, kind: entry.kind }],
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.actionTasks?.some((task) => task.state === "failed" && task.retryable) === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected failed action")
+    const failed = state.actionTasks?.find((task) => task.state === "failed" && task.retryable)
+    if (failed === undefined) throw new Error("expected retryable failed action")
+    const retryCommandSequence = state.commandSequence + 1
+    expect(await session.send({ action: "retry-action", task_id: failed.task_id })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === retryCommandSequence && state.actionTasks?.some((task) => task.task_id !== failed.task_id && task.state === "failed" && task.retryable) === true)
+    expect(await Bun.file(destinationPath).text()).toBe("existing")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })

@@ -127,6 +127,7 @@ export type CoreSessionCommand =
     }>
   | Readonly<{ action: "undo" }>
   | Readonly<{ action: "cancel-action"; task_id: string }>
+  | Readonly<{ action: "retry-action"; task_id: string }>
   | Readonly<{
       action: "preview"
       pane: "left" | "right"

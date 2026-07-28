@@ -26,6 +26,7 @@
 #include "../utils/parson.h"
 
 #define NV_SESSION_MAX_COMMAND_BYTES (16U*1024U)
+#define NV_SESSION_MAX_RETRY_HISTORY 64U
 
 typedef struct nv_pending_action_context_t
 {
@@ -38,6 +39,8 @@ typedef struct nv_pending_action_context_t
 	uint64_t destination_tab_id;
 	char *undo_path;
 	nv_fs_identity_t undo_parent_identity;
+	nv_session_prepared_action_t retry_action;
+	int retry_available;
 	struct nv_pending_action_context_t *next;
 } nv_pending_action_context_t;
 
@@ -61,7 +64,8 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
-		nv_pending_action_context_t **pending_actions);
+		nv_pending_action_context_t **pending_actions,
+		size_t *retry_history_count);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
 static int validate_preview_identity(const nv_workspace_session_t *session,
@@ -82,10 +86,15 @@ static int drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
 		uint64_t *preview_generation,
-		nv_pending_action_context_t **pending_actions);
+		nv_pending_action_context_t **pending_actions,
+		size_t *retry_history_count);
 static int command_is_action(nv_session_command_kind_t kind);
 static int refresh_action_tab(nv_workspace_session_t *session,
 		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
+static nv_pending_action_context_t *find_retry_context(
+		nv_pending_action_context_t *contexts, uint64_t task_id);
+static void trim_retry_history(nv_pending_action_context_t **contexts,
+		size_t *retry_history_count);
 
 #ifdef __APPLE__
 typedef struct
@@ -511,6 +520,16 @@ parse_command(const char line[], unsigned int previous_sequence,
 		}
 		command->kind = NV_SESSION_CANCEL_ACTION;
 	}
+	else if(strcmp(action, "retry-action") == 0)
+	{
+		if(parse_u64_field(payload, "task_id", &command->action_task_id) != 0 ||
+				command->action_task_id == 0U)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = NV_SESSION_RETRY_ACTION;
+	}
 	else if(strcmp(action, "sort-cycle") == 0)
 	{
 		const double delta = json_object_get_number(payload, "delta");
@@ -715,7 +734,48 @@ pending_action_context_free(nv_pending_action_context_t *context)
 {
 	if(context == NULL) return;
 	free(context->undo_path);
+	nv_session_prepared_action_free(&context->retry_action);
 	free(context);
+}
+
+static nv_pending_action_context_t *
+find_retry_context(nv_pending_action_context_t *contexts, uint64_t task_id)
+{
+	while(contexts != NULL)
+	{
+		if(contexts->task_id == task_id && contexts->retry_available)
+			return contexts;
+		contexts = contexts->next;
+	}
+	return NULL;
+}
+
+static void
+trim_retry_history(nv_pending_action_context_t **contexts,
+		size_t *retry_history_count)
+{
+	if(contexts == NULL || retry_history_count == NULL) return;
+	while(*retry_history_count > NV_SESSION_MAX_RETRY_HISTORY)
+	{
+		nv_pending_action_context_t *oldest = NULL;
+		nv_pending_action_context_t *oldest_previous = NULL;
+		nv_pending_action_context_t *previous = NULL;
+		for(nv_pending_action_context_t *context = *contexts;
+				context != NULL; context = context->next)
+		{
+			if(context->retry_available)
+			{
+				oldest = context;
+				oldest_previous = previous;
+			}
+			previous = context;
+		}
+		if(oldest == NULL) break;
+		if(oldest_previous == NULL) *contexts = oldest->next;
+		else oldest_previous->next = oldest->next;
+		--*retry_history_count;
+		pending_action_context_free(oldest);
+	}
 }
 
 static int
@@ -753,7 +813,8 @@ process_command_line(nv_workspace_session_t *session, char line[],
 		unsigned int *command_sequence, int *directory_changed,
 		nv_preview_queue_t *preview_queue, uint64_t *preview_generation,
 		nv_action_queue_t *action_queue,
-		nv_pending_action_context_t **pending_actions)
+		nv_pending_action_context_t **pending_actions,
+		size_t *retry_history_count)
 {
 	const size_t length = strlen(line);
 	nv_session_command_t command = {};
@@ -855,6 +916,48 @@ process_command_line(nv_workspace_session_t *session, char line[],
 				nv_snapshot_error_free(&error);
 				nv_session_command_free(&command);
 				return result;
+			}
+		}
+		else if(command.kind == NV_SESSION_RETRY_ACTION)
+		{
+			nv_pending_action_context_t *const context =
+				find_retry_context(pending_actions == NULL ? NULL : *pending_actions,
+					command.action_task_id);
+			if(action_queue == NULL)
+			{
+				set_error(&error, "unsupported-action",
+						"file actions are unavailable on this platform");
+			}
+			else if(context == NULL)
+			{
+				set_error(&error, "retry-unavailable",
+						"the task no longer has a safe retry identity");
+			}
+			else
+			{
+				uint64_t task_id = 0U;
+				if(nv_action_queue_submit(action_queue, &context->retry_action,
+						next_sequence, &task_id) == 0)
+				{
+					context->task_id = task_id;
+					context->active = 1;
+					context->retry_available = 0;
+					if(retry_history_count != NULL && *retry_history_count != 0U)
+						--*retry_history_count;
+					*command_sequence = next_sequence;
+					const int result = write_workspace(session,
+							(*output_sequence)++, *command_sequence, "command");
+					nv_snapshot_error_free(&error);
+					nv_session_command_free(&command);
+					return result;
+				}
+				const int submit_error = errno;
+				set_error(&error, submit_error == EBUSY ? "action-queue-full" :
+						"retry-failed", submit_error == EBUSY ?
+						"file action queue is full" :
+						"failed to queue the retry");
+				error.os_error = submit_error;
+				error.retryable = submit_error == EBUSY;
 			}
 		}
 		else if(command_is_action(command.kind))
@@ -1192,7 +1295,8 @@ drain_action_events(nv_action_queue_t *queue,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, nv_preview_queue_t *preview_queue,
 		uint64_t *preview_generation,
-		nv_pending_action_context_t **pending_actions)
+		nv_pending_action_context_t **pending_actions,
+		size_t *retry_history_count)
 {
 	if(queue == NULL) return 0;
 	if(nv_action_queue_failed(queue))
@@ -1211,6 +1315,7 @@ drain_action_events(nv_action_queue_t *queue,
 		if(action_terminal(event.state))
 		{
 			nv_snapshot_error_t error = {};
+			nv_session_prepared_action_t retry_action = {};
 			nv_pending_action_context_t *previous = NULL;
 			nv_pending_action_context_t *context = pending_actions == NULL ? NULL :
 				*pending_actions;
@@ -1221,6 +1326,23 @@ drain_action_events(nv_action_queue_t *queue,
 			}
 			if(context != NULL && context->active)
 			{
+				const int retry_candidate = event.retryable &&
+					(event.state == NV_ACTION_TASK_FAILED ||
+					 event.state == NV_ACTION_TASK_CANCELLED);
+				const int retain_retry = retry_candidate &&
+					nv_action_queue_take_terminal_action(queue, event.task_id,
+						&retry_action) == 0;
+				if(retain_retry)
+				{
+					context->retry_action = retry_action;
+					context->retry_available = 1;
+					context->active = 0;
+					if(retry_history_count != NULL) ++*retry_history_count;
+				}
+				else
+				{
+					event.retryable = 0;
+				}
 				if(event.state == NV_ACTION_TASK_DONE &&
 					 event.kind == NV_SESSION_MKDIR && context->undo_path != NULL &&
 					 nv_undo_bridge_record_mkdir(context->undo_path,
@@ -1240,14 +1362,20 @@ drain_action_events(nv_action_queue_t *queue,
 				{
 					refresh_failed = refresh_action_tab(session,
 							context->destination_pane, context->destination_tab_id,
-							&error) != 0;
+						&error) != 0;
 				}
-				if(previous == NULL) *pending_actions = context->next;
-				else previous->next = context->next;
-				pending_action_context_free(context);
+				if(retain_retry)
+					trim_retry_history(pending_actions, retry_history_count);
+				if(!retain_retry)
+				{
+					if(previous == NULL) *pending_actions = context->next;
+					else previous->next = context->next;
+					pending_action_context_free(context);
+				}
 			}
 			else
 			{
+				event.retryable = 0;
 				refresh_failed = nv_workspace_session_refresh_pane(session,
 						NV_SESSION_LEFT, &error) != 0 ||
 					nv_workspace_session_refresh_pane(session, NV_SESSION_RIGHT,
@@ -1547,6 +1675,7 @@ main(int argc, char *argv[])
 	unsigned int output_sequence = 2U;
 	unsigned int command_sequence = 0U;
 	nv_pending_action_context_t *pending_actions = NULL;
+	size_t retry_history_count = 0U;
 	int result = 0;
 #ifdef __APPLE__
 	nv_session_watcher_t watcher = {};
@@ -1568,7 +1697,7 @@ main(int argc, char *argv[])
 			}
 			if(drain_action_events(action_queue, &session, &output_sequence,
 					command_sequence, preview_queue, &preview_generation,
-					&pending_actions) != 0)
+					&pending_actions, &retry_history_count) != 0)
 			{
 				result = 1;
 				break;
@@ -1578,7 +1707,8 @@ main(int argc, char *argv[])
 			int directory_changed = 0;
 			if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, &directory_changed, preview_queue,
-					&preview_generation, action_queue, &pending_actions) != 0)
+					&preview_generation, action_queue, &pending_actions,
+					&retry_history_count) != 0)
 			{
 				result = 1;
 				break;
@@ -1614,8 +1744,8 @@ main(int argc, char *argv[])
 #endif
 		if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
 				drain_action_events(action_queue, &session, &output_sequence,
-						command_sequence, preview_queue, &preview_generation,
-						&pending_actions) != 0)
+					command_sequence, preview_queue, &preview_generation,
+					&pending_actions, &retry_history_count) != 0)
 		{
 			result = 1;
 			break;
@@ -1624,7 +1754,7 @@ main(int argc, char *argv[])
 		if(fgets(line, sizeof(line), stdin) == NULL) break;
 		if(process_command_line(&session, line, sizeof(line), &output_sequence,
 					&command_sequence, NULL, preview_queue, &preview_generation,
-					action_queue, &pending_actions) != 0)
+					action_queue, &pending_actions, &retry_history_count) != 0)
 		{
 			result = 1;
 			break;
@@ -1633,7 +1763,7 @@ main(int argc, char *argv[])
 	nv_action_queue_cancel_all(action_queue);
 	if(drain_action_events(action_queue, &session, &output_sequence,
 				command_sequence, preview_queue, &preview_generation,
-				&pending_actions) != 0) result = 1;
+				&pending_actions, &retry_history_count) != 0) result = 1;
 	if(drain_preview_events(preview_queue, &output_sequence) != 0) result = 1;
 	nv_snapshot_error_free(&error);
 	while(pending_actions != NULL)
