@@ -152,7 +152,7 @@
 
 - Added `src/neovifm/resource_mount.[ch]` and wired it into the core probe/session build lists. The module prepares Vifm-compatible archive and SSH mounts without shell interpolation: absolute helper discovery, bounded path/remote validation, explicit read-only argv, and required unmount helper capability.
 - Added five C fixture tests using injected fake executables. Focused fixture passed 54 checks / 5 tests; the full snapshot binary passed 9418 checks / 77 tests after the cleanup fix.
-- This slice intentionally does not fork a helper or mutate pane state. The host has `sshfs` and `umount` but no `fuse-zip`/`archivemount`, so `archive-mount-unavailable` remains the correct core enter result until the cancellable resource lifecycle is wired.
+- This slice intentionally does not fork a helper or mutate pane state. `archivemount-ng` 1b builds against the existing headers, but its OSXFUSE runtime is not available to the kernel; the temporary helper was removed after a probe showed false-success without a mount. Mounted browsing remains blocked until a user-approved FUSE runtime is enabled.
 
 ## 2026-07-29 Media metadata and transfer undo slice
 
@@ -162,3 +162,9 @@
 - Fixed resource completion handling so a successful task without mount ownership is reported as a structured core error instead of being treated as an attached resource.
 - RED/GREEN evidence: C snapshot suite passed 9585 checks / 85 tests; TUI typecheck and focused app/keymap tests passed 44 tests / 249 expects; real core-session integration passed 8 tests / 50 expects; core-probe + keyboard + core-session integration passed 14 tests / 90 expects; standalone production PTY passed 1 test / 8 expects; `git diff --check` passed.
 - Known verification note: running every integration file in one Bun invocation after the PTY can intermittently time out the first core-session startup; the core-session file and the non-PTY integration set pass when scheduled separately/serially. A bare `bun test` without `NEOVIFM_CORE_PROBE`/`NEOVIFM_CORE_SESSION` correctly fails integration preconditions and is not a code regression.
+
+## 2026-07-29 Optional helper setup
+
+- Installed Homebrew `chafa` 1.18.2 and its image-loader dependencies. The helper is reserved for the future graphical preview fallback; current core output remains metadata-only.
+- Built `archivemount-ng` 1b against Homebrew `libarchive` and the existing OSXFUSE 3.10.4 headers in a temporary prefix. A real ZIP mount probe reached the helper but failed with `kext load failed` / `file system is not available`; the helper was removed after the probe because its zero exit code did not imply an active mount. The existing FUSE runtime needs system approval or replacement with macFUSE/FUSE-T before a mount E2E can be accepted. ZIP listing preview remains deterministic and does not depend on FUSE.
+- README now documents required/optional helper installation, macOS FUSE constraints, reproducible archivemount build, and targeted uninstall commands.

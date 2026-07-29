@@ -120,7 +120,7 @@
 - [x] mount 请求、生命周期错误、取消和 unmount/cleanup 出现在任务中心；正常返回、退出和异常恢复通过 core-owned cleanup 释放 mount ownership。
 - [x] 协议只发布资源/mount capability 与不可变 pane snapshot，不向 TypeScript 暴露 `view_t` 或任意 mount shell command。
 - **阶段验收：** 正常/空/损坏/大 ZIP，文件名编码、符号链接、嵌套目录、helper 缺失、取消和清理均有测试；形成独立提交。
-- **状态：** in_progress（注入 fake helper 的 lifecycle、tab ownership、cleanup 和任务中心边界已完成；本机没有 archive mounter，真实 ZIP 浏览、编码/损坏/大包 E2E 和 Vifm `FUSE_MOUNT` 完整桥接仍待补齐）。
+- **状态：** in_progress（注入 fake helper 的 lifecycle、tab ownership、cleanup 和任务中心边界已完成；本机已在临时 prefix 构建并验证 `archivemount-ng` 1b，但 OSXFUSE runtime 未获系统批准，故 helper 已移除以避免伪成功；真实 ZIP 浏览、编码/损坏/大包 E2E 和 Vifm `FUSE_MOUNT` 完整桥接仍待补齐）。
 
 ### Phase 5：SSH 挂载目录
 
@@ -147,7 +147,7 @@
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
 - [ ] 所有外部 viewer 使用结构化 argv、明确 cwd、超时、输出上限、取消和清理，不执行 display path，不拼接未验证 shell 输入。
 - **阶段验收：** 图片/PDF/Markdown/代码/视频/音频在宽窄终端、支持/不支持图形协议、快速移动 cursor、helper 缺失和损坏文件下行为稳定；形成独立提交。
-- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex 和 image/audio/video metadata fallback 已完成；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
+- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex 和 image/audio/video metadata fallback 已完成；`chafa` helper 已安装但尚未接入；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
 
 ### Phase 7：主线联调与计划收口
 

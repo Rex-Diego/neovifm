@@ -6,14 +6,15 @@ NeoVifm 是一款正在建设中的终端文件工作台，以 Vifm 的 Vim 语�
 
 ## 当前状态
 
-NeoVifm 处于 Hybrid M0 原型阶段，尚未发布可安装版本，也不应通过系统包管理器安装 `vifm` 来替代本项目。
+NeoVifm 的主线入口是 OpenTUI，当前仍处于 Hybrid M0 原型阶段，尚未发布可安装版本。这里的 Hybrid 不是另一条客户端路线，而是“Vifm C core 负责文件系统、操作和兼容语义，OpenTUI 负责渲染与交互”的边界；经典 `vifm` 继续作为兼容入口。
 
 - 当前代码基线：Vifm 0.15 开发版。
 - 经典二进制、配置目录和 Lua API 仍使用 `vifm`，用于保持兼容。
-- 已加入实验性 `neovifm-core-probe`：无 ncurses、无用户配置、只读输出目录快照。
-- 已加入 `clients/tui`：TypeScript/Bun/OpenTUI/SolidJS 客户端，通过版本化 JSONL 协议消费 C core 快照。
-- 当前原型仅浏览和展示，不执行 copy/move/delete，不替换经典 Vifm 客户端。
-- 架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol v0](protocol/README.md)。
+- `neovifm-core-probe` 发布无用户配置污染的目录快照；`neovifm-core-session` 为 OpenTUI 提供版本化 JSONL 会话协议。
+- `clients/tui` 已接入双 pane、pane tab、Vifm 风格键位基础、异步 copy/move/mkdir、任务中心、undo、ZIP 清单预览、SSH mount 生命周期和 F3/Space 文本与媒体元数据预览。
+- 当前仍未完成：完整 Vifm filetype/fileviewer/running 语义、删除/Trash undo、真实 ZIP/SSH 挂载 E2E、图形图片/PDF/视频/音频渲染和完整低色彩/终端尺寸验收。
+- 经典 Vifm 默认行为不被替换；OpenTUI 是实验性主线客户端，缺少 capability 时必须降级为可读的文本或结构化错误。
+- 架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol](protocol/README.md)；主线阶段计划见 [.planning/neovifm-mainline-workbench/task_plan.md](.planning/neovifm-mainline-workbench/task_plan.md)。
 
 ## 产品方向
 
@@ -25,9 +26,99 @@ NeoVifm 处于 Hybrid M0 原型阶段，尚未发布可安装版本，也不应�
 
 详细边界和阶段计划见 [NeoVifm 产品与架构基线](docs/NEOVIFM_ARCHITECTURE.md)。参与开发前请阅读 [项目协作约定](AGENTS.md) 和 [Vifm 的开发说明](HACKING.md)。
 
+## 安装依赖
+
+### 必需依赖
+
+macOS 的 core 构建需要 Autotools，OpenTUI 需要 Bun 1.3 或更高版本。已安装时无需重复执行：
+
+```bash
+brew install autoconf automake bun
+```
+
+确认环境：
+
+```bash
+autoconf --version | head -1
+automake --version | head -1
+bun --version
+```
+
+### 可选预览与挂载 helper
+
+这些工具不是 core 编译依赖；缺少它们时，NeoVifm 使用内建的文本、metadata 或结构化错误降级。命令会使用绝对路径和受限参数，不会把 shell 命令拼进协议。
+
+| helper | 用途 | macOS 安装方式 |
+| --- | --- | --- |
+| `unzip`、`bsdtar` | ZIP/tar 清单预览 | 系统自带 |
+| `sshfs`、`umount` | F9 SSH 目录生命周期 | `brew install sshfs` 或 macFUSE 发行包；`umount` 系统自带 |
+| `pdftotext` | PDF 文本降级预览 | `brew install poppler` |
+| `mutool` | PDF/文档诊断与后续页面渲染 | `brew install mupdf` |
+| `ffprobe` | 媒体探测与调试 | `brew install ffmpeg` |
+| `chafa` | 图像终端降级渲染（尚未接入完整图形 pipeline） | `brew install chafa` |
+| `archivemount` 或 `fuse-zip` | ZIP 作为目录挂载 | macOS 需要 macFUSE/FUSE-T；Homebrew core 中这两个 formula 当前标记为 Linux-only，不能直接安装 |
+
+本项目会按 `/usr/local/bin`、`/opt/homebrew/bin` 和系统路径探测 helper。macOS 上要启用真实 archive mount，需要先安装一个 FUSE runtime。任选其一：
+
+```bash
+brew install --cask macfuse
+# 或：brew install --cask fuse-t
+```
+
+macFUSE 安装需要管理员密码，并可能需要在“系统设置 -> 隐私与安全性”批准系统扩展；FUSE-T 不使用 kext，但安装器仍需要管理员权限。然后可构建当前上游 `archivemount-ng`（Homebrew formula 在 macOS 上不能直接用）：
+
+```bash
+brew install libarchive pkgconf
+archive_build_dir=$(mktemp -d /tmp/neovifm-archivemount.XXXXXX)
+curl -fL 'https://git.sr.ht/~nabijaczleweli/archivemount-ng/archive/1b.tar.gz' \
+  -o "$archive_build_dir/source.tar.gz"
+tar -xzf "$archive_build_dir/source.tar.gz" -C "$archive_build_dir"
+cd "$archive_build_dir/archivemount-ng-1b"
+PKG_CONFIG_PATH="$(brew --prefix libarchive)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" \
+  make FUSES=fuse VERSION=1b
+install -m 755 archivemount "$(brew --prefix)/bin/archivemount"
+archivemount --version
+```
+
+仅安装 `unzip` 只能提供清单预览，不能让 ZIP 变成可进入的目录。没有管理员密码、系统扩展未批准或 helper 不存在时，OpenTUI 会返回结构化的 mount-unavailable 错误，不会把 ZIP 交给桌面 opener。
+
+检查当前环境：
+
+```bash
+for tool in sshfs umount unzip bsdtar pdftotext mutool ffprobe chafa archivemount fuse-zip; do
+  printf '%-12s' "$tool"
+  command -v "$tool" || printf '%s' 'missing'
+  printf '\n'
+done
+```
+
+### 卸载可选依赖
+
+只卸载你通过 Homebrew 安装且不再被其他项目使用的 helper。系统自带的 `/usr/bin/unzip`、`/usr/bin/bsdtar` 和 `/sbin/umount` 不要删除。
+
+```bash
+brew uninstall chafa
+brew uninstall sshfs
+brew uninstall poppler       # pdftotext
+brew uninstall mupdf         # mutool
+brew uninstall ffmpeg        # ffprobe
+brew uninstall --cask macfuse
+brew uninstall --cask fuse-t
+```
+
+`archivemount`/`fuse-zip` 若是手工构建，请只删除当时使用的明确文件，例如：
+
+```bash
+rm -f "$(brew --prefix)/bin/archivemount"
+```
+
+不要递归删除整个 `/usr/local`。卸载 macFUSE/FUSE-T 前先退出 NeoVifm 并卸载所有仍在使用的 FUSE 挂载。
+
+`autoconf`、`automake`、`bun`、`libarchive` 和 `pkgconf` 通常会被其他项目共用，除非确认没有其他使用者，否则不要卸载它们。
+
 ## 原型运行
 
-NeoVifm core 沿用 Vifm 的 Autotools 构建；新 TUI 使用 Bun 1.3 或更高版本。通用 C 依赖和平台说明见 [INSTALL](INSTALL)。macOS 还需要 `autoconf` 和 `automake`。
+NeoVifm core 沿用 Vifm 的 Autotools 构建。通用 C 依赖和平台说明见 [INSTALL](INSTALL)。
 
 构建 core probe：
 
