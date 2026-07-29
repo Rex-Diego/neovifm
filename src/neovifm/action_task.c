@@ -12,6 +12,11 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#ifndef _WIN32
+#include <sys/time.h>
+#endif
 
 #include "../compat/pthread.h"
 
@@ -27,6 +32,8 @@ struct nv_action_task_t
 	unsigned int command_sequence;
 	nv_session_prepared_action_t action;
 	int cancelled;
+	uint64_t started_at_unix_ms;
+	uint64_t finished_at_unix_ms;
 	nv_action_task_t *next;
 };
 
@@ -58,6 +65,18 @@ struct nv_action_queue_t
 };
 
 static void *action_worker(void *data);
+
+static uint64_t
+now_unix_ms(void)
+{
+#ifndef _WIN32
+	struct timeval value;
+	if(gettimeofday(&value, NULL) == 0)
+		return (uint64_t)value.tv_sec*1000U + (uint64_t)value.tv_usec/1000U;
+#endif
+	const time_t seconds = time(NULL);
+	return seconds < 0 ? 0U : (uint64_t)seconds*1000U;
+}
 
 static int
 action_kind_valid(nv_session_command_kind_t kind)
@@ -103,19 +122,66 @@ void
 nv_action_event_free(nv_action_event_t *event)
 {
 	if(event == NULL) return;
+	free(event->source_path_bytes_hex);
+	free(event->destination_path_bytes_hex);
+	free(event->current_path_bytes_hex);
 	free(event->error_code);
 	*event = (nv_action_event_t){};
+}
+
+static char *
+path_hex_dup(const char path[])
+{
+	if(path == NULL) return NULL;
+	const size_t length = strlen(path);
+	if(length > NV_PANE_SNAPSHOT_MAX_HEX_BYTES/2U ||
+			length > (SIZE_MAX - 1U)/2U)
+	{
+		errno = EOVERFLOW;
+		return NULL;
+	}
+	static const char digits[] = "0123456789abcdef";
+	char *const result = malloc(length*2U + 1U);
+	if(result == NULL) { errno = ENOMEM; return NULL; }
+	for(size_t i = 0U; i < length; ++i)
+	{
+		const unsigned char byte = (unsigned char)path[i];
+		result[i*2U] = digits[byte >> 4U];
+		result[i*2U + 1U] = digits[byte & 0x0fU];
+	}
+	result[length*2U] = '\0';
+	return result;
+}
+
+static uint64_t
+action_total_bytes(const nv_session_prepared_action_t *action, int *known)
+{
+	if(known != NULL) *known = 0;
+	if(action == NULL || (action->kind != NV_SESSION_COPY &&
+			action->kind != NV_SESSION_MOVE_FILES)) return 0U;
+	uint64_t total = 0U;
+	for(size_t i = 0U; i < action->target_count; ++i)
+	{
+		if(!action->targets[i].size_known ||
+				total > UINT64_MAX - action->targets[i].size_bytes) return 0U;
+		total += action->targets[i].size_bytes;
+	}
+	if(known != NULL) *known = 1;
+	return total;
 }
 
 static int
 queue_event_locked(nv_action_queue_t *queue, const nv_action_task_t *task,
 		nv_action_task_state_t state, size_t completed_count,
+		uint64_t completed_bytes, const char current_path[],
 		int has_failed_index, size_t failed_index, const char error_code[],
 		int os_error, int partial)
 {
 	if(queue->event_count >= NV_ACTION_EVENT_LIMIT) return -1;
 	nv_action_event_node_t *const node = calloc(1U, sizeof(*node));
 	if(node == NULL) return -1;
+	int bytes_known = 0;
+	const uint64_t total_bytes = action_total_bytes(&task->action, &bytes_known);
 	node->event = (nv_action_event_t){
 		.task_id = task->id,
 		.command_sequence = task->command_sequence,
@@ -130,11 +196,26 @@ queue_event_locked(nv_action_queue_t *queue, const nv_action_task_t *task,
 		.retryable = state == NV_ACTION_TASK_FAILED ||
 			state == NV_ACTION_TASK_CANCELLED ?
 			(task->action.kind != NV_SESSION_MKDIR) : 0,
+		.bytes_completed = bytes_known ? completed_bytes : 0U,
+		.bytes_total = bytes_known ? total_bytes : 0U,
+		.bytes_known = bytes_known,
+		.started_at_unix_ms = task->started_at_unix_ms,
+		.finished_at_unix_ms = task->finished_at_unix_ms,
 		.error_code = error_code == NULL ? NULL : strdup(error_code),
 		.os_error = os_error,
 	};
-	if(error_code != NULL && node->event.error_code == NULL)
+	node->event.source_path_bytes_hex = path_hex_dup(task->action.source_directory);
+	node->event.destination_path_bytes_hex = path_hex_dup(
+		task->action.destination_directory);
+	node->event.current_path_bytes_hex = path_hex_dup(current_path);
+	if((task->action.source_directory != NULL &&
+				node->event.source_path_bytes_hex == NULL) ||
+			(task->action.destination_directory != NULL &&
+				node->event.destination_path_bytes_hex == NULL) ||
+			(current_path != NULL && node->event.current_path_bytes_hex == NULL) ||
+			(error_code != NULL && node->event.error_code == NULL))
 	{
+		nv_action_event_free(&node->event);
 		free(node);
 		return -1;
 	}
@@ -143,6 +224,18 @@ queue_event_locked(nv_action_queue_t *queue, const nv_action_task_t *task,
 	queue->events_tail = node;
 	++queue->event_count;
 	return 0;
+}
+
+static void
+publish_action_progress(nv_action_queue_t *queue, const nv_action_task_t *task,
+		size_t completed_count, uint64_t completed_bytes,
+		const char current_path[])
+{
+	pthread_mutex_lock(&queue->mutex);
+	if(queue_event_locked(queue, task, NV_ACTION_TASK_RUNNING, completed_count,
+			completed_bytes, current_path, 0, 0U, NULL, 0, 0) != 0)
+		queue->terminal_event_lost = 1;
+	pthread_mutex_unlock(&queue->mutex);
 }
 
 static nv_action_queue_t *
@@ -217,8 +310,8 @@ nv_action_queue_submit(nv_action_queue_t *queue,
 		return -1;
 	}
 	task->id = queue->next_id++;
-	if(queue_event_locked(queue, task, NV_ACTION_TASK_QUEUED, 0U, 0, 0U,
-			NULL, 0, 0) != 0)
+	if(queue_event_locked(queue, task, NV_ACTION_TASK_QUEUED, 0U, 0U, NULL,
+			0, 0U, NULL, 0, 0) != 0)
 	{
 		pthread_mutex_unlock(&queue->mutex);
 		free(task);
@@ -423,22 +516,31 @@ failure_code(nv_session_command_kind_t kind, int os_error)
 
 static int
 execute_action(nv_action_queue_t *queue, nv_action_task_t *task,
-		size_t *completed_count, size_t *failed_index, const char **error_code,
-		int *os_error)
+		size_t *completed_count, uint64_t *completed_bytes,
+		size_t *failed_index, const char **last_path,
+		const char **error_code, int *os_error)
 {
 	nv_action_cancel_context_t cancel = { .queue = queue, .task = task };
+	int bytes_known = 0;
+	(void)action_total_bytes(&task->action, &bytes_known);
 	if(task_cancelled(&cancel)) { *os_error = ECANCELED; goto failed; }
 	if(task->action.kind == NV_SESSION_MKDIR)
 	{
 		char *const path = join_path(task->action.source_directory,
 				task->action.name);
 		if(path == NULL) { *os_error = errno; goto failed; }
+		publish_action_progress(queue, task, 0U, 0U, path);
 		const int result = nv_fs_mkdir(path, 0777,
 				task->action.source_directory_identity);
 		*os_error = result == 0 ? 0 : errno;
-		free(path);
-		if(result != 0) goto failed;
+		if(result != 0)
+		{
+			free(path);
+			goto failed;
+		}
 		*completed_count = 1U;
+		publish_action_progress(queue, task, *completed_count, 0U, path);
+		free(path);
 		return 0;
 	}
 	for(size_t i = 0U; i < task->action.target_count; ++i)
@@ -450,6 +552,9 @@ execute_action(nv_action_queue_t *queue, nv_action_task_t *task,
 			goto failed;
 		}
 		const nv_session_prepared_target_t *const target = &task->action.targets[i];
+		*last_path = target->path;
+		publish_action_progress(queue, task, *completed_count,
+				*completed_bytes, target->path);
 		char *destination = NULL;
 		if(task->action.destination_directory != NULL)
 		{
@@ -482,6 +587,9 @@ execute_action(nv_action_queue_t *queue, nv_action_task_t *task,
 			goto failed;
 		}
 		++*completed_count;
+		if(bytes_known) *completed_bytes += target->size_bytes;
+		publish_action_progress(queue, task, *completed_count,
+				*completed_bytes, target->path);
 	}
 	return 0;
 
@@ -510,17 +618,23 @@ action_worker(void *data)
 		--queue->pending_count;
 		task->next = NULL;
 		queue->running = task;
-		(void)queue_event_locked(queue, task, NV_ACTION_TASK_RUNNING, 0U, 0,
-				0U, NULL, 0, 0);
+		task->started_at_unix_ms = now_unix_ms();
+		(void)queue_event_locked(queue, task, NV_ACTION_TASK_RUNNING, 0U, 0U,
+				NULL, 0, 0U, NULL, 0, 0);
 		pthread_mutex_unlock(&queue->mutex);
 
 		size_t completed = 0U, failed_index = 0U;
+		uint64_t completed_bytes = 0U;
 		int os_error = 0;
+		const char *last_path = NULL;
 		const char *error_code = NULL;
-		const int result = execute_action(queue, task, &completed, &failed_index,
-				&error_code, &os_error);
+		const int result = execute_action(queue, task, &completed, &completed_bytes,
+				&failed_index, &last_path, &error_code, &os_error);
 
 		pthread_mutex_lock(&queue->mutex);
+		task->finished_at_unix_ms = now_unix_ms();
+		if(task->finished_at_unix_ms < task->started_at_unix_ms)
+			task->finished_at_unix_ms = task->started_at_unix_ms;
 		queue->running = NULL;
 		if(queue->finishing_tail == NULL) queue->finishing = task;
 		else queue->finishing_tail->next = task;
@@ -528,7 +642,8 @@ action_worker(void *data)
 		if(queue_event_locked(queue, task,
 				result == 0 ? NV_ACTION_TASK_DONE :
 				result > 0 ? NV_ACTION_TASK_CANCELLED : NV_ACTION_TASK_FAILED,
-				completed, result == 0 ? 0 : 1, failed_index, error_code, os_error,
+				completed, completed_bytes, last_path, result == 0 ? 0 : 1, failed_index,
+				error_code, os_error,
 				(completed != 0U && completed < action_total(&task->action)) ||
 				(result != 0 && task->action.kind == NV_SESSION_COPY)) != 0)
 		{

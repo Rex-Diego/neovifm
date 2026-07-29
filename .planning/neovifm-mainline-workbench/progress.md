@@ -168,3 +168,30 @@
 - Installed Homebrew `chafa` 1.18.2 and its image-loader dependencies. The helper is reserved for the future graphical preview fallback; current core output remains metadata-only.
 - Built `archivemount-ng` 1b against Homebrew `libarchive` and the existing OSXFUSE 3.10.4 headers in a temporary prefix. A real ZIP mount probe reached the helper but failed with `kext load failed` / `file system is not available`; the helper was removed after the probe because its zero exit code did not imply an active mount. The existing FUSE runtime needs system approval or replacement with macFUSE/FUSE-T before a mount E2E can be accepted. ZIP listing preview remains deterministic and does not depend on FUSE.
 - README now documents required/optional helper installation, macOS FUSE constraints, reproducible archivemount build, and targeted uninstall commands.
+
+## 2026-07-29 Task-center transfer progress continuation
+
+- 本轮目标：在不改变现有文件操作/undo 语义的前提下，扩展 action-task DTO，发布 source/destination/current path identity、条目级进度和仅对可确定的普通文件提供字节进度。
+- 验收边界：目录或非普通文件只发布 `bytes_known=false`，不得伪造递归字节总量；协议字段 additive，旧 v3 fixture 仍必须可解析。
+- C action queue 现在为 queued/running/progress/terminal 事件携带 source、destination、current path 的 hex identity；普通文件 copy/move 记录已完成条目和字节数，目录/非普通文件保持未知字节状态。
+- Task Center 队列行展示短路径和字节进度，历史详情展示 transfer/current path、item/byte progress、failure 和既有 retry/undo 信息；路径只通过协议 hex 解码，不重建 shell 命令。
+- RED/GREEN 与回归证据：`make -C tests neovifm_snapshot` 通过 9615 checks / 86 tests；TUI 全量 134 tests / 497 expects，coverage 85.51% functions / 89.44% lines，`bun run typecheck`、`bun audit` 通过；真实 core-probe/session/keyboard/production PTY 15 tests / 98 expects 通过；串行 `env -u VIFM -u MYVIFMRC make check`、`git diff --check` 通过。
+
+## 2026-07-29 Chafa ASCII image fallback
+
+- 图片 preview 现在按 capability 顺序先尝试 `chafa` 的 `symbols/ascii` 无色输出，再回退原有 metadata；helper 只接受显式绝对路径 `NEOVIFM_CHAFA_EXECUTABLE` 或固定绝对候选路径，不经过 shell。
+- `--polite on`、`--relative off`、`--colors none` 和 `--symbols ascii` 保证 ANSI/Kitty/Sixel 控制序列不进入 line-safe v3 JSONL；输出有界、可取消、受 deadline 约束，helper 缺失、非零退出或空输出不会阻塞可读 metadata。
+- C test 以带空格的图片路径和注入 helper 验证结构化 argv；RED/GREEN 与回归证据：`make -C src neovifm/preview_task.o neovifm-core-session`、`make -C tests neovifm_snapshot` 通过 9635 checks / 87 tests，`git diff --check` 通过；实际仓库 PNG 的 `chafa` 命令行输出为纯 ASCII。
+
+## 2026-07-29 Action task lifecycle timestamps
+
+- action-task DTO 新增可选 `started_at_unix_ms` 与 `finished_at_unix_ms` 字符串字段；queued 事件不填充时间，worker 进入 running 时记录开始时间，终态记录结束时间并钳制为不早于开始时间。
+- snapshot JSON、v3 schema 和 TypeScript parser 保持 additive/旧记录兼容；parser 拒绝结束时间早于开始时间，Task Center 终态详情在字段存在时显示本地时间区间。
+- RED/GREEN 与回归证据：C snapshot suite 通过 9639 checks / 87 tests；TUI focused 67 tests / 311 expects、全量 134 tests / 502 expects，coverage 85.51% functions / 89.42% lines，`bun run typecheck`、`bun audit` 和 `git diff --check` 通过；Task Center 时间行在 100x24 详情布局中仍保留 Retry 操作可见。
+
+## 2026-07-29 Exit collaboration guard
+
+- F10/`ZZ` 退出请求在存在 queued/running action/resource task 时先打开明确的 EXIT overlay：等待任务完成、发送 core-owned cancellation 后退出，或返回应用；无活动任务时保持原有直接退出路径。
+- 等待/取消均设置退出 pending 状态，只有 reducer 观察到活动任务数归零后才销毁 renderer；取消路径只发送结构化 `cancel-action`/`cancel-resource`，不把任务提升为常驻 daemon。
+- 退出选项在窄终端自动纵向排列，避免 60 列布局中的横排按钮溢出；新增窄屏渲染测试覆盖三项入口仍可见。
+- RED/GREEN 证据：新增 app test 先验证旧实现会直接销毁渲染器，再验证鼠标入口、返回、取消和任务清空后的退出；窄终端测试覆盖纵排布局。最终 TUI unit/coverage 为 136 tests / 517 expects、85.50% functions / 89.38% lines，`bun run typecheck`、`bun audit`、真实 integration 15 tests / 98 expects、C snapshot 9639 checks / 87 tests、串行 `env -u VIFM -u MYVIFMRC make check` 与 `git diff --check` 均通过。

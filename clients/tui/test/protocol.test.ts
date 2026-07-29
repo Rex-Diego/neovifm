@@ -251,6 +251,11 @@ describe("JSONL protocol", () => {
         task_id: "9", command_sequence: 3, pane: "left", action: "copy",
         state: "failed", completed_count: 1, total_count: 2, failed_index: 1,
         partial: true, retryable: true, undo_available: false, error_code: "destination-exists", os_error: 17,
+        source_path_bytes_hex: "2f746d702f736f75726365",
+        destination_path_bytes_hex: "2f746d702f64657374696e6174696f6e",
+        current_path_bytes_hex: "2f746d702f736f757263652f6e6f7465",
+        bytes_known: true, bytes_completed: "12", bytes_total: "42",
+        started_at_unix_ms: "1700000000000", finished_at_unix_ms: "1700000000123",
       },
     })
 
@@ -266,7 +271,19 @@ describe("JSONL protocol", () => {
     expect(audio).toMatchObject({ type: "preview", payload: { kind: "audio", content: expect.stringContaining("format: MP3") } })
     expect(video).toMatchObject({ type: "preview", payload: { kind: "video", content: expect.stringContaining("format: MP4/MOV") } })
     expect(Object.isFrozen(preview)).toBe(true)
-    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true, undo_available: false } })
+    expect(actionTask).toMatchObject({ type: "action-task", payload: { action: "copy", partial: true, retryable: true, undo_available: false, source_path_bytes_hex: "2f746d702f736f75726365", bytes_completed: "12", bytes_total: "42", started_at_unix_ms: "1700000000000", finished_at_unix_ms: "1700000000123" } })
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "action-task", sequence: 12,
+      payload: { task_id: "50", command_sequence: 3, pane: "left", action: "copy", state: "running", completed_count: 1, total_count: 2, partial: false, bytes_known: true, bytes_completed: "12", bytes_total: "42" },
+    })).not.toThrow()
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "action-task", sequence: 13,
+      payload: { task_id: "51", command_sequence: 3, pane: "left", action: "copy", state: "running", completed_count: 1, total_count: 2, partial: false, bytes_known: false, bytes_completed: "12", bytes_total: "42" },
+    })).toThrow("bytes_known")
+    expect(() => parseProtocolRecord({
+      protocol: "neovifm-core", version: 3, type: "action-task", sequence: 14,
+      payload: { task_id: "52", command_sequence: 3, pane: "left", action: "copy", state: "done", completed_count: 1, total_count: 1, partial: false, started_at_unix_ms: "1700000000123", finished_at_unix_ms: "1700000000000" },
+    })).toThrow("finished_at_unix_ms")
     expect(() => parseProtocolRecord({
       protocol: "neovifm-core", version: 3, type: "preview", sequence: 3,
       payload: { task_id: "42", generation: "7", pane: "left", kind: "text", state: "queued", cwd_bytes_hex: "2f", path_bytes_hex: "2f", content: "", truncated: false },

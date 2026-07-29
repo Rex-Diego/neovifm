@@ -891,6 +891,9 @@ nv_workspace_session_prepare_action(const nv_workspace_session_t *session,
 				.ctime_unix_ns = entry->ctime_unix_ns,
 			};
 			next.targets[i].kind = entry->kind;
+			next.targets[i].size_bytes = entry->size_bytes;
+			next.targets[i].size_known = entry->kind == NV_ENTRY_FILE ||
+				entry->kind == NV_ENTRY_EXECUTABLE;
 			if(next.targets[i].path == NULL || next.targets[i].name == NULL)
 				goto invalid_path;
 		}

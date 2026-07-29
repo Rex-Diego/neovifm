@@ -497,7 +497,16 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 			(event->has_failed_index && event->failed_index >= event->total_count) ||
 			(event->retryable && (event->state != NV_ACTION_TASK_FAILED &&
 				event->state != NV_ACTION_TASK_CANCELLED)) ||
-				(event->error_code != NULL && !string_fits(event->error_code, 128U)))
+			(event->bytes_known && event->bytes_completed > event->bytes_total) ||
+			(event->finished_at_unix_ms != 0U && event->started_at_unix_ms != 0U &&
+				event->finished_at_unix_ms < event->started_at_unix_ms) ||
+			(event->source_path_bytes_hex != NULL && !hex_string_is_valid(
+				event->source_path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES)) ||
+			(event->destination_path_bytes_hex != NULL && !hex_string_is_valid(
+				event->destination_path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES)) ||
+			(event->current_path_bytes_hex != NULL && !hex_string_is_valid(
+				event->current_path_bytes_hex, NV_PANE_SNAPSHOT_MAX_HEX_BYTES)) ||
+			(event->error_code != NULL && !string_fits(event->error_code, 128U)))
 	{
 		return NULL;
 	}
@@ -520,6 +529,20 @@ nv_protocol_action_task_json(const nv_action_event_t *event,
 			json_object_set_boolean(payload, "partial", event->partial) != JSONSuccess ||
 			json_object_set_boolean(payload, "retryable", event->retryable) != JSONSuccess ||
 			json_object_set_boolean(payload, "undo_available", event->undo_available) != JSONSuccess ||
+			json_object_set_boolean(payload, "bytes_known", event->bytes_known) != JSONSuccess ||
+			(event->started_at_unix_ms != 0U && set_u64_string(payload,
+				"started_at_unix_ms", event->started_at_unix_ms) != JSONSuccess) ||
+			(event->finished_at_unix_ms != 0U && set_u64_string(payload,
+				"finished_at_unix_ms", event->finished_at_unix_ms) != JSONSuccess) ||
+			(event->source_path_bytes_hex != NULL && json_object_set_string(payload,
+				"source_path_bytes_hex", event->source_path_bytes_hex) != JSONSuccess) ||
+			(event->destination_path_bytes_hex != NULL && json_object_set_string(payload,
+				"destination_path_bytes_hex", event->destination_path_bytes_hex) != JSONSuccess) ||
+			(event->current_path_bytes_hex != NULL && json_object_set_string(payload,
+				"current_path_bytes_hex", event->current_path_bytes_hex) != JSONSuccess) ||
+			(event->bytes_known && (set_u64_string(payload, "bytes_completed",
+					event->bytes_completed) != JSONSuccess || set_u64_string(payload,
+					"bytes_total", event->bytes_total) != JSONSuccess)) ||
 			(event->has_failed_index && json_object_set_number(payload,
 				"failed_index", event->failed_index) != JSONSuccess) ||
 			(event->error_code != NULL && json_object_set_string(payload,

@@ -10,6 +10,7 @@
 #include <test-utils.h>
 
 #include "../../src/neovifm/action_task.h"
+#include "../../src/neovifm/preview_task.h"
 
 #ifdef __APPLE__
 
@@ -101,6 +102,13 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	nv_session_prepared_action_t action = {};
 	assert_success(nv_workspace_session_prepare_action(&session, &command,
 			&action, &error));
+	char left_hex[NV_PREVIEW_MAX_PATH_BYTES*2U + 1U];
+	char right_hex[NV_PREVIEW_MAX_PATH_BYTES*2U + 1U];
+	char file_hex[NV_PREVIEW_MAX_PATH_BYTES*2U + 1U];
+	assert_success(nv_preview_hex_encode(left, left_hex, sizeof(left_hex)));
+	assert_success(nv_preview_hex_encode(right, right_hex, sizeof(right_hex)));
+	assert_success(nv_preview_hex_encode(SANDBOX_PATH "/action-queue-left/file",
+			file_hex, sizeof(file_hex)));
 	nv_action_queue_t *const queue = nv_action_queue_alloc();
 	assert_non_null(queue);
 	uint64_t task_id = 0U;
@@ -117,6 +125,14 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	assert_int_equal(7, event.command_sequence);
 	assert_int_equal(1, event.completed_count);
 	assert_int_equal(1, event.total_count);
+	assert_true(event.bytes_known);
+	assert_int_equal(7, event.bytes_total);
+	assert_int_equal(7, event.bytes_completed);
+	assert_string_equal(left_hex, event.source_path_bytes_hex);
+	assert_string_equal(right_hex, event.destination_path_bytes_hex);
+	assert_string_equal(file_hex, event.current_path_bytes_hex);
+	assert_true(event.started_at_unix_ms > 0U);
+	assert_true(event.finished_at_unix_ms >= event.started_at_unix_ms);
 	assert_false(event.partial);
 	assert_false(event.retryable);
 	assert_int_equal(0, event.os_error);
@@ -131,6 +147,57 @@ TEST(action_queue_emits_lifecycle_and_copies_an_immutable_request)
 	nv_snapshot_error_free(&error);
 	remove_file(SANDBOX_PATH "/action-queue-left/file");
 	remove_file(SANDBOX_PATH "/action-queue-right/file");
+	remove_dir(left);
+	remove_dir(right);
+}
+
+TEST(action_queue_publishes_item_progress_before_terminal_completion)
+{
+	const char *const left = SANDBOX_PATH "/action-progress-left";
+	const char *const right = SANDBOX_PATH "/action-progress-right";
+	create_dir(left);
+	create_dir(right);
+	make_file(SANDBOX_PATH "/action-progress-left/file", "content");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	nv_session_command_t command = command_for(&session, NV_SESSION_LEFT,
+			NV_SESSION_COPY);
+	nv_session_prepared_action_t action = {};
+	assert_success(nv_workspace_session_prepare_action(&session, &command,
+			&action, &error));
+	char progress_file_hex[NV_PREVIEW_MAX_PATH_BYTES*2U + 1U];
+	assert_success(nv_preview_hex_encode(SANDBOX_PATH "/action-progress-left/file",
+			progress_file_hex, sizeof(progress_file_hex)));
+	nv_action_queue_t *const queue = nv_action_queue_alloc();
+	assert_non_null(queue);
+	assert_success(nv_action_queue_submit(queue, &action, 11U, NULL));
+	int saw_progress = 0, saw_terminal = 0;
+	for(int attempt = 0; attempt < 400 && !saw_terminal; ++attempt)
+	{
+		nv_action_event_t event = {};
+		if(nv_action_queue_pop(queue, &event) == 0)
+		{
+			usleep(5000);
+			continue;
+		}
+		if(event.state == NV_ACTION_TASK_RUNNING && event.completed_count == 1U)
+		{
+			saw_progress = 1;
+			assert_true(event.bytes_known);
+			assert_int_equal(7, event.bytes_completed);
+			assert_string_equal(progress_file_hex, event.current_path_bytes_hex);
+		}
+		if(event.state == NV_ACTION_TASK_DONE) saw_terminal = 1;
+		nv_action_event_free(&event);
+	}
+	assert_true(saw_progress);
+	assert_true(saw_terminal);
+	nv_action_queue_free(queue);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	remove_file(SANDBOX_PATH "/action-progress-left/file");
+	remove_file(SANDBOX_PATH "/action-progress-right/file");
 	remove_dir(left);
 	remove_dir(right);
 }

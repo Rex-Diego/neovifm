@@ -89,6 +89,8 @@ static int preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_image(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_audio(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_video(nv_preview_queue_t *queue, nv_preview_task_t *task,
@@ -835,6 +837,19 @@ static int
 preview_image(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
+	const int rendered = preview_chafa(queue, task, content, truncated,
+			error_code, os_error);
+	if(rendered >= 0) return rendered;
+	if(*error_code == NULL || strncmp(*error_code, "preview-helper-",
+			strlen("preview-helper-")) != 0)
+	{
+		return rendered;
+	}
+	/* A helper is an optional capability.  Its absence or non-zero exit must
+	 * not turn an otherwise readable image into a hard preview failure. */
+	*error_code = NULL;
+	*os_error = 0;
+	*truncated = 0;
 	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_IMAGE, content,
 			truncated, error_code, os_error);
 }
@@ -981,6 +996,58 @@ preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
 	return 0;
 }
 
+static const char *
+select_chafa_helper(void)
+{
+	const char *const configured = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	if(configured != NULL && configured[0] == '/' && configured[1] != '\0' &&
+			access(configured, X_OK) == 0)
+	{
+		return configured;
+	}
+	static const char *const candidates[] = {
+		"/usr/local/bin/chafa", "/opt/homebrew/bin/chafa",
+		"/usr/bin/chafa", "/bin/chafa",
+	};
+	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
+	{
+		if(access(candidates[i], X_OK) == 0) return candidates[i];
+	}
+	return NULL;
+}
+
+static int
+preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const char *const helper = select_chafa_helper();
+	if(helper == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	/* Symbols/ASCII and no colors keep this optional renderer inside the
+	 * line-safe protocol.  Raw Kitty/Sixel/iTerm escape sequences are not
+	 * allowed to cross the core/client boundary. */
+	char *const argv[] = {
+		(char *)helper, "--format", "symbols", "--symbols", "ascii",
+		"--colors", "none", "--polite", "on", "--relative", "off",
+		"--animate", "off", "--size", "40x16", task->path, NULL,
+	};
+	const int result = preview_external(queue, task, helper, argv, content, truncated,
+			error_code, os_error);
+	if(result == 0 && (content == NULL || *content == NULL || (*content)[0] == '\0'))
+	{
+		free(content == NULL ? NULL : *content);
+		if(content != NULL) *content = NULL;
+		*error_code = "preview-helper-failed";
+		*os_error = EINVAL;
+		return -1;
+	}
+	return result;
+}
+
 static int
 preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
@@ -1067,6 +1134,16 @@ preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task, char **conte
 			error_code, os_error);
 }
 #else
+static int
+preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	(void)queue; (void)task; (void)content; (void)truncated;
+	*error_code = "preview-helper-unavailable";
+	*os_error = ENOSYS;
+	return -1;
+}
+
 static int
 preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)

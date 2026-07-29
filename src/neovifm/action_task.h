@@ -38,6 +38,14 @@ typedef struct
 	int partial;
 	int retryable;
 	int undo_available;
+	char *source_path_bytes_hex;
+	char *destination_path_bytes_hex;
+	char *current_path_bytes_hex;
+	uint64_t bytes_completed;
+	uint64_t bytes_total;
+	int bytes_known;
+	uint64_t started_at_unix_ms;
+	uint64_t finished_at_unix_ms;
 	char *error_code;
 	int os_error;
 } nv_action_event_t;

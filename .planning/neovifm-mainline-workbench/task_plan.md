@@ -100,15 +100,17 @@
 - [ ] 复用 Vifm `background.c`、`bg_job_t/bg_op_t`、`:jobs` 与后台文件操作能力，在其上增加可排队、可观察的稳定 task facade；不再新建互不相通的 executor。
 - [x] copy/move 默认异步入队；当前 action lane 为有界 FIFO 串行执行，preview 使用独立 lane，避免预览挤占复制/移动。
 - [ ] 队列模型至少发布：id、kind、source、destination、queued/running/succeeded/failed/cancelled/partial、items/bytes progress、当前文件、错误、开始/结束时间和 undo availability。
+- [x] 当前实现切片先补齐 action-task 的 source/destination/current path identity、已完成条目事件和有界字节进度；目录递归的精确字节统计、时间戳和退出协作继续单独验收。
+- [x] 当前实现切片补齐 action-task 的 `started_at_unix_ms`/`finished_at_unix_ms` 生命周期字段；queued 不伪造时间，running/terminal 由 core 填充，旧记录保持可解析。
 - [x] 当前会话内的 queued/running 与 completed/failed/cancelled action 历史由 v3 reducer 保留，并在任务中心覆盖层中可滚动查看；跨重启持久化另设明确的数据格式、隐私和 retention 决策，不偷偷引入 daemon。
 - [x] 在右下角状态栏加入稳定尺寸、可点击的 `Tasks` 入口和 running/queued badge；窄终端仍保留短标签与数字，不遮挡 F3--F10。
 - [x] 点击入口打开覆盖式弹窗；Queue/History 两个 tab 支持查看终态详情、取消 pending/running、清理当前视图历史和关闭弹窗。
 - [x] 为 failed/cancelled 保留经验证的 source/destination/target identity 并实现 core-owned 安全 retry；重试复用原始不可变 action，不从 UI display path 重建请求，并以 64 条历史上限控制内存。
 - [x] 主界面在异步 copy/move 期间继续响应导航、pane/tab 切换、F3、任务弹窗和退出请求；受控大目录吞吐/bytes 进度仍待补充。
-- [ ] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
+- [x] 退出时若有任务，必须给出继续等待/协作取消/返回应用的明确选择；本阶段不让任务脱离应用成为常驻 daemon。
 - [ ] 将 ViATc/Total Commander 的“后台传输管理器”和 Vifm `:jobs` 语义统一到同一 task center，而不是提供两个互相矛盾的入口。
 - **阶段验收：** 用受控大文件/大目录真实复制验证输入无卡顿、队列顺序、进度、取消、失败、history、undo 状态与鼠标入口；形成独立提交。
-- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口、取消、safe retry 与 copy/move/mkdir `undo_available` 已完成；完整 source/destination/items/bytes DTO、退出协作选择与 Vifm background facade 仍待补齐）。
+- **状态：** in_progress（FIFO、历史可见、Queue/History tab、终态详情、当前会话历史清理、Tasks 入口、取消、safe retry、copy/move/mkdir `undo_available` 与退出协作选择已完成；完整 Vifm background facade、目录精确字节统计和阶段独立验收仍待补齐）。
 
 ### Phase 4：压缩包作为目录打开
 
@@ -142,12 +144,13 @@
 - [x] 第二批首个切片：archive listing 通过受限 `unzip -Z1`/`bsdtar -tf` 以结构化 argv 输出有界只读清单；仍不写回 archive、不改变 pane cwd。
 - [x] 第二批首个切片补充：常见二进制后缀由 core 以有界十六进制文本 fallback 预览；不执行外部 viewer，不把原始二进制直接送入终端文本渲染。
 - [x] 第二批元数据切片：图片尺寸/格式、音频格式、视频容器格式均提供有界 ASCII metadata fallback，不把二进制直送终端。
+- [x] 第二批补充：图片在当前 line-safe v3 协议中优先尝试绝对路径 `chafa` 的 ASCII symbols 输出；helper 缺失、损坏或非零退出时回退 metadata，不传递 ANSI/Kitty/Sixel 原始序列。
 - [ ] 第二批剩余：视频首帧、音频 duration/封面和图形协议渲染。
 - [ ] 图片能力顺序由终端 capability 决定：可用协议渲染、`chafa` 降级、纯文本 metadata 最终降级；无 Nerd Font/低色彩仍可读。
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
 - [ ] 所有外部 viewer 使用结构化 argv、明确 cwd、超时、输出上限、取消和清理，不执行 display path，不拼接未验证 shell 输入。
 - **阶段验收：** 图片/PDF/Markdown/代码/视频/音频在宽窄终端、支持/不支持图形协议、快速移动 cursor、helper 缺失和损坏文件下行为稳定；形成独立提交。
-- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex 和 image/audio/video metadata fallback 已完成；`chafa` helper 已安装但尚未接入；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
+- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex、图片 `chafa` ASCII symbols 降级和 image/audio/video metadata fallback 已完成；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
 
 ### Phase 7：主线联调与计划收口
 

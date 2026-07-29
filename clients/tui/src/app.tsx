@@ -527,8 +527,63 @@ function ActionDialog(props: {
   </box>
 }
 
+function ExitDialog(props: {
+  readonly taskCount: number
+  readonly stacked: boolean
+  readonly onWait: () => void
+  readonly onCancel: () => void
+  readonly onReturn: () => void
+}) {
+  const button = (id: string, label: string, action: () => void, color: string) => <text
+    id={id}
+    fg={color}
+    onMouseDown={(event) => {
+      if (event.button !== MouseButton.LEFT) return
+      event.preventDefault()
+      event.stopPropagation()
+      action()
+    }}
+  >[{label}]</text>
+  return <box width="70%" flexDirection="column" border borderStyle="double" borderColor={COLORS.yellow} backgroundColor={COLORS.base} padding={1} title="EXIT">
+    <text fg={COLORS.yellow}>TASKS STILL RUNNING ({props.taskCount})</text>
+    <text fg={COLORS.text}>Choose how to close the session.</text>
+    <box width="100%" flexDirection={props.stacked ? "column" : "row"} gap={2}>
+      {button("exit-wait", "Wait for tasks", props.onWait, COLORS.green)}
+      {button("exit-cancel", "Cancel and exit", props.onCancel, COLORS.red)}
+      {button("exit-return", "Return", props.onReturn, COLORS.text)}
+    </box>
+  </box>
+}
+
 function actionTaskLabel(task: ActionTaskPayload): string {
-  return `${task.action} #${task.task_id} ${task.state} ${task.completed_count}/${task.total_count}${task.partial ? " partial" : ""}${task.error_code === undefined ? "" : ` ${task.error_code}`}`
+  const source = taskPath(task.source_path_bytes_hex)
+  const destination = taskPath(task.destination_path_bytes_hex)
+  const current = taskPath(task.current_path_bytes_hex)
+  const paths = source === undefined && current === undefined ? "" : ` ${source === undefined ? "" : shortTaskPath(source)}${destination === undefined ? "" : ` -> ${shortTaskPath(destination)}`}${current === undefined ? "" : ` [${shortTaskPath(current)}]`}`
+  const bytes = task.bytes_known && task.bytes_completed !== undefined && task.bytes_total !== undefined
+    ? ` ${formatFileSize(task.bytes_completed).trim()}/${formatFileSize(task.bytes_total).trim()}`
+    : ""
+  return `${task.action} #${task.task_id} ${task.state} ${task.completed_count}/${task.total_count}${bytes}${paths}${task.partial ? " partial" : ""}${task.error_code === undefined ? "" : ` ${task.error_code}`}`
+}
+
+function taskPath(pathBytesHex: string | undefined): string | undefined {
+  if (pathBytesHex === undefined || pathBytesHex.length % 2 !== 0 || !/^(?:[0-9a-f]{2})*$/i.test(pathBytesHex)) return undefined
+  const pairs = pathBytesHex.match(/../g)
+  if (pairs === null) return undefined
+  const bytes = Uint8Array.from(pairs, (pair) => Number.parseInt(pair, 16))
+  const path = new TextDecoder("utf-8", { fatal: false }).decode(bytes)
+  return path.replace(/[\u0000-\u001f\u007f]/g, "?")
+}
+
+function shortTaskPath(path: string): string {
+  return path.length <= 36 ? path : `...${path.slice(-33)}`
+}
+
+function taskTimeLabel(task: ActionTaskPayload): string {
+  if (task.started_at_unix_ms === undefined && task.finished_at_unix_ms === undefined) return ""
+  const started = task.started_at_unix_ms === undefined ? "not started" : formatMtime(task.started_at_unix_ms)
+  const finished = task.finished_at_unix_ms === undefined ? "running" : formatMtime(task.finished_at_unix_ms)
+  return ` · Time ${started} -> ${finished}`
 }
 
 function resourceTaskLabel(task: ResourceTaskPayload): string {
@@ -584,18 +639,15 @@ function TaskCenter(props: {
     <text fg={COLORS.yellow}>TASK DETAILS</text>
     <text fg={COLORS.text}>Task {task.task_id} · command {task.command_sequence}</text>
     <text fg={COLORS.text}>{task.action} · {task.state} · {task.pane}</text>
-    <text fg={COLORS.subtext0}>Progress {task.completed_count}/{task.total_count}{task.partial ? " · partial" : ""}</text>
+    <text fg={COLORS.subtext0}>Progress {task.completed_count}/{task.total_count}{task.bytes_known && task.bytes_completed !== undefined && task.bytes_total !== undefined ? ` · ${formatFileSize(task.bytes_completed).trim()}/${formatFileSize(task.bytes_total).trim()}` : ""}{task.partial ? " · partial" : ""}{taskTimeLabel(task)}</text>
+    <Show when={task.source_path_bytes_hex !== undefined || task.destination_path_bytes_hex !== undefined || task.current_path_bytes_hex !== undefined}>
+      <text fg={COLORS.text}>Transfer {taskPath(task.source_path_bytes_hex) ?? "[unreadable path]"}{task.destination_path_bytes_hex === undefined ? "" : ` -> ${taskPath(task.destination_path_bytes_hex) ?? "[unreadable path]"}`}{task.current_path_bytes_hex === undefined ? "" : ` · Current ${taskPath(task.current_path_bytes_hex) ?? "[unreadable path]"}`}</text>
+    </Show>
     <Show when={task.undo_available === true}>
       <text fg={COLORS.green}>Undo available</text>
     </Show>
-    <Show when={task.failed_index !== undefined}>
-      <text fg={COLORS.red}>Failed item {task.failed_index! + 1}</text>
-    </Show>
-    <Show when={task.error_code !== undefined}>
-      <text fg={COLORS.red}>Error {task.error_code}</text>
-    </Show>
-    <Show when={task.os_error !== undefined}>
-      <text fg={COLORS.red}>OS error {task.os_error}</text>
+    <Show when={task.failed_index !== undefined || task.error_code !== undefined || task.os_error !== undefined}>
+      <text fg={COLORS.red}>{task.failed_index === undefined ? "" : `Failed item ${task.failed_index + 1}`}{task.error_code === undefined ? "" : ` · Error ${task.error_code}`}{task.os_error === undefined ? "" : ` · OS error ${task.os_error}`}</text>
     </Show>
     <Show when={task.state === "failed" || task.state === "cancelled"}>
       <Show when={task.retryable} fallback={<text id={`task-retry-${task.task_id}`} fg={COLORS.overlay1}>Retry unavailable: core task identity is not retained</text>}>
@@ -859,6 +911,8 @@ export function App(props: AppProps) {
   const [viewerOpen, setViewerOpen] = createSignal(false)
   const [quickPreviewOpen, setQuickPreviewOpen] = createSignal(false)
   const [taskCenterOpen, setTaskCenterOpen] = createSignal(false)
+  const [exitPrompt, setExitPrompt] = createSignal(false)
+  const [exitAfterTasks, setExitAfterTasks] = createSignal(false)
   const [notice, setNotice] = createSignal<string | undefined>()
   const [dialog, setDialog] = createSignal<DialogState | undefined>()
   const [pathMode, setPathMode] = createSignal<StatusPathMode>("absolute")
@@ -944,6 +998,40 @@ export function App(props: AppProps) {
     if (successNotice !== undefined) setNotice(successNotice)
     return true
   }
+  const activeTaskCount = () => (props.actionTasks?.filter((task) => task.state === "queued" || task.state === "running").length ?? 0) +
+    (props.resourceTasks?.filter((task) => task.state === "queued" || task.state === "running").length ?? 0)
+  const quitNow = () => {
+    setExitAfterTasks(false)
+    setExitPrompt(false)
+    props.onCancel?.()
+    renderer.destroy()
+  }
+  const quit = () => {
+    if (activeTaskCount() !== 0) {
+      setExitPrompt(true)
+      return
+    }
+    quitNow()
+  }
+  const waitForTasks = () => {
+    setExitPrompt(false)
+    setExitAfterTasks(true)
+    setNotice("Waiting for tasks to finish")
+  }
+  const cancelAndQuit = () => {
+    setExitPrompt(false)
+    setExitAfterTasks(true)
+    for (const task of props.actionTasks ?? []) {
+      if (task.state === "queued" || task.state === "running") sendCommand({ action: "cancel-action", task_id: task.task_id })
+    }
+    for (const task of props.resourceTasks ?? []) {
+      if (task.state === "queued" || task.state === "running") sendCommand({ action: "cancel-resource", task_id: task.task_id })
+    }
+    setNotice("Cancelling tasks before exit")
+  }
+  createEffect(() => {
+    if (exitAfterTasks() && activeTaskCount() === 0) quitNow()
+  })
   const requestQuickPreview = () => {
     if (!quickPreviewOpen()) {
       quickPreviewIdentity = ""
@@ -974,10 +1062,6 @@ export function App(props: AppProps) {
     })
   }
   createEffect(requestQuickPreview)
-  const quit = () => {
-    props.onCancel?.()
-    renderer.destroy()
-  }
   const copyStatusPath = (path: string) => {
     if (props.onCopyText === undefined) {
       setNotice("Clipboard is unavailable")
@@ -1229,6 +1313,23 @@ export function App(props: AppProps) {
       }
       return
     }
+    if (exitPrompt()) {
+      const choice = key.name.toLowerCase()
+      if (escape || choice === "r") {
+        key.preventDefault()
+        key.stopPropagation()
+        setExitPrompt(false)
+      } else if (choice === "w") {
+        key.preventDefault()
+        key.stopPropagation()
+        waitForTasks()
+      } else if (choice === "c") {
+        key.preventDefault()
+        key.stopPropagation()
+        cancelAndQuit()
+      }
+      return
+    }
     if (quickPreviewOpen() && escape) {
       key.preventDefault()
       key.stopPropagation()
@@ -1283,7 +1384,7 @@ export function App(props: AppProps) {
 
   const quickPreviewPane = () => quickPreviewOpen() && props.workspace !== undefined ? props.workspace.active_pane : undefined
   return <box width="100%" height="100%" flexDirection="column" backgroundColor={COLORS.crust} padding={1}>
-    <Show when={dialog()} fallback={
+    <Show when={exitPrompt()} fallback={<Show when={dialog()} fallback={
       <Show when={taskCenterOpen()} fallback={props.error !== undefined
         ? <ErrorPanel message={props.error} />
         : viewerOpen()
@@ -1312,8 +1413,11 @@ export function App(props: AppProps) {
               : <ErrorPanel message="Core returned no workspace" />}>
         <TaskCenter actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} onClose={() => setTaskCenterOpen(false)} onCommand={sendCommand} />
       </Show>
+      }>
+        {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
+      </Show>
     }>
-      {(state: () => DialogState) => <ActionDialog state={state()} onSubmit={submitDialog} onCancel={closeDialog} />}
+      <ExitDialog taskCount={activeTaskCount()} stacked={dimensions().width < 110} onWait={waitForTasks} onCancel={cancelAndQuit} onReturn={() => setExitPrompt(false)} />
     </Show>
     <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} canResourceTasks={canResourceTasks()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
   </box>

@@ -55,10 +55,12 @@ bun --version
 | `pdftotext` | PDF 文本降级预览 | `brew install poppler` |
 | `mutool` | PDF/文档诊断与后续页面渲染 | `brew install mupdf` |
 | `ffprobe` | 媒体探测与调试 | `brew install ffmpeg` |
-| `chafa` | 图像终端降级渲染（尚未接入完整图形 pipeline） | `brew install chafa` |
+| `chafa` | 图像 ASCII symbols 降级预览（不传递 ANSI/Kitty/Sixel 原始序列） | `brew install chafa` |
 | `archivemount` 或 `fuse-zip` | ZIP 作为目录挂载 | macOS 需要 macFUSE/FUSE-T；Homebrew core 中这两个 formula 当前标记为 Linux-only，不能直接安装 |
 
 本项目会按 `/usr/local/bin`、`/opt/homebrew/bin` 和系统路径探测 helper。macOS 上要启用真实 archive mount，需要先安装一个 FUSE runtime。任选其一：
+
+如需测试或指定其他安装位置，可将 `NEOVIFM_CHAFA_EXECUTABLE` 设为一个绝对路径；该变量只改变 helper 选择，不会改变参数校验或通过 shell 执行。
 
 ```bash
 brew install --cask macfuse

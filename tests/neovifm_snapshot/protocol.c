@@ -86,6 +86,12 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 		.state = NV_ACTION_TASK_FAILED, .completed_count = 1U,
 		.total_count = 2U, .failed_index = 1U, .has_failed_index = 1,
 		.partial = 1, .error_code = "destination-exists", .os_error = EEXIST,
+		.source_path_bytes_hex = "2f746d702f736f75726365",
+		.destination_path_bytes_hex = "2f746d702f64657374696e6174696f6e",
+		.current_path_bytes_hex = "2f746d702f736f757263652f6e6f7465",
+		.bytes_known = 1, .bytes_completed = 12U, .bytes_total = 42U,
+		.started_at_unix_ms = 1700000000000U,
+		.finished_at_unix_ms = 1700000000123U,
 	};
 	line = nv_protocol_action_task_json(&action, 3U);
 	assert_non_null(line);
@@ -99,6 +105,13 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 	assert_int_equal(1, json_object_get_number(payload, "completed_count"));
 	assert_true(json_object_get_boolean(payload, "partial"));
 	assert_false(json_object_get_boolean(payload, "retryable"));
+	assert_string_equal("2f746d702f736f75726365",
+		json_object_get_string(payload, "source_path_bytes_hex"));
+	assert_string_equal("12", json_object_get_string(payload, "bytes_completed"));
+	assert_string_equal("1700000000000",
+		json_object_get_string(payload, "started_at_unix_ms"));
+	assert_string_equal("1700000000123",
+		json_object_get_string(payload, "finished_at_unix_ms"));
 	json_value_free(value);
 	nv_protocol_json_free(line);
 

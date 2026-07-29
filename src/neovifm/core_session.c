@@ -794,6 +794,8 @@ clone_prepared_action(const nv_session_prepared_action_t *source,
 		{
 			destination->targets[i].identity = source->targets[i].identity;
 			destination->targets[i].kind = source->targets[i].kind;
+			destination->targets[i].size_bytes = source->targets[i].size_bytes;
+			destination->targets[i].size_known = source->targets[i].size_known;
 			destination->targets[i].path = source->targets[i].path == NULL ? NULL :
 				strdup(source->targets[i].path);
 			destination->targets[i].name = source->targets[i].name == NULL ? NULL :

@@ -114,6 +114,14 @@
         "partial": { "type": "boolean" },
         "retryable": { "type": "boolean" },
         "undo_available": { "type": "boolean" },
+        "source_path_bytes_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$", "maxLength": 32768 },
+        "destination_path_bytes_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$", "maxLength": 32768 },
+        "current_path_bytes_hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$", "maxLength": 32768 },
+        "bytes_known": { "type": "boolean" },
+        "bytes_completed": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
+        "bytes_total": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
+        "started_at_unix_ms": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
+        "finished_at_unix_ms": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
         "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
         "os_error": { "type": "integer" }
       }

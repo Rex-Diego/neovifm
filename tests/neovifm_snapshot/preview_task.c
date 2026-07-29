@@ -1,6 +1,7 @@
 #include <stic.h>
 
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -160,6 +161,55 @@ TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 	assert_non_null(strstr(event.content, "metadata-only"));
 	nv_preview_event_free(&event);
 	nv_preview_queue_free(queue);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_uses_bounded_ascii_chafa_before_metadata_fallback)
+{
+	const char *const dir = SANDBOX_PATH "/preview-chafa";
+	const char *const path = SANDBOX_PATH "/preview-chafa/photo image.png";
+	const char *const helper = SANDBOX_PATH "/preview-chafa/chafa";
+	create_dir(dir);
+	const unsigned char png_header[] = {
+		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+		0, 0, 0, 13, 'I', 'H', 'D', 'R',
+		0, 0, 1, 0, 0, 0, 0, 1,
+	};
+	make_bytes(path, png_header, sizeof(png_header));
+	make_file(helper,
+			"#!/bin/sh\n"
+			"[ \"$#\" -eq 15 ] || exit 91\n"
+			"[ -f \"${15}\" ] || exit 92\n"
+			"printf 'ASCII-IMAGE\\n'\n");
+	assert_success(chmod(helper, 0700));
+	const char *const old_helper = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	char *const old_copy = old_helper == NULL ? NULL : strdup(old_helper);
+	assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", helper, 1));
+
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_RIGHT, .generation = 13U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_IMAGE, .max_bytes = 512U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_string_equal("ASCII-IMAGE\n", event.content);
+	assert_false(event.truncated);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+
+	if(old_copy == NULL) assert_success(unsetenv("NEOVIFM_CHAFA_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", old_copy, 1));
+	free(old_copy);
+	remove_file(helper);
 	remove_file(path);
 	remove_dir(dir);
 }

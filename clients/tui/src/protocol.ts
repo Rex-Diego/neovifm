@@ -165,6 +165,14 @@ export interface ActionTaskPayload {
   readonly partial: boolean
   readonly retryable: boolean
   readonly undo_available?: boolean
+  readonly source_path_bytes_hex?: string
+  readonly destination_path_bytes_hex?: string
+  readonly current_path_bytes_hex?: string
+  readonly bytes_known?: boolean
+  readonly bytes_completed?: string
+  readonly bytes_total?: string
+  readonly started_at_unix_ms?: string
+  readonly finished_at_unix_ms?: string
   readonly error_code?: string
   readonly os_error?: number
 }
@@ -753,9 +761,31 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
   const undoAvailable = payload.undo_available === undefined
     ? false
     : booleanValue(payload.undo_available, "payload.undo_available")
+  const sourcePath = optionalPatternString(payload, "source_path_bytes_hex", "payload", HEX_PATTERN)
+  const destinationPath = optionalPatternString(payload, "destination_path_bytes_hex", "payload", HEX_PATTERN)
+  const currentPath = optionalPatternString(payload, "current_path_bytes_hex", "payload", HEX_PATTERN)
+  const bytesKnown = payload.bytes_known === undefined
+    ? false
+    : booleanValue(payload.bytes_known, "payload.bytes_known")
+  const bytesCompleted = optionalPatternString(payload, "bytes_completed", "payload", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const bytesTotal = optionalPatternString(payload, "bytes_total", "payload", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const startedAt = optionalPatternString(payload, "started_at_unix_ms", "payload", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  const finishedAt = optionalPatternString(payload, "finished_at_unix_ms", "payload", UNSIGNED_DECIMAL_PATTERN, MAX_DECIMAL_TEXT_BYTES)
+  if (bytesKnown && (bytesCompleted === undefined || bytesTotal === undefined)) {
+    return invalid("payload.bytes_known", "requires bytes_completed and bytes_total")
+  }
+  if (!bytesKnown && (bytesCompleted !== undefined || bytesTotal !== undefined)) {
+    return invalid("payload.bytes_known", "must be true when byte progress is present")
+  }
+  if (bytesKnown && BigInt(bytesCompleted!) > BigInt(bytesTotal!)) {
+    return invalid("payload.bytes_completed", "must not exceed bytes_total")
+  }
+  if (startedAt !== undefined && finishedAt !== undefined && BigInt(finishedAt) < BigInt(startedAt)) {
+    return invalid("payload.finished_at_unix_ms", "must not be earlier than started_at_unix_ms")
+  }
   if (state === "done" && partial) return invalid("payload.partial", "must be false for a completed action")
   if (state === "done" && completed !== total) return invalid("payload.completed_count", "must equal total_count for done")
-  if ((state === "queued" || state === "running") && completed !== 0) return invalid("payload.completed_count", "must be zero before completion")
+  if (state === "queued" && completed !== 0) return invalid("payload.completed_count", "must be zero before running")
   if ((state === "failed" || state === "cancelled") && failedIndex === undefined) return invalid("payload.failed_index", "is required for a terminal incomplete action")
   if (retryable && state !== "failed" && state !== "cancelled") return invalid("payload.retryable", "requires a failed or cancelled action")
   const errorCode = payload.error_code === undefined
@@ -774,6 +804,14 @@ function parseActionTaskPayload(value: unknown): ActionTaskPayload {
     partial,
     retryable,
     undo_available: undoAvailable,
+    ...(sourcePath === undefined ? {} : { source_path_bytes_hex: sourcePath }),
+    ...(destinationPath === undefined ? {} : { destination_path_bytes_hex: destinationPath }),
+    ...(currentPath === undefined ? {} : { current_path_bytes_hex: currentPath }),
+    bytes_known: bytesKnown,
+    ...(bytesCompleted === undefined ? {} : { bytes_completed: bytesCompleted }),
+    ...(bytesTotal === undefined ? {} : { bytes_total: bytesTotal }),
+    ...(startedAt === undefined ? {} : { started_at_unix_ms: startedAt }),
+    ...(finishedAt === undefined ? {} : { finished_at_unix_ms: finishedAt }),
     ...(errorCode === undefined ? {} : { error_code: errorCode }),
     ...(osError === undefined ? {} : { os_error: osError }),
   })

@@ -133,6 +133,8 @@ typedef struct
 	char *name;
 	nv_fs_identity_t identity;
 	nv_entry_kind_t kind;
+	uint64_t size_bytes;
+	int size_known;
 } nv_session_prepared_target_t;
 
 typedef struct

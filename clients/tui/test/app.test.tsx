@@ -614,12 +614,74 @@ test("opens a clickable task center with queue and history", async () => {
   expect(setup.captureCharFrame()).not.toContain("TASK CENTER")
 })
 
+test("offers wait, cancel, and return choices before quitting with active tasks", async () => {
+  const [tasks, setTasks] = createSignal<readonly ActionTaskPayload[]>([{
+    task_id: "21", command_sequence: 8, pane: "left", action: "copy", state: "running",
+    completed_count: 0, total_count: 1, partial: false, retryable: false,
+  }])
+  const sent: unknown[] = []
+  let cancelled = false
+  setup = await testRender(() => <App
+    workspace={workspace}
+    actionTasks={tasks()}
+    onCommand={(command) => { sent.push(command) }}
+    onCancel={() => { cancelled = true }}
+  />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  const quitButton = setup.renderer.root.findDescendantById("function-quit")
+  expect(quitButton).toBeDefined()
+  await setup.mockMouse.click(quitButton!.x, quitButton!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("TASKS STILL RUNNING")
+  expect(setup.renderer.root.findDescendantById("exit-wait")).toBeDefined()
+  expect(cancelled).toBe(false)
+
+  const returnButton = setup.renderer.root.findDescendantById("exit-return")
+  expect(returnButton).toBeDefined()
+  await setup.mockMouse.click(returnButton!.x, returnButton!.y)
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).not.toContain("TASKS STILL RUNNING")
+
+  await setup.mockMouse.click(quitButton!.x, quitButton!.y)
+  await setup.renderOnce()
+  const cancelButton = setup.renderer.root.findDescendantById("exit-cancel")
+  expect(cancelButton).toBeDefined()
+  await setup.mockMouse.click(cancelButton!.x, cancelButton!.y)
+  expect(sent).toEqual([{ action: "cancel-action", task_id: "21" }])
+  expect(cancelled).toBe(false)
+  setTasks([])
+  await Bun.sleep(20)
+  expect(cancelled).toBe(true)
+})
+
+test("stacks exit choices in a narrow terminal", async () => {
+  setup = await testRender(() => <App workspace={workspace} actionTasks={[{
+    task_id: "22", command_sequence: 9, pane: "left", action: "copy", state: "running",
+    completed_count: 0, total_count: 1, partial: false, retryable: false,
+  }]} onCancel={() => undefined} />, { width: 60, height: 20 })
+  await setup.renderOnce()
+  const quitButton = setup.renderer.root.findDescendantById("function-quit")
+  expect(quitButton).toBeDefined()
+  await setup.mockMouse.click(quitButton!.x, quitButton!.y)
+  await setup.renderOnce()
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("TASKS STILL RUNNING")
+  expect(frame).toContain("[Wait for tasks]")
+  expect(frame).toContain("[Cancel and exit]")
+  expect(frame).toContain("[Return]")
+})
+
 test("shows terminal task details and sends only core-owned safe retry", async () => {
   const tasks: ActionTaskPayload[] = [
     {
       task_id: "7", command_sequence: 6, pane: "left", action: "copy", state: "failed",
       completed_count: 1, total_count: 2, failed_index: 1, partial: true,
       error_code: "destination-exists", os_error: 17, retryable: true,
+      source_path_bytes_hex: "2f746d702f736f75726365",
+      destination_path_bytes_hex: "2f746d702f64657374696e6174696f6e",
+      current_path_bytes_hex: "2f746d702f736f757263652f6e6f7465",
+      bytes_known: true, bytes_completed: "12", bytes_total: "42",
+      started_at_unix_ms: "1700000000000", finished_at_unix_ms: "1700000000123",
     },
     {
       task_id: "8", command_sequence: 7, pane: "right", action: "delete", state: "cancelled",
@@ -649,6 +711,10 @@ test("shows terminal task details and sends only core-owned safe retry", async (
   expect(frame).toContain("Task 7")
   expect(frame).toContain("copy · failed · left")
   expect(frame).toContain("Progress 1/2")
+  expect(frame).toContain("Time 2023-11-14")
+  expect(frame).toContain("12 B")
+  expect(frame).toContain("/tmp/source")
+  expect(frame).toContain("/tmp/destination")
   expect(frame).toContain("Failed item 2")
   expect(frame).toContain("destination-exists")
   expect(frame).toContain("Retry task")
