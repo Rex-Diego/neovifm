@@ -10,15 +10,16 @@ const key = (name: string, options: Partial<KeyLike> = {}): KeyLike => ({
   meta: options.meta ?? false,
 })
 
-test("keeps Vifm h/j/k/l while reserving horizontal arrows for btop-style sort selection", () => {
+test("maps all arrow keys to the matching Vifm h/j/k/l navigation", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("h"))).toEqual({ kind: "command", command: { action: "parent" } })
   expect(map.handle(key("j"))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
   expect(map.handle(key("k"))).toEqual({ kind: "command", command: { action: "move", delta: -1 } })
   expect(map.handle(key("l"))).toEqual({ kind: "command", command: { action: "enter" } })
   expect(map.handle(key("down", { sequence: "\u001b[B" }))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
-  expect(map.handle(key("left", { sequence: "\u001b[D" }))).toEqual({ kind: "command", command: { action: "sort-cycle", delta: -1 } })
-  expect(map.handle(key("right", { sequence: "\u001b[C" }))).toEqual({ kind: "command", command: { action: "sort-cycle", delta: 1 } })
+  expect(map.handle(key("up", { sequence: "\u001b[A" }))).toEqual({ kind: "command", command: { action: "move", delta: -1 } })
+  expect(map.handle(key("left", { sequence: "\u001b[D" }))).toEqual({ kind: "command", command: { action: "parent" } })
+  expect(map.handle(key("right", { sequence: "\u001b[C" }))).toEqual({ kind: "command", command: { action: "enter" } })
 })
 
 test("keeps Tab for pane switching and reserves Space for opposite-pane preview", () => {

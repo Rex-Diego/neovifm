@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import { CoreClientError, runCoreProbe, startCoreSession } from "../src/core-client.js"
 
@@ -331,3 +331,34 @@ sleep 1
   session.close()
   await session.completion
 }, 8_000)
+
+test("forces session persistence flags from the request over inherited values", async () => {
+  const executable = await makeProbe(`
+printf '%s:%s' "$NEOVIFM_SESSION_RESUME" "$NEOVIFM_SESSION_PERSIST" > "$(dirname "$0")/flags.txt"
+printf '%s\\n' '${workspaceHello}'
+printf '%s\\n' '${workspaceSnapshot}'
+`)
+  const flagsFile = join(dirname(executable), "flags.txt")
+  const previousResume = process.env.NEOVIFM_SESSION_RESUME
+  const previousPersist = process.env.NEOVIFM_SESSION_PERSIST
+  process.env.NEOVIFM_SESSION_RESUME = "1"
+  process.env.NEOVIFM_SESSION_PERSIST = "1"
+  try {
+    const session = startCoreSession({
+      executable,
+      leftPath: "/tmp",
+      rightPath: "/var",
+      resume: false,
+      persist: false,
+      onRecord: () => undefined,
+      onError: () => undefined,
+    })
+    await session.completion
+    expect(await readFile(flagsFile, "utf8")).toBe("0:0")
+  } finally {
+    if (previousResume === undefined) delete process.env.NEOVIFM_SESSION_RESUME
+    else process.env.NEOVIFM_SESSION_RESUME = previousResume
+    if (previousPersist === undefined) delete process.env.NEOVIFM_SESSION_PERSIST
+    else process.env.NEOVIFM_SESSION_PERSIST = previousPersist
+  }
+})

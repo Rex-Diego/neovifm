@@ -248,6 +248,13 @@ int nv_workspace_session_attach_resource(nv_workspace_session_t *session,
 		nv_snapshot_error_t *error);
 int nv_workspace_session_detach_resource(nv_workspace_session_t *session,
 		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error);
+/* Persist and restore the local workspace layout using a bounded JSON file.
+ * Missing or invalid state is reported as 1 and is safe to ignore at startup;
+ * successful restore returns 0 and allocation/I/O failures return -1. */
+int nv_workspace_session_save_state(const nv_workspace_session_t *session,
+		const char path[], nv_snapshot_error_t *error);
+int nv_workspace_session_load_state(nv_workspace_session_t *session,
+		const char path[], nv_snapshot_error_t *error);
 void nv_session_command_free(nv_session_command_t *command);
 void nv_workspace_session_free(nv_workspace_session_t *session);
 

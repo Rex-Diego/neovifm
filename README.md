@@ -151,6 +151,10 @@ bun run dev ../.. /tmp
 
 前两个路径参数分别是左、右 pane；省略右路径时会复制左路径。`q` 或 `Ctrl-C` 退出，`Tab` 切换当前 pane。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
 
+不传路径启动时，OpenTUI 会在正常退出后恢复上次现场：包括左右 pane 路径、每个 pane 的 tab 顺序与活动 tab、活动 pane 和各目录中的光标目标。状态默认保存到 `$XDG_STATE_HOME/neovifm/session.json`，未设置时使用 `~/.local/state/neovifm/session.json`；可用 `NEOVIFM_SESSION_STATE=/path/to/session.json` 覆盖。显式传入路径会以这些路径启动，但退出时仍会更新现场文件。已挂载的 ZIP/SSH 资源不会被伪造为普通本地目录恢复。
+
+方向键遵循 Vifm 直觉：`↑/↓/←/→` 分别等同于 `k/j/h/l`；排序切换保留在排序控件和命令入口，不再占用左右方向键。
+
 ## 测试
 
 ```bash

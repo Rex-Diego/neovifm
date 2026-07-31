@@ -11,10 +11,45 @@
 
 #include <errno.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+
+#ifndef _WIN32
+# include <unistd.h>
+#else
+# include <io.h>
+#endif
 
 #include "../compat/neovifm_fs.h"
+#include "../utils/parson.h"
+
+#define NV_SESSION_STATE_VERSION 1U
+#define NV_SESSION_STATE_MAX_BYTES (256U*1024U)
+
+typedef struct
+{
+	char *cwd_bytes_hex;
+	char *cursor_path_bytes_hex;
+	nv_pane_sort_key_t sort_key;
+	int sort_descending;
+	int resource;
+} nv_persisted_tab_t;
+
+typedef struct
+{
+	nv_persisted_tab_t items[NV_SESSION_MAX_TABS];
+	size_t count;
+	size_t active;
+} nv_persisted_tabs_t;
+
+typedef struct
+{
+	nv_persisted_tabs_t panes[2];
+	nv_session_pane_t active_pane;
+} nv_persisted_state_t;
 
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		const char message[]);
@@ -61,6 +96,17 @@ static char *hex_decode(const char hex[]);
 static char *parent_path(const char path[]);
 static int refresh_snapshot(nv_workspace_session_t *session,
 		nv_pane_snapshot_t *snapshot, nv_session_pane_t pane, uint64_t tab_id,
+		nv_snapshot_error_t *error);
+static int hex_digit(char character);
+static void persisted_state_free(nv_persisted_state_t *state);
+static int write_state_json_atomic(const JSON_Value *value, const char path[]);
+static int new_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
+		nv_snapshot_error_t *error);
+static int activate_tab_at(nv_workspace_session_t *session,
+		nv_session_pane_t pane, size_t index, int focus_pane,
+		nv_snapshot_error_t *error);
+static int restore_persisted_pane(nv_workspace_session_t *session,
+		nv_session_pane_t pane, const nv_persisted_tabs_t *stored,
 		nv_snapshot_error_t *error);
 
 static void
@@ -725,6 +771,476 @@ nv_workspace_session_detach_resource(nv_workspace_session_t *session,
 	free(origin_directory);
 	free(origin_entry);
 	resource_free(resource);
+	return 0;
+}
+
+static const char *
+persisted_sort_key_name(nv_pane_sort_key_t key)
+{
+	switch(key)
+	{
+		case NV_SORT_NAME: return "name";
+		case NV_SORT_EXTENSION: return "extension";
+		case NV_SORT_SIZE: return "size";
+		case NV_SORT_CTIME: return "ctime";
+		case NV_SORT_MTIME: return "mtime";
+		case NV_SORT_MODE: return "mode";
+		case NV_SORT_TYPE: return "type";
+		case NV_SORT_OTHER: return "other";
+	}
+	return NULL;
+}
+
+static int
+persisted_sort_key(const char name[], nv_pane_sort_key_t *key)
+{
+	if(name == NULL || key == NULL) return -1;
+	static const struct
+	{
+		const char *name;
+		nv_pane_sort_key_t key;
+	} keys[] = {
+		{ "name", NV_SORT_NAME }, { "extension", NV_SORT_EXTENSION },
+		{ "size", NV_SORT_SIZE }, { "ctime", NV_SORT_CTIME },
+		{ "mtime", NV_SORT_MTIME }, { "mode", NV_SORT_MODE },
+		{ "type", NV_SORT_TYPE }, { "other", NV_SORT_OTHER },
+	};
+	for(size_t i = 0U; i < sizeof(keys)/sizeof(keys[0]); ++i)
+	{
+		if(strcmp(name, keys[i].name) == 0)
+		{
+			*key = keys[i].key;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static void
+persisted_tab_free(nv_persisted_tab_t *tab)
+{
+	if(tab == NULL) return;
+	free(tab->cwd_bytes_hex);
+	free(tab->cursor_path_bytes_hex);
+	*tab = (nv_persisted_tab_t){};
+}
+
+static void
+persisted_state_free(nv_persisted_state_t *state)
+{
+	if(state == NULL) return;
+	for(size_t pane = 0U; pane < 2U; ++pane)
+	{
+		for(size_t i = 0U; i < state->panes[pane].count; ++i)
+			persisted_tab_free(&state->panes[pane].items[i]);
+		state->panes[pane] = (nv_persisted_tabs_t){};
+	}
+	*state = (nv_persisted_state_t){};
+}
+
+static int
+write_state_json_atomic(const JSON_Value *value, const char path[])
+{
+	char *const serialized = json_serialize_to_string_pretty(value);
+	if(serialized == NULL) return -1;
+	const size_t path_length = strlen(path);
+	const size_t suffix_length = strlen(".tmp-XXXXXX");
+	char *const temporary = malloc(path_length + suffix_length + 1U);
+	if(temporary == NULL)
+	{
+		json_free_serialized_string(serialized);
+		return -1;
+	}
+	if(snprintf(temporary, path_length + suffix_length + 1U,
+			"%s.tmp-XXXXXX", path) < 0)
+	{
+		free(temporary);
+		json_free_serialized_string(serialized);
+		return -1;
+	}
+	int descriptor = -1;
+#ifndef _WIN32
+	descriptor = mkstemp(temporary);
+#else
+	if(_mktemp_s(temporary, path_length + suffix_length + 1U) == 0)
+		descriptor = _open(temporary, _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
+				_S_IREAD | _S_IWRITE);
+#endif
+	FILE *const file = descriptor < 0 ? NULL :
+#ifndef _WIN32
+		fdopen(descriptor, "wb");
+#else
+		_fdopen(descriptor, "wb");
+#endif
+	if(file == NULL)
+	{
+		if(descriptor >= 0)
+#ifndef _WIN32
+			close(descriptor);
+#else
+			_close(descriptor);
+#endif
+		if(descriptor >= 0) remove(temporary);
+		free(temporary);
+		json_free_serialized_string(serialized);
+		return -1;
+	}
+	const size_t length = strlen(serialized);
+	int result = fwrite(serialized, 1U, length, file) == length &&
+		fflush(file) == 0;
+#ifndef _WIN32
+	if(result && fsync(fileno(file)) != 0) result = 0;
+#else
+	if(result && _commit(_fileno(file)) != 0) result = 0;
+#endif
+	if(fclose(file) != 0) result = 0;
+	if(result && rename(temporary, path) != 0) result = 0;
+	if(!result) remove(temporary);
+	free(temporary);
+	json_free_serialized_string(serialized);
+	return result ? 0 : -1;
+}
+
+static int
+persisted_hex_is_valid(const char value[])
+{
+	if(value == NULL || value[0] == '\0' || strlen(value) > NV_PANE_SNAPSHOT_MAX_HEX_BYTES ||
+			strlen(value) % 2U != 0U)
+		return 0;
+	for(size_t i = 0U; value[i] != '\0'; ++i)
+	{
+		if(hex_digit(value[i]) < 0) return 0;
+	}
+	return 1;
+}
+
+static int
+persisted_directory_exists(const char bytes_hex[])
+{
+	char *const path = hex_decode(bytes_hex);
+	if(path == NULL) return 0;
+	struct stat info = {};
+	const int result = stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+	free(path);
+	return result;
+}
+
+static int
+parse_persisted_tabs(JSON_Object *root, const char field[],
+		nv_persisted_tabs_t *tabs)
+{
+	JSON_Array *const array = json_object_get_array(root, field);
+	if(array == NULL || json_array_get_count(array) == 0U ||
+			json_array_get_count(array) > NV_SESSION_MAX_TABS)
+		return -1;
+	for(size_t i = 0U; i < json_array_get_count(array); ++i)
+	{
+		JSON_Object *const object = json_array_get_object(array, i);
+		if(object == NULL) return -1;
+		if(json_object_has_value_of_type(object, "resource", JSONBoolean) &&
+				json_object_get_boolean(object, "resource") == 1)
+		{
+			tabs->items[tabs->count++].resource = 1;
+			continue;
+		}
+		const char *const cwd = json_object_get_string(object, "cwd_bytes_hex");
+		if(!persisted_hex_is_valid(cwd)) return -1;
+		nv_persisted_tab_t *const tab = &tabs->items[tabs->count];
+		tab->cwd_bytes_hex = strdup(cwd);
+		if(tab->cwd_bytes_hex == NULL) return -2;
+		tab->sort_key = NV_SORT_NAME;
+		const char *const sort = json_object_get_string(object, "sort_key");
+		if(sort != NULL && persisted_sort_key(sort, &tab->sort_key) != 0)
+		{
+			persisted_tab_free(tab);
+			return -1;
+		}
+		if(json_object_has_value(object, "sort_descending"))
+		{
+			if(!json_object_has_value_of_type(object, "sort_descending", JSONBoolean))
+			{
+				persisted_tab_free(tab);
+				return -1;
+			}
+			tab->sort_descending = json_object_get_boolean(object,
+					"sort_descending");
+		}
+		const char *const cursor = json_object_get_string(object,
+				"cursor_path_bytes_hex");
+		if(cursor != NULL)
+		{
+			if(!persisted_hex_is_valid(cursor))
+			{
+				persisted_tab_free(tab);
+				return -1;
+			}
+			tab->cursor_path_bytes_hex = strdup(cursor);
+			if(tab->cursor_path_bytes_hex == NULL)
+			{
+				persisted_tab_free(tab);
+				return -2;
+			}
+		}
+		++tabs->count;
+	}
+	if(tabs->count == 0U) return -1;
+	return 0;
+}
+
+static int
+parse_persisted_state(const char path[], nv_persisted_state_t *state)
+{
+	struct stat info = {};
+	if(stat(path, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+			(uintmax_t)info.st_size > NV_SESSION_STATE_MAX_BYTES)
+		return 1;
+	JSON_Value *const value = json_parse_file(path);
+	JSON_Object *const root = value == NULL ? NULL : json_value_get_object(value);
+	if(root == NULL || !json_object_has_value_of_type(root, "version", JSONNumber) ||
+			json_object_get_number(root, "version") != NV_SESSION_STATE_VERSION ||
+			!json_object_has_value_of_type(root, "active_pane", JSONString))
+	{
+		json_value_free(value);
+		return 1;
+	}
+	const char *const active = json_object_get_string(root, "active_pane");
+	if(strcmp(active, "left") == 0) state->active_pane = NV_SESSION_LEFT;
+	else if(strcmp(active, "right") == 0) state->active_pane = NV_SESSION_RIGHT;
+	else
+	{
+		json_value_free(value);
+		return 1;
+	}
+	const int left_result = parse_persisted_tabs(root, "left_tabs", &state->panes[0]);
+	const int right_result = parse_persisted_tabs(root, "right_tabs", &state->panes[1]);
+	if(left_result != 0 || right_result != 0)
+	{
+		json_value_free(value);
+		return left_result == -2 || right_result == -2 ? -1 : 1;
+	}
+	for(size_t pane = 0U; pane < 2U; ++pane)
+	{
+		const char *const field = pane == 0U ? "left_active" : "right_active";
+		if(!json_object_has_value_of_type(root, field, JSONNumber))
+		{
+			json_value_free(value);
+			return 1;
+		}
+		const double active_index = json_object_get_number(root, field);
+		if(active_index < 0.0 ||
+				active_index >= (double)state->panes[pane].count ||
+				active_index != (double)(size_t)active_index)
+		{
+			json_value_free(value);
+			return 1;
+		}
+		state->panes[pane].active = (size_t)active_index;
+	}
+	json_value_free(value);
+	for(size_t pane = 0U; pane < 2U; ++pane)
+	{
+		nv_persisted_tabs_t source = state->panes[pane];
+		nv_persisted_tabs_t filtered = {};
+		const size_t source_active = source.active;
+		state->panes[pane] = (nv_persisted_tabs_t){};
+		for(size_t i = 0U; i < source.count; ++i)
+		{
+			nv_persisted_tab_t *const tab = &source.items[i];
+			if(tab->resource || !persisted_directory_exists(tab->cwd_bytes_hex))
+			{
+				persisted_tab_free(tab);
+				continue;
+			}
+			const size_t output = filtered.count++;
+			filtered.items[output] = *tab;
+			*tab = (nv_persisted_tab_t){};
+			if(i == source_active)
+				filtered.active = output;
+		}
+		for(size_t i = 0U; i < source.count; ++i)
+			persisted_tab_free(&source.items[i]);
+		state->panes[pane] = filtered;
+		if(state->panes[pane].count == 0U) return 1;
+		if(state->panes[pane].active >= state->panes[pane].count)
+			state->panes[pane].active = 0U;
+	}
+	return 0;
+}
+
+static int
+restore_persisted_tab(nv_workspace_session_t *session, nv_session_pane_t pane,
+		size_t index, const nv_persisted_tab_t *stored, nv_snapshot_error_t *error)
+{
+	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
+	if(index >= tabs->count || stored == NULL) return -1;
+	nv_pane_snapshot_t *const snapshot = tab_snapshot(session, pane, index);
+	const uint64_t id = tabs->items[index].id;
+	char *const path = hex_decode(stored->cwd_bytes_hex);
+	if(snapshot == NULL || path == NULL)
+	{
+		free(path);
+		return set_error(error, "invalid-path",
+				"persisted directory identity is invalid");
+	}
+	if(replace_snapshot(session, snapshot, pane, id, path, error) != 0)
+	{
+		free(path);
+		return -1;
+	}
+	free(path);
+	nv_pane_snapshot_sort(snapshot, stored->sort_key, stored->sort_descending);
+	if(stored->cursor_path_bytes_hex != NULL)
+	{
+		for(size_t i = 0U; i < snapshot->entry_count; ++i)
+		{
+			if(strcmp(snapshot->entries[i].path_bytes_hex,
+					stored->cursor_path_bytes_hex) == 0)
+			{
+				snapshot->cursor = (int)i;
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+static int
+restore_persisted_pane(nv_workspace_session_t *session, nv_session_pane_t pane,
+		const nv_persisted_tabs_t *stored, nv_snapshot_error_t *error)
+{
+	if(stored == NULL || stored->count == 0U) return -1;
+	if(restore_persisted_tab(session, pane, 0U, &stored->items[0], error) != 0)
+		return -1;
+	for(size_t i = 1U; i < stored->count; ++i)
+	{
+		if(new_tab(session, pane, error) != 0 ||
+				restore_persisted_tab(session, pane,
+					nv_workspace_session_active_tab_index(session, pane),
+					&stored->items[i], error) != 0)
+			return -1;
+	}
+	return activate_tab_at(session, pane, stored->active, 0, error);
+}
+
+int
+nv_workspace_session_save_state(const nv_workspace_session_t *session,
+		const char path[], nv_snapshot_error_t *error)
+{
+	if(session == NULL || path == NULL || path[0] == '\0' || error == NULL)
+		return -1;
+	nv_snapshot_error_free(error);
+	JSON_Value *const root_value = json_value_init_object();
+	if(root_value == NULL) return set_error(error, "out-of-memory",
+			"failed to allocate session state");
+	JSON_Object *const root = json_value_get_object(root_value);
+	const char *const active = nv_workspace_session_active_name(session);
+	if(json_object_set_number(root, "version", NV_SESSION_STATE_VERSION) != JSONSuccess ||
+			json_object_set_string(root, "active_pane", active) != JSONSuccess)
+		goto failed;
+	for(nv_session_pane_t pane = NV_SESSION_LEFT; pane <= NV_SESSION_RIGHT; ++pane)
+	{
+		const char *const field = pane == NV_SESSION_LEFT ? "left_tabs" : "right_tabs";
+		const char *const active_field = pane == NV_SESSION_LEFT ? "left_active" :
+			"right_active";
+		JSON_Value *const array_value = json_value_init_array();
+		if(array_value == NULL) goto failed;
+		JSON_Array *const array = json_value_get_array(array_value);
+		const size_t count = nv_workspace_session_tab_count(session, pane);
+		for(size_t i = 0U; i < count; ++i)
+		{
+			JSON_Value *const tab_value = json_value_init_object();
+			if(tab_value == NULL) { json_value_free(array_value); goto failed; }
+			JSON_Object *const tab = json_value_get_object(tab_value);
+			const nv_pane_snapshot_t *const snapshot =
+				nv_workspace_session_tab_snapshot(session, pane, i);
+			const nv_session_resource_t *const resource =
+				nv_workspace_session_tab_resource(session, pane, i);
+			const int is_resource = resource != NULL && resource->active;
+			const char *const cursor = !is_resource && snapshot != NULL &&
+					snapshot->cursor >= 0 && (size_t)snapshot->cursor < snapshot->entry_count ?
+				snapshot->entries[snapshot->cursor].path_bytes_hex : NULL;
+			if((is_resource && json_object_set_boolean(tab, "resource", 1) != JSONSuccess) ||
+					(!is_resource && (snapshot == NULL ||
+						json_object_set_string(tab, "cwd_bytes_hex", snapshot->cwd_bytes_hex) != JSONSuccess ||
+						json_object_set_string(tab, "sort_key",
+							persisted_sort_key_name(snapshot->sort_key)) != JSONSuccess ||
+						json_object_set_boolean(tab, "sort_descending",
+							snapshot->sort_descending) != JSONSuccess ||
+						(cursor != NULL && json_object_set_string(tab,
+							"cursor_path_bytes_hex", cursor) != JSONSuccess))) ||
+					json_array_append_value(array, tab_value) != JSONSuccess)
+			{
+				if(json_value_get_parent(tab_value) == NULL) json_value_free(tab_value);
+				json_value_free(array_value);
+				goto failed;
+			}
+		}
+		if(json_object_set_value(root, field, array_value) != JSONSuccess ||
+			json_object_set_number(root, active_field,
+				nv_workspace_session_active_tab_index(session, pane)) != JSONSuccess)
+		{
+			if(json_value_get_parent(array_value) == NULL) json_value_free(array_value);
+			goto failed;
+		}
+	}
+	if(json_serialization_size_pretty(root_value) == 0U ||
+			json_serialization_size_pretty(root_value) - 1U > NV_SESSION_STATE_MAX_BYTES)
+		goto failed;
+	if(write_state_json_atomic(root_value, path) != 0) goto failed;
+	json_value_free(root_value);
+	return 0;
+
+failed:
+	json_value_free(root_value);
+	return set_error(error, "session-state-write-failed",
+			"failed to save workspace state");
+}
+
+int
+nv_workspace_session_load_state(nv_workspace_session_t *session,
+		const char path[], nv_snapshot_error_t *error)
+{
+	if(session == NULL || path == NULL || path[0] == '\0' || error == NULL)
+		return -1;
+	nv_snapshot_error_free(error);
+	nv_persisted_state_t stored = {};
+	const int parsed = parse_persisted_state(path, &stored);
+	if(parsed != 0)
+	{
+		persisted_state_free(&stored);
+		return parsed;
+	}
+	char *const left_path = hex_decode(stored.panes[0].items[0].cwd_bytes_hex);
+	char *const right_path = hex_decode(stored.panes[1].items[0].cwd_bytes_hex);
+	if(left_path == NULL || right_path == NULL)
+	{
+		free(left_path);
+		free(right_path);
+		persisted_state_free(&stored);
+		return 1;
+	}
+	nv_workspace_session_t next = {};
+	if(nv_workspace_session_init(left_path, right_path, &next, error) != 0)
+	{
+		free(left_path);
+		free(right_path);
+		persisted_state_free(&stored);
+		return 1;
+	}
+	free(left_path);
+	free(right_path);
+	if(restore_persisted_pane(&next, NV_SESSION_LEFT, &stored.panes[0], error) != 0 ||
+			restore_persisted_pane(&next, NV_SESSION_RIGHT, &stored.panes[1], error) != 0)
+	{
+		nv_workspace_session_free(&next);
+		persisted_state_free(&stored);
+		nv_snapshot_error_free(error);
+		return 1;
+	}
+	next.active_pane = stored.active_pane;
+	nv_workspace_session_free(session);
+	*session = next;
+	persisted_state_free(&stored);
 	return 0;
 }
 

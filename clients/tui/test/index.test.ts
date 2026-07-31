@@ -161,6 +161,24 @@ test("starts the session before rendering and applies records through the reduce
   expect(calls).toEqual(["/mock/neovifm-core-probe", "/tmp", "/tmp"])
 })
 
+test("requests persisted session restore only when no paths are supplied", async () => {
+  let resume: boolean | undefined
+  let persist: boolean | undefined
+  const start = (request: CoreSessionRequest): CoreSession => {
+    resume = request.resume
+    persist = request.persist
+    request.onRecord(workspaceHello)
+    request.onRecord(workspace)
+    return { completion: Promise.resolve(), send: async () => true, close: () => undefined }
+  }
+  await main([], dependencies(start))
+  expect(resume).toBe(true)
+  expect(persist).toBe(true)
+  await main(["/tmp"], dependencies(start))
+  expect(resume).toBe(false)
+  expect(persist).toBe(true)
+})
+
 test("injects the clipboard service into the rendered app", async () => {
   const copied: string[] = []
   const base = dependencies((request) => {

@@ -41,6 +41,9 @@
 - [x] 以 `src/modes/normal.c`、`src/engine/keys.c`、Vifm 文档、`/Users/rex/soft/_refs/neovifm/viatc` 为来源，建立完整行为矩阵：按键序列、计数、模式、目标动作、当前支持度、冲突、验收用例和来源。
 - [ ] 第一批固定主线交互层：`F3--F10` + `hjkl`、`gg/G`、计数、`Ctrl-W`、`gt/gT`、搜索/next/previous、marks、registers、selection/visual、历史、pane 切换、刷新、打开/返回和退出语义。
 - [x] 当前搜索切片：`/`、`?`、`n/N` 已由 OpenTUI 标准化为 core-owned、按 pane 保存查询与方向并循环匹配；marks、registers、visual 和完整目录历史仍待补齐。
+- [x] 将 `↑/↓/←/→` 与 `k/j/h/l` 的对应 Vifm 导航语义固定；排序切换保留在排序控件/命令入口，避免方向键承担两套语义。
+- [x] 增加干净退出现场保护：默认无路径启动恢复左右 pane 路径、tab 顺序/活动 tab、活动 pane 和光标目标；显式路径启动不恢复旧路径但仍更新状态文件。
+- [x] Core 使用受限、原子替换的 JSON 状态文件，默认落在 XDG state 目录，支持 `NEOVIFM_SESSION_STATE` 覆盖；缺失、损坏、过期或资源 tab 状态安全降级到普通启动。
 - [ ] 第二批覆盖 Total Commander/ViATc 高频动作：同扩展名选择、反选、目录历史/常用目录、复制名称/完整路径、左右 pane 同步/交换、在另一 pane 或新 tab 打开。
 - [ ] 第三批单列高级动作：批量重命名、目录比较/同步、内容比较、快速搜索和命令浏览；逐项判断复用 Vifm、实现 adapter 或明确 defer。
 - [ ] 将 Vifm 的 key engine/command engine 作为语义来源；OpenTUI 只做按键事件标准化和 UI-local overlay 操作，不维护第二套独立 Vim 状态机。
@@ -66,6 +69,7 @@
 - [ ] 为 keymap、排序 comparator、协议边界、响应式 column、主题降级和 preview 生命周期分别补 unit/integration；正式 PTY 覆盖 Space/Tab 分离、快速移动 cursor、双 pane 状态不变、鼠标滚动以及 60/80/100/160 列。
 - [x] 返回父目录时按 `tab_id + directory_bytes_hex` 保存并恢复上次 cursor 的原始路径，刷新和排序后仍保持目标条目；增加 C 回归覆盖进入/返回闭环。
 - [x] TUI 额外按 pane/目录保存最近 128 个 scrollTop；进入子目录再返回时恢复原可视位置，目标 cursor 只在超出视口时校正，避免目标被推到最后一行。
+- [x] 为现场保护和方向键兼容补齐 RED/GREEN：C session 状态 round-trip、真实 core 跨进程恢复、TUI 启动参数和 keymap 单测。
 - **阶段验收：** 上述九项视觉/交互需求在 Unicode、ASCII、低色彩和窄宽终端均有稳定行为；经典 Vifm 排序和 OpenTUI 既有 tab/pane 操作无回归；形成一个独立提交。
 - **状态：** in_progress（Space/Tab、source-pane/target-pane preview intent、target-lane generation cancellation、目录优先 comparator、三行底栏、滚动条/active marker/sort/plus/权限时间/owner-group 信息层和 TaskCenter 取消/详情入口已落地；unit、真实 core session、PTY、ASCII/compact 基线已复验，完整低色彩与 60/80/100/160 列矩阵和阶段独立提交仍待补齐）。
 

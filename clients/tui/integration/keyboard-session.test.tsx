@@ -117,30 +117,26 @@ test("real keyboard navigation, tabs, actions, and mkdir undo update the C-owned
       return current.phase === "ready" && "workspace" in current && current.workspace.right.cwd_display === right
     })
 
+    setup.mockInput.pressArrow("right")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.right.cwd_display.endsWith("/a-dir")
+    })
+    setup.mockInput.pressArrow("left")
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "workspace" in current && current.workspace.right.cwd_display === right
+    })
+
     setup.mockInput.pressTab()
     await waitFor(() => {
       const current = state()
       return current.phase === "ready" && "workspace" in current && current.workspace.active_pane === "left"
     })
-    setup.mockInput.pressArrow("right")
-    await waitFor(() => {
-      const current = state()
-      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "size"
-    })
-    setup.mockInput.pressArrow("right")
-    await waitFor(() => {
-      const current = state()
-      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "ctime"
-    })
-    setup.mockInput.pressArrow("right")
-    await waitFor(() => {
-      const current = state()
-      return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_key === "mtime"
-    })
     await setup.renderOnce()
-    const modifiedHeader = setup.renderer.root.findDescendantById("sort-left-mtime")
-    expect(modifiedHeader).toBeDefined()
-    await setup.mockMouse.click(modifiedHeader!.x, modifiedHeader!.y)
+    const nameHeader = setup.renderer.root.findDescendantById("sort-left-name")
+    expect(nameHeader).toBeDefined()
+    await setup.mockMouse.click(nameHeader!.x, nameHeader!.y)
     await waitFor(() => {
       const current = state()
       return current.phase === "ready" && "workspace" in current && current.workspace.left.sort_descending

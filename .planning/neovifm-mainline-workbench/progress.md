@@ -263,3 +263,11 @@
 - core 的路径身份恢复已确认正确；真正造成“返回后目标跑到最后一行”的是 TUI scrollbox：进入只有少量条目的子目录后 scrollTop 被压回 0，返回父目录时只做 nearest-edge `scrollChildIntoView`。
 - `EntryList` 现在按 pane/目录缓存最多 128 个 scrollTop。目录切换先恢复该目录的位置，再执行现有 cursor 可见性校正；同一目录内上下移动仍由 cursor 驱动滚动，刷新/排序不会重置目录历史。
 - RED/GREEN：新增父目录 40 项、目标原本在可视区域倒数第五行、子目录仅 1 项的回归；旧实现返回时 scrollTop 从 37 漂到 33，修复后保持原值。全量 TUI `142 pass / 539 expects`，coverage `85.52% funcs / 89.35% lines`；`bunx tsc --noEmit`、`bun audit`、`git diff --check` 通过。
+
+## 2026-07-31 Session persistence and arrow navigation
+
+- OpenTUI now requests `NEOVIFM_SESSION_RESUME=1` only for a no-argument launch and requests `NEOVIFM_SESSION_PERSIST=1` for normal sessions. Explicit paths remain authoritative at startup while still updating the last clean-exit snapshot.
+- Core persists a bounded, versioned JSON state file atomically. It records active pane, per-pane tab order/active tab, local directory identities, sort state and cursor path identities. Missing, malformed, stale or mounted-resource entries are ignored safely rather than restored as fake local directories. The state file is written with mode `0600` on POSIX systems, through a same-directory exclusive random temporary file with a last-writer-wins rename.
+- A cross-process core-session smoke test restored the active right pane, a nested left directory, the remembered cursor target and two right-pane tabs from the previous process. The C snapshot suite also covers save/load round-trip and stale-state fallback boundaries.
+- Arrow keys now match Vifm navigation: `Up/Down/Left/Right` map to `k/j/h/l`. The previous left/right sort-cycle mapping is removed; sorting remains available through the sort control/command path.
+- RED/GREEN evidence for this slice: TUI `144 pass / 545 expects` with `85.57%` function and `89.37%` line coverage, `bunx tsc --noEmit`, `bun audit`, C snapshot `9849 checks / 96 tests`, serial `make check`, full integration `23 pass / 122 expects`, core-session build and `git diff --check` all passed. One full-suite startup timing miss was reproduced once and the isolated test plus the next full serial run passed.

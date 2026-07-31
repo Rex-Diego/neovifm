@@ -140,6 +140,7 @@ export async function main(
   dependencies: MainDependencies = DEFAULT_MAIN_DEPENDENCIES,
 ): Promise<void> {
   const executable = process.env.NEOVIFM_CORE_PROBE?.trim() || dependencies.defaultCoreProbePath()
+  const resume = args.length === 0
   const targetPath = args[0] ?? process.cwd()
   const rightPath = args[1] ?? targetPath
   const controller = new AbortController()
@@ -150,6 +151,8 @@ export async function main(
     executable,
     leftPath: targetPath,
     rightPath,
+    resume,
+    persist: true,
     signal: controller.signal,
     onRecord: (record) => setProbeState((state) => reduceProbeState(state, record)),
     onError: (error) => {

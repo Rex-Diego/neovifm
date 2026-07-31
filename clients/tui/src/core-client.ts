@@ -167,6 +167,8 @@ export interface CoreSessionRequest {
   readonly executable: string
   readonly leftPath: string
   readonly rightPath: string
+  readonly resume?: boolean
+  readonly persist?: boolean
   readonly cwd?: string
   readonly signal?: AbortSignal
   readonly onRecord: (record: ProtocolRecord) => void
@@ -578,6 +580,11 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
   const controller = new AbortController()
   const abort = () => controller.abort()
   request.signal?.addEventListener("abort", abort, { once: true })
+  const sessionEnvironment = {
+    ...Object.fromEntries(Object.entries(globalThis.process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
+    NEOVIFM_SESSION_RESUME: request.resume === true ? "1" : "0",
+    NEOVIFM_SESSION_PERSIST: request.persist === true ? "1" : "0",
+  }
   let process: Bun.Subprocess<"pipe", "pipe", "pipe">
   try {
     process = Bun.spawn({
@@ -587,6 +594,7 @@ export function startCoreSession(request: CoreSessionRequest): CoreSession {
       stderr: "pipe",
       signal: controller.signal,
       killSignal: "SIGKILL",
+      env: sessionEnvironment,
       ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
     })
   } catch (cause) {

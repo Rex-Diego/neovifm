@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+
+#ifndef _WIN32
+# include <unistd.h>
+#else
+# include <direct.h>
+# define mkdir(path, mode) _mkdir(path)
+#endif
 
 #ifdef __APPLE__
 # include <fcntl.h>
@@ -169,6 +177,9 @@ static int watcher_handle_events(nv_session_watcher_t *watcher,
 		nv_action_queue_t *action_queue);
 static int poll_stdin(int *stdin_ready);
 #endif
+
+static char *session_state_path(void);
+static int ensure_session_state_directory(const char path[]);
 
 static int
 set_error(nv_snapshot_error_t *error, const char code[], const char message[])
@@ -2461,6 +2472,82 @@ poll_stdin(int *stdin_ready)
 }
 #endif
 
+static char *
+session_state_path(void)
+{
+	const char *const configured = getenv("NEOVIFM_SESSION_STATE");
+	if(configured != NULL && configured[0] != '\0') return strdup(configured);
+	const char *base = getenv("XDG_STATE_HOME");
+	char *owned_base = NULL;
+	if(base == NULL || base[0] == '\0')
+	{
+		const char *const home = getenv("HOME");
+		if(home == NULL || home[0] == '\0') return NULL;
+		const size_t length = strlen(home);
+		const size_t suffix_length = strlen("/.local/state");
+		owned_base = malloc(length + suffix_length + 1U);
+		if(owned_base == NULL) return NULL;
+		if(snprintf(owned_base, length + suffix_length + 1U,
+				"%s/.local/state", home) < 0)
+		{
+			free(owned_base);
+			return NULL;
+		}
+		base = owned_base;
+	}
+	const size_t length = strlen(base);
+	const size_t suffix_length = strlen("/neovifm/session.json");
+	char *const result = malloc(length + suffix_length + 1U);
+	if(result != NULL && snprintf(result, length + suffix_length + 1U,
+			"%s/neovifm/session.json", base) < 0)
+	{
+		free(result);
+		free(owned_base);
+		return NULL;
+	}
+	free(owned_base);
+	return result;
+}
+
+static int
+ensure_session_state_directory(const char path[])
+{
+	if(path == NULL || path[0] == '\0') return -1;
+	char *const directory = strdup(path);
+	if(directory == NULL) return -1;
+	char *const slash = strrchr(directory, '/');
+	if(slash == NULL)
+	{
+		free(directory);
+		return 0;
+	}
+	*slash = '\0';
+	if(directory[0] == '\0')
+	{
+		free(directory);
+		return 0;
+	}
+	char *cursor = directory + (directory[0] == '/' ? 1 : 0);
+	for(; *cursor != '\0'; ++cursor)
+	{
+		if(*cursor != '/') continue;
+		*cursor = '\0';
+		if(directory[0] != '\0' && mkdir(directory, 0700) != 0 && errno != EEXIST)
+		{
+			free(directory);
+			return -1;
+		}
+		*cursor = '/';
+	}
+	if(mkdir(directory, 0700) != 0 && errno != EEXIST)
+	{
+		free(directory);
+		return -1;
+	}
+	free(directory);
+	return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2518,13 +2605,31 @@ main(int argc, char *argv[])
 		nv_workspace_session_free(&session);
 		return 1;
 	}
+	const int persistence_enabled = getenv("NEOVIFM_SESSION_PERSIST") != NULL &&
+		strcmp(getenv("NEOVIFM_SESSION_PERSIST"), "1") == 0;
+	const int resume_requested = getenv("NEOVIFM_SESSION_RESUME") != NULL &&
+		strcmp(getenv("NEOVIFM_SESSION_RESUME"), "1") == 0;
+	char *const state_path = persistence_enabled ? session_state_path() : NULL;
+	if(resume_requested && state_path != NULL)
+	{
+		nv_snapshot_error_t restore_error = {};
+		const int restored = nv_workspace_session_load_state(&session, state_path,
+				&restore_error);
+		if(restored < 0)
+		{
+			fprintf(stderr, "neovifm-core-session: session restore failed: %s\n",
+				restore_error.message == NULL ? "unknown error" : restore_error.message);
+		}
+		nv_snapshot_error_free(&restore_error);
+	}
 	uint64_t preview_generation = 0U;
 	char *const hello = nv_protocol_preview_session_hello_json(0U);
 	if(write_line(hello) != 0 || write_workspace(&session, 1U, 0U, "initial") != 0)
 	{
 		nv_protocol_json_free(hello);
-		 nv_action_queue_free(action_queue);
-		 nv_resource_task_queue_free(resource_queue);
+		free(state_path);
+		nv_action_queue_free(action_queue);
+		nv_resource_task_queue_free(resource_queue);
 		nv_preview_queue_free(preview_queue);
 		nv_undo_bridge_reset();
 		nv_workspace_session_free(&session);
@@ -2655,6 +2760,25 @@ main(int argc, char *argv[])
 	if(drain_resource_events_until_idle(resource_queue, &session,
 			&output_sequence, preview_queue, &preview_generation,
 			&pending_resources) != 0) result = 1;
+	if(persistence_enabled && state_path != NULL)
+	{
+		if(ensure_session_state_directory(state_path) != 0)
+		{
+			fputs("neovifm-core-session: unable to create session state directory\n",
+				stderr);
+		}
+		else
+		{
+			nv_snapshot_error_t state_error = {};
+			if(nv_workspace_session_save_state(&session, state_path, &state_error) != 0)
+			{
+				fprintf(stderr, "neovifm-core-session: session state save failed: %s\n",
+					state_error.message == NULL ? "unknown error" : state_error.message);
+			}
+			nv_snapshot_error_free(&state_error);
+		}
+	}
+	free(state_path);
 	nv_snapshot_error_free(&error);
 	while(pending_actions != NULL)
 	{

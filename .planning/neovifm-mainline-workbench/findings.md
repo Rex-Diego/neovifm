@@ -185,6 +185,16 @@
 - A Vifm image `fileviewer` association can successfully return identify/metadata text while providing no terminal pixels. For image previews the worker therefore tries the builtin line-safe `chafa` renderer first when an association exists, and only falls back to the external association if builtin rendering is unavailable; this preserves readable PNG behavior without putting graphics escape sequences into JSONL.
 - The test fixtures create helper executables in the same directory as the media file, so initial sorting may place a helper before the target. Integration tests must explicitly issue `select-entry` before asserting a media marker; otherwise a passing renderer can be mistaken for a timeout or missing capability.
 
+## 2026-07-31 Session persistence and arrow navigation
+
+- Before this slice, the core session kept cursor/tab state only in memory and the TUI always launched from `cwd`/CLI paths. That made a clean restart lose the workspace even though in-session parent navigation already remembered cursor identities.
+- The persistence boundary is intentionally opt-in at the core process boundary: OpenTUI sets `NEOVIFM_SESSION_PERSIST=1`, and only a no-argument OpenTUI launch adds `NEOVIFM_SESSION_RESUME=1`. This prevents direct probe/test invocations from polluting a user's state while making the normal app entry behave like a resumable workspace.
+- The state format is a small versioned JSON document with bounded size, hex-encoded raw filesystem identities, atomic temporary-file replacement and POSIX `0600` permissions. A resource tab is represented as a non-restorable marker; restoring a stale mount path as a local directory would be unsafe and misleading.
+- Restoring builds a fresh session from valid local tab directories, recreates tab order, reapplies sort and cursor identities, then restores active tab/pane. If any required pane has no valid local tab, the whole restore is discarded and ordinary startup remains available.
+- Arrow-key behavior now follows the established Vifm mental model (`Up/Down/Left/Right` = `k/j/h/l`). Sort cycling is no longer bound to horizontal navigation, reducing the ambiguity for users who do not know the Vim keyset.
+- The state writer now serializes to a same-directory, exclusive random temporary file created with mode `0600`, flushes/syncs it, and renames it into place. Concurrent clean exits therefore have an explicit last-writer-wins outcome without sharing a predictable `.tmp` pathname.
+- The parser rejects non-finite/out-of-range active tab numbers before any floating-point-to-index conversion; the C regression includes an extreme `1e300` active index and keeps normal startup safe.
+
 ## 2026-07-29 Resource lifecycle and media/undo follow-up
 
 - The resource lifecycle is now core-owned and asynchronous: mount/unmount helpers run behind a bounded FIFO task queue, tab ownership is attached only after a terminal success event, and session shutdown submits unmount cleanup before freeing the queue. A completion event with missing mount ownership is treated as `resource-mount-result-invalid`.

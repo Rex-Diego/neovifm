@@ -39,8 +39,8 @@
 | `Ctrl-N` | Normal | 下移一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:87), [`src/modes/view.c`](/Users/rex/soft/neovifm/src/modes/view.c:228) | 单测已覆盖，建议补 session 级验证 |
 | `Ctrl-P` | Normal | 上移一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:88), [`src/modes/view.c`](/Users/rex/soft/neovifm/src/modes/view.c:229) | 同上 |
 | `Ctrl-L` | Normal | 刷新 workspace | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:86) | 增加 command 发送断言或 session 回包断言 |
-| `Left` | Normal | sort cycle 上一个 key | `conflict` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:130) | 明确记录为 btop 风格排序导航；保持排序切换集成测试 |
-| `Right` | Normal | sort cycle 下一个 key | `conflict` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:131) | 同上 |
+| `Left` | Normal | 返回父目录 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:130) | 与 `h` 共用目录返回和 cursor 恢复路径 |
+| `Right` | Normal | 进入目录；对文件走 viewer 入口 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:131) | 与 `l` 共用目录/文件分流 |
 
 ## Prefix / Pane / Tabs
 
@@ -111,5 +111,5 @@
 ## 当前可验收重点
 
 1. 已实现主线应继续锁定：`hjkl`、`gg/G`、`Ctrl-W w/h/l`、`gt/gT`、`F3-F10`。
-2. 当前最重要的显式偏差有两项：`l` 对文件进入 F3 viewer；左右方向键用于排序切换。
+2. 当前最重要的显式偏差是：`l`/`Right` 对普通文件进入 F3 viewer；排序切换由排序控件和命令入口完成，不占用方向键。
 3. 下一批最适合进入执行阶段的键位扩展，不是新增大量快捷键，而是让既有 `F3`、`e`、`l/Enter` 承接 archive、image、pdf、markdown、remote provider。
