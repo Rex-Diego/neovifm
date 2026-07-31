@@ -84,6 +84,8 @@ export type CoreSessionCommand =
   | Readonly<{ action: "focus-next" }>
   | Readonly<{ action: "move"; delta: -1 | 1 }>
   | Readonly<{ action: "move-to"; target: "first" | "last" }>
+  | Readonly<{ action: "search"; query: string; direction: -1 | 1 }>
+  | Readonly<{ action: "search-next"; direction: -1 | 1 }>
   | Readonly<{ action: "sort-cycle"; pane?: "left" | "right"; delta: -1 | 1 }>
   | Readonly<{ action: "sort-by"; pane: "left" | "right"; key: PaneSortKey }>
   | Readonly<{ action: "tab-cycle"; delta: number }>

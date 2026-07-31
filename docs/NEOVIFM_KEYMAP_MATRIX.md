@@ -1,7 +1,7 @@
 # NeoVifm Keymap Matrix
 
 状态：Phase 1 基线矩阵
-日期：2026-07-28
+日期：2026-07-30
 
 本文档只覆盖当前 Hybrid TUI 的键盘映射边界，并用 classic Vifm 与 ViATc/Total Commander 作为语义参照。目标不是复制 ViATc 的 AutoHotkey 实现，而是建立可验收的交互矩阵。
 
@@ -30,7 +30,11 @@
 | `gg` | Normal | 跳到第一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:53), [`src/modes/normal.c`](/Users/rex/soft/neovifm/src/modes/normal.c:362) | 已有真实 session 测试，继续保留 |
 | `G` / `End` | Normal | 跳到最后一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:114), [`src/modes/normal.c`](/Users/rex/soft/neovifm/src/modes/normal.c:334) | 覆盖空列表与长列表 |
 | `Home` | Normal | 跳到第一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:115) | 保持单测 |
-| `Space` / `Tab` | Normal | 切换活动 pane | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:132), [`src/modes/normal.c`](/Users/rex/soft/neovifm/src/modes/normal.c:318) | 真实 session 验证 `active_pane` 切换 |
+| `Space` | Normal | 在对面 pane 临时预览当前项，不改变目标 pane 状态 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:132), [`clients/tui/src/app.tsx`](/Users/rex/soft/neovifm/clients/tui/src/app.tsx:1380) | 验证 source/target identity、Esc/Tab 关闭和窄终端 F3 fallback |
+| `Tab` | Normal | 切换活动 pane | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:136), [`src/modes/normal.c`](/Users/rex/soft/neovifm/src/modes/normal.c:318) | 真实 session 验证 `active_pane` 切换 |
+| `/` | Normal | 正向按名称搜索并打开查询输入 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:122), [`src/neovifm/workspace_session.c`](/Users/rex/soft/neovifm/src/neovifm/workspace_session.c:1100) | 覆盖大小写、不命中、换向和查询长度边界 |
+| `?` | Normal | 反向按名称搜索并打开查询输入 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:123), [`src/neovifm/workspace_session.c`](/Users/rex/soft/neovifm/src/neovifm/workspace_session.c:1100) | 与 `/` 共用查询对话框，验证反向首个匹配 |
+| `n` / `N` | Normal | 沿最近一次查询向前/向后循环 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:119), [`src/neovifm/workspace_session.c`](/Users/rex/soft/neovifm/src/neovifm/workspace_session.c:1100) | 验证 wraparound、无历史查询和 pane 隔离 |
 | `t` | Normal | 切换当前条目选中态 | `mapped` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:133), [`src/modes/normal.c`](/Users/rex/soft/neovifm/src/modes/normal.c:392) | 补一条键盘选择集成测试，和鼠标右键选择对齐 |
 | `Ctrl-N` | Normal | 下移一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:87), [`src/modes/view.c`](/Users/rex/soft/neovifm/src/modes/view.c:228) | 单测已覆盖，建议补 session 级验证 |
 | `Ctrl-P` | Normal | 上移一项 | `supported` | [`clients/tui/src/keymap.ts`](/Users/rex/soft/neovifm/clients/tui/src/keymap.ts:88), [`src/modes/view.c`](/Users/rex/soft/neovifm/src/modes/view.c:229) | 同上 |

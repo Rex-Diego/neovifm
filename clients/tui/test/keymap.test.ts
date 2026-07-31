@@ -125,3 +125,14 @@ test("routes Vifm u through the core-owned undo command", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("u"))).toEqual({ kind: "command", command: { action: "undo" } })
 })
+
+test("opens directional name search and repeats matches with n/N", () => {
+  const map = new VifmKeymap()
+  expect(map.handle(key("/"))).toEqual({ kind: "search", direction: 1 })
+  expect(map.handle(key("?"))).toEqual({ kind: "search", direction: -1 })
+  expect(map.handle(key("n"))).toEqual({ kind: "command", command: { action: "search-next", direction: 1 } })
+  expect(map.handle(key("n", { shift: true, sequence: "N" }))).toEqual({
+    kind: "command",
+    command: { action: "search-next", direction: -1 },
+  })
+})

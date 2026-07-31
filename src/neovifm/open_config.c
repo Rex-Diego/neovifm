@@ -40,6 +40,8 @@ static int collect_pattern_token(char ***patterns, size_t *pattern_count,
 		char token[], nv_open_error_t *error);
 static int add_rule(nv_open_config_t *config, nv_open_association_kind_t kind,
 		const char pattern[], const char command[], nv_open_error_t *error);
+static int parse_previewprg(char statement[], nv_open_config_t *config,
+		nv_open_error_t *error);
 static int parse_statement(char statement[], nv_open_config_t *config,
 		nv_open_error_t *error);
 static int flush_statement(char logical[], size_t *logical_length,
@@ -225,11 +227,80 @@ add_rule(nv_open_config_t *config, nv_open_association_kind_t kind,
 }
 
 static int
+parse_previewprg(char statement[], nv_open_config_t *config,
+		nv_open_error_t *error)
+{
+	static const char *const prefixes[] = {
+		"setlocal", "setglobal", "setl", "setg", "set",
+	};
+	char *cursor = skip_space(statement);
+	const char *matched = NULL;
+	for(size_t i = 0U; i < sizeof(prefixes)/sizeof(prefixes[0]); ++i)
+	{
+		const size_t length = strlen(prefixes[i]);
+		if(strncmp(cursor, prefixes[i], length) == 0 &&
+				(cursor[length] == '\0' || isspace((unsigned char)cursor[length])))
+		{
+			matched = prefixes[i];
+			cursor += length;
+			break;
+		}
+	}
+	if(matched == NULL) return 0;
+	cursor = skip_space(cursor);
+	static const char option[] = "previewprg";
+	if(strncmp(cursor, option, sizeof(option) - 1U) != 0)
+	{
+		return 0;
+	}
+	cursor += sizeof(option) - 1U;
+	cursor = skip_space(cursor);
+	if(*cursor != '=') return 0;
+	cursor = skip_space(cursor + 1U);
+	trim_right(cursor);
+	if(*cursor == '\0')
+	{
+		free(config->previewprg);
+		config->previewprg = NULL;
+		return 1;
+	}
+	const size_t length = strlen(cursor);
+	if(length > NV_OPEN_MAX_ARG_BYTES)
+	{
+		return set_error(error, "config-invalid",
+				"previewprg command is too long");
+	}
+	if(length >= 2U && ((cursor[0] == '\'' && cursor[length - 1U] == '\'') ||
+			(cursor[0] == '"' && cursor[length - 1U] == '"')))
+	{
+		cursor[length - 1U] = '\0';
+		++cursor;
+	}
+	if(*cursor == '\0')
+	{
+		free(config->previewprg);
+		config->previewprg = NULL;
+		return 1;
+	}
+	char *const copy = strdup(cursor);
+	if(copy == NULL)
+	{
+		return set_error(error, "out-of-memory",
+				"failed to copy previewprg command");
+	}
+	free(config->previewprg);
+	config->previewprg = copy;
+	return 1;
+}
+
+static int
 parse_statement(char statement[], nv_open_config_t *config,
 		nv_open_error_t *error)
 {
 	char *cursor = skip_space(statement);
 	if(*cursor == '\0' || *cursor == '"' || *cursor == '#') return 0;
+	const int previewprg_result = parse_previewprg(cursor, config, error);
+	if(previewprg_result != 0) return previewprg_result < 0 ? -1 : 0;
 	nv_open_association_kind_t kind;
 	const size_t keyword_count = sizeof(association_keywords)/
 		sizeof(association_keywords[0]);
@@ -502,6 +573,7 @@ void
 nv_open_config_free(nv_open_config_t *config)
 {
 	if(config == NULL) return;
+	free(config->previewprg);
 	for(size_t i = 0U; i < config->owned_string_count; ++i)
 	{
 		free(config->owned_strings[i]);

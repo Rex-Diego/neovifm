@@ -22,7 +22,7 @@ make_bytes(const char path[], const unsigned char bytes[], size_t length)
 static int
 pop_terminal_event(nv_preview_queue_t *queue, nv_preview_event_t *event)
 {
-	for(int attempt = 0; attempt < 200; ++attempt)
+	for(int attempt = 0; attempt < 600; ++attempt)
 	{
 		if(nv_preview_queue_pop(queue, event) == 1)
 		{
@@ -56,6 +56,15 @@ TEST(preview_queue_rejects_invalid_request_context)
 		.timeout_ms = 1000U,
 	};
 	assert_failure(nv_preview_queue_submit(queue, &request, NULL));
+	static char oversized_arg[NV_PREVIEW_MAX_VIEWER_ARG_BYTES + 2U];
+	memset(oversized_arg, 'x', sizeof(oversized_arg) - 1U);
+	oversized_arg[sizeof(oversized_arg) - 1U] = '\0';
+	const char *const viewer_argv[] = { oversized_arg };
+	nv_preview_request_t oversized = request;
+	oversized.generation = 1U;
+	oversized.viewer_argv = viewer_argv;
+	oversized.viewer_argc = 1U;
+	assert_failure(nv_preview_queue_submit(queue, &oversized, NULL));
 	nv_preview_queue_free(queue);
 }
 
@@ -102,6 +111,41 @@ TEST(preview_queue_emits_bounded_text_completion_with_raw_identity)
 	remove_dir(dir);
 }
 
+TEST(preview_queue_preserves_utf8_and_replaces_invalid_text_bytes)
+{
+	const char *const dir = SANDBOX_PATH "/preview-utf8";
+	const char *const path = SANDBOX_PATH "/preview-utf8/example.txt";
+	const unsigned char bytes[] = {
+		0xe4, 0xb8, 0xad, 0xe6, 0x96, 0x87, '\n', 0xff, '\t', 0x1b,
+	};
+	const unsigned char expected[] = {
+		0xe4, 0xb8, 0xad, 0xe6, 0x96, 0x87, '\n', '?', '\t', '?', '\0',
+	};
+	create_dir(dir);
+	make_bytes(path, bytes, sizeof(bytes));
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 2U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_TEXT, .max_bytes = 64U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_int_equal((long long)sizeof(expected) - 1LL,
+			(long long)strlen(event.content));
+	assert_true(memcmp(expected, event.content, sizeof(expected) - 1U) == 0);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(path);
+	remove_dir(dir);
+}
+
 TEST(preview_queue_treats_markdown_as_bounded_text)
 {
 	const char *const dir = SANDBOX_PATH "/preview-markdown";
@@ -126,6 +170,45 @@ TEST(preview_queue_treats_markdown_as_bounded_text)
 	assert_string_equal("# heading\n\nbody", event.content);
 	nv_preview_event_free(&event);
 	nv_preview_queue_free(queue);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
+{
+	const char *const dir = SANDBOX_PATH "/preview-fileviewer";
+	const char *const path = SANDBOX_PATH "/preview-fileviewer/read me.txt";
+	const char *const helper = SANDBOX_PATH "/preview-fileviewer/viewer.sh";
+	create_dir(dir);
+	make_file(path, "builtin content");
+	make_file(helper,
+			"#!/bin/sh\n"
+			"[ \"$1\" = \"--tag\" ] || exit 91\n"
+			"printf 'custom:%s\\n' \"$2\"\n");
+	assert_success(chmod(helper, 0700));
+
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const char *const viewer_argv[] = { helper, "--tag", path };
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 14U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_TEXT, .max_bytes = 512U, .timeout_ms = 1000U,
+		.viewer_argv = viewer_argv,
+		.viewer_argc = sizeof(viewer_argv)/sizeof(viewer_argv[0]),
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_true(strncmp(event.content, "custom:", strlen("custom:")) == 0);
+	assert_non_null(strstr(event.content, path));
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	remove_file(helper);
 	remove_file(path);
 	remove_dir(dir);
 }
@@ -165,7 +248,7 @@ TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 	remove_dir(dir);
 }
 
-TEST(preview_queue_uses_bounded_ascii_chafa_before_metadata_fallback)
+TEST(preview_queue_uses_bounded_block_chafa_before_metadata_fallback)
 {
 	const char *const dir = SANDBOX_PATH "/preview-chafa";
 	const char *const path = SANDBOX_PATH "/preview-chafa/photo image.png";
@@ -180,8 +263,9 @@ TEST(preview_queue_uses_bounded_ascii_chafa_before_metadata_fallback)
 	make_file(helper,
 			"#!/bin/sh\n"
 			"[ \"$#\" -eq 15 ] || exit 91\n"
+			"[ \"$4\" = block ] || exit 93\n"
 			"[ -f \"${15}\" ] || exit 92\n"
-			"printf 'ASCII-IMAGE\\n'\n");
+			"printf 'BLOCK-IMAGE\\n'\n");
 	assert_success(chmod(helper, 0700));
 	const char *const old_helper = getenv("NEOVIFM_CHAFA_EXECUTABLE");
 	char *const old_copy = old_helper == NULL ? NULL : strdup(old_helper);
@@ -201,7 +285,7 @@ TEST(preview_queue_uses_bounded_ascii_chafa_before_metadata_fallback)
 	nv_preview_event_t event = {};
 	assert_true(pop_terminal_event(queue, &event));
 	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
-	assert_string_equal("ASCII-IMAGE\n", event.content);
+	assert_string_equal("BLOCK-IMAGE\n", event.content);
 	assert_false(event.truncated);
 	nv_preview_event_free(&event);
 	nv_preview_queue_free(queue);
@@ -210,6 +294,53 @@ TEST(preview_queue_uses_bounded_ascii_chafa_before_metadata_fallback)
 	else assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", old_copy, 1));
 	free(old_copy);
 	remove_file(helper);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_prefers_ascii_image_over_metadata_fileviewer)
+{
+	const char *const dir = SANDBOX_PATH "/preview-image-viewer";
+	const char *const path = SANDBOX_PATH "/preview-image-viewer/photo.png";
+	const char *const chafa = SANDBOX_PATH "/preview-image-viewer/chafa";
+	const char *const viewer = SANDBOX_PATH "/preview-image-viewer/viewer";
+	create_dir(dir);
+	const unsigned char png_header[] = {
+		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+		0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1,
+	};
+	make_bytes(path, png_header, sizeof(png_header));
+	make_file(chafa, "#!/bin/sh\nprintf 'ASCII-FROM-IMAGE\n'\n");
+	make_file(viewer, "#!/bin/sh\nprintf 'METADATA-FROM-FILEVIEWER\n'\n");
+	assert_success(chmod(chafa, 0700));
+	assert_success(chmod(viewer, 0700));
+	const char *const old_helper = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	char *const old_copy = old_helper == NULL ? NULL : strdup(old_helper);
+	assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", chafa, 1));
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const char *const viewer_argv[] = { viewer };
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 15U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_IMAGE, .max_bytes = 512U, .timeout_ms = 1000U,
+		.viewer_argv = viewer_argv, .viewer_argc = 1U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_string_equal("ASCII-FROM-IMAGE\n", event.content);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+	if(old_copy == NULL) assert_success(unsetenv("NEOVIFM_CHAFA_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", old_copy, 1));
+	free(old_copy);
+	remove_file(chafa);
+	remove_file(viewer);
 	remove_file(path);
 	remove_dir(dir);
 }
@@ -257,6 +388,162 @@ TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
 	nv_preview_queue_free(queue);
 	remove_file(audio);
 	remove_file(video);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_renders_pdf_first_page_after_empty_viewer_with_raster_helper)
+{
+	const char *const dir = SANDBOX_PATH "/preview-pdf-raster";
+	const char *const path = SANDBOX_PATH "/preview-pdf-raster/read me.pdf";
+	const char *const raster = SANDBOX_PATH "/preview-pdf-raster/pdftoppm";
+	const char *const chafa = SANDBOX_PATH "/preview-pdf-raster/chafa";
+	const char *const viewer = SANDBOX_PATH "/preview-pdf-raster/pdftotext";
+	const char *const viewer_argv[] = { viewer };
+	create_dir(dir);
+	make_file(path, "%PDF-1.4\n");
+	make_file(viewer, "#!/bin/sh\nexit 0\n");
+	make_file(raster,
+			"#!/bin/sh\n"
+			"for arg do output=\"$arg\"; done\n"
+			"printf 'fake-png' > \"$output.png\"\n");
+	make_file(chafa,
+			"#!/bin/sh\n"
+			"printf 'PDF-ASCII\\n'\n");
+	assert_success(chmod(raster, 0700));
+	assert_success(chmod(chafa, 0700));
+	assert_success(chmod(viewer, 0700));
+	const char *const old_raster = getenv("NEOVIFM_PDF_RENDER_EXECUTABLE");
+	char *const old_raster_copy = old_raster == NULL ? NULL : strdup(old_raster);
+	const char *const old_chafa = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	char *const old_chafa_copy = old_chafa == NULL ? NULL : strdup(old_chafa);
+	assert_success(setenv("NEOVIFM_PDF_RENDER_EXECUTABLE", raster, 1));
+	assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", chafa, 1));
+
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 21U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_PDF, .max_bytes = 512U, .timeout_ms = 5000U,
+		.viewer_argv = viewer_argv, .viewer_argc = 1U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_string_equal("PDF-ASCII\n", event.content);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+
+	if(old_raster_copy == NULL) assert_success(unsetenv("NEOVIFM_PDF_RENDER_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_PDF_RENDER_EXECUTABLE", old_raster_copy, 1));
+	if(old_chafa_copy == NULL) assert_success(unsetenv("NEOVIFM_CHAFA_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", old_chafa_copy, 1));
+	free(old_raster_copy);
+	free(old_chafa_copy);
+	remove_file(chafa);
+	remove_file(raster);
+	remove_file(viewer);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_renders_video_first_frame_with_ffmpeg_and_chafa)
+{
+	const char *const dir = SANDBOX_PATH "/preview-video-frame";
+	const char *const path = SANDBOX_PATH "/preview-video-frame/movie clip.mp4";
+	const char *const ffmpeg = SANDBOX_PATH "/preview-video-frame/ffmpeg";
+	const char *const chafa = SANDBOX_PATH "/preview-video-frame/chafa";
+	create_dir(dir);
+	make_file(path, "fake video");
+	make_file(ffmpeg,
+			"#!/bin/sh\n"
+			"for arg do output=\"$arg\"; done\n"
+			"printf 'fake-png' > \"$output\"\n");
+	make_file(chafa,
+			"#!/bin/sh\n"
+			"printf 'VIDEO-ASCII\\n'\n");
+	assert_success(chmod(ffmpeg, 0700));
+	assert_success(chmod(chafa, 0700));
+	const char *const old_ffmpeg = getenv("NEOVIFM_FFMPEG_EXECUTABLE");
+	char *const old_ffmpeg_copy = old_ffmpeg == NULL ? NULL : strdup(old_ffmpeg);
+	const char *const old_chafa = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	char *const old_chafa_copy = old_chafa == NULL ? NULL : strdup(old_chafa);
+	assert_success(setenv("NEOVIFM_FFMPEG_EXECUTABLE", ffmpeg, 1));
+	assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", chafa, 1));
+
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_RIGHT, .generation = 22U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_VIDEO, .max_bytes = 512U, .timeout_ms = 5000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_string_equal("VIDEO-ASCII\n", event.content);
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+
+	if(old_ffmpeg_copy == NULL) assert_success(unsetenv("NEOVIFM_FFMPEG_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_FFMPEG_EXECUTABLE", old_ffmpeg_copy, 1));
+	if(old_chafa_copy == NULL) assert_success(unsetenv("NEOVIFM_CHAFA_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_CHAFA_EXECUTABLE", old_chafa_copy, 1));
+	free(old_ffmpeg_copy);
+	free(old_chafa_copy);
+	remove_file(chafa);
+	remove_file(ffmpeg);
+	remove_file(path);
+	remove_dir(dir);
+}
+
+TEST(preview_queue_uses_ffprobe_for_audio_metadata_before_header_fallback)
+{
+	const char *const dir = SANDBOX_PATH "/preview-audio-probe";
+	const char *const path = SANDBOX_PATH "/preview-audio-probe/track.mp3";
+	const char *const ffprobe = SANDBOX_PATH "/preview-audio-probe/ffprobe";
+	create_dir(dir);
+	make_file(path, "ID3\004\0\0");
+	make_file(ffprobe,
+			"#!/bin/sh\n"
+			"printf 'format_name=mp3\\nduration=12.500000\\ncodec_name=mp3\\n'\n");
+	assert_success(chmod(ffprobe, 0700));
+	const char *const old_ffprobe = getenv("NEOVIFM_FFPROBE_EXECUTABLE");
+	char *const old_ffprobe_copy = old_ffprobe == NULL ? NULL : strdup(old_ffprobe);
+	assert_success(setenv("NEOVIFM_FFPROBE_EXECUTABLE", ffprobe, 1));
+
+	nv_preview_queue_t *const queue = nv_preview_queue_alloc();
+	assert_non_null(queue);
+	char cwd_hex[1024], path_hex[1024];
+	assert_success(nv_preview_hex_encode(dir, cwd_hex, sizeof(cwd_hex)));
+	assert_success(nv_preview_hex_encode(path, path_hex, sizeof(path_hex)));
+	const nv_preview_request_t request = {
+		.pane = NV_PREVIEW_PANE_LEFT, .generation = 23U,
+		.cwd_bytes_hex = cwd_hex, .path_bytes_hex = path_hex,
+		.kind = NV_PREVIEW_KIND_AUDIO, .max_bytes = 512U, .timeout_ms = 1000U,
+	};
+	assert_success(nv_preview_queue_submit(queue, &request, NULL));
+	nv_preview_event_t event = {};
+	assert_true(pop_terminal_event(queue, &event));
+	assert_int_equal(NV_PREVIEW_TASK_DONE, event.state);
+	assert_non_null(strstr(event.content, "duration=12.500000"));
+	assert_non_null(strstr(event.content, "codec_name=mp3"));
+	nv_preview_event_free(&event);
+	nv_preview_queue_free(queue);
+
+	if(old_ffprobe_copy == NULL) assert_success(unsetenv("NEOVIFM_FFPROBE_EXECUTABLE"));
+	else assert_success(setenv("NEOVIFM_FFPROBE_EXECUTABLE", old_ffprobe_copy, 1));
+	free(old_ffprobe_copy);
+	remove_file(ffprobe);
+	remove_file(path);
 	remove_dir(dir);
 }
 

@@ -13,6 +13,7 @@ export type FunctionAction = "view" | "quick-view" | "edit" | "copy" | "move" | 
 export type KeymapResult =
   | Readonly<{ kind: "command"; command: CoreSessionCommand }>
   | Readonly<{ kind: "tab-index"; index: number }>
+  | Readonly<{ kind: "search"; direction: -1 | 1 }>
   | Readonly<{ kind: "cancel" }>
   | Readonly<{ kind: "function"; action: FunctionAction }>
   | Readonly<{ kind: "pending" }>
@@ -118,6 +119,9 @@ export class VifmKeymap {
     if (name === "p") return { kind: "function", action: key.shift ? "move" : "copy" }
     if (name === "d") return { kind: "function", action: "delete" }
     if (name === "u") return command({ action: "undo" })
+    if (name === "n") return command({ action: "search-next", direction: key.shift ? -1 : 1 })
+    if (name === "/" || name === "slash") return { kind: "search", direction: 1 }
+    if (name === "?" || name === "question") return { kind: "search", direction: -1 }
     if (key.shift) return { kind: "unhandled" }
     if (name === "q") {
       this.#prefix = "q"

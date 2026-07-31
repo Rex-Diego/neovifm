@@ -186,7 +186,7 @@ describe("JSONL protocol", () => {
       payload: {
         task_id: "42", generation: "7", pane: "left", target_pane: "right", kind: "text", state: "done",
         cwd_bytes_hex: "2f746d70", path_bytes_hex: "2f746d702f6e6f7465",
-        content: "note", truncated: false,
+        content: "note\n\u4e2d\u6587\tline", truncated: false,
       },
     })
     const markdown = parseProtocolRecord({
@@ -260,7 +260,7 @@ describe("JSONL protocol", () => {
     })
 
     expect(task).toMatchObject({ version: 3, type: "task", payload: { generation: "7", target_pane: "right", state: "running" } })
-    expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note", target_pane: "right", truncated: false } })
+    expect(preview).toMatchObject({ version: 3, type: "preview", payload: { content: "note\n\u4e2d\u6587\tline", target_pane: "right", truncated: false } })
     expect(markdown).toMatchObject({ type: "preview", payload: { kind: "markdown", content: "# heading" } })
     expect(pdf).toMatchObject({ type: "preview", payload: { kind: "pdf", content: "PDF page" } })
     expect(archive).toMatchObject({ type: "preview", payload: { kind: "archive" } })
@@ -514,7 +514,7 @@ describe("JSONL protocol", () => {
         code: "scan-failed",
         message: "unsafe\u001bmessage\u202e",
         retryable: false,
-        path_display: "/tmp/unsafe\u001bname",
+        path_display: "/tmp/unsafe\u001bname\nnext",
         path_bytes_hex: "2f746d702f756e736166651b6e616d65",
       },
     })
@@ -522,7 +522,7 @@ describe("JSONL protocol", () => {
     expect(record).toMatchObject({
       payload: {
         message: "unsafe�message�",
-        path_display: "/tmp/unsafe�name",
+        path_display: "/tmp/unsafe�name�next",
         path_bytes_hex: "2f746d702f756e736166651b6e616d65",
       },
     })

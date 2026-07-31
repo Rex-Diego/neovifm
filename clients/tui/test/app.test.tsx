@@ -271,6 +271,30 @@ test("opens the guarded F9 SSH dialog and sends a validated resource command", a
   })
 })
 
+test("opens directional search input and sends core-owned repeat commands", async () => {
+  const sent: unknown[] = []
+  const entries = [
+    snapshot.entries[0]!,
+    { ...snapshot.entries[0]!, name_display: "second.txt", path_bytes_hex: "2f746d702f7365636f6e642e747874" },
+  ]
+  const searchableWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: { ...workspace.left, entry_count: entries.length, entries },
+  }
+  setup = await testRender(() => <App workspace={searchableWorkspace} onCommand={(command) => { sent.push(command) }} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+  setup.mockInput.pressKey("/")
+  await setup.renderOnce()
+  expect(setup.renderer.root.findDescendantById("search-input")).toBeDefined()
+  await setup.mockInput.typeText("second")
+  setup.mockInput.pressEnter()
+  await setup.renderOnce()
+  expect(sent.at(-1)).toEqual({ action: "search", query: "second", direction: 1 })
+  setup.mockInput.pressKey("n")
+  await setup.renderOnce()
+  expect(sent.at(-1)).toEqual({ action: "search-next", direction: 1 })
+})
+
 test("never allocates a third pane for preview or tasks", async () => {
   setup = await testRender(() => <App workspace={workspace} preview={{
     task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
@@ -310,6 +334,32 @@ test("opens F3 preview as a full workspace viewer instead of a third pane", asyn
   expect(setup.captureCharFrame()).not.toContain("preview body")
 })
 
+test("keeps preview text selectable and copies the original Unicode content", async () => {
+  const copied: string[] = []
+  const content = "\u7b2c\u4e00\u884c\n\u4e2d\u6587\tsecond"
+  setup = await testRender(() => <App workspace={workspace} preview={{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content, truncated: false,
+  }} onCopyText={(text) => { copied.push(text) }} />, { width: 100, height: 20 })
+
+  await setup.renderOnce()
+  setup.mockInput.pressKey("F3")
+  await setup.renderOnce()
+  const previewContent = setup.renderer.root.findDescendantById("preview-content") as { selectable?: boolean } | undefined
+  expect(previewContent?.selectable).toBe(true)
+  const copyButton = setup.renderer.root.findDescendantById("preview-copy")
+  expect(copyButton).toBeDefined()
+  await setup.mockMouse.click(copyButton!.x, copyButton!.y)
+  await Bun.sleep(0)
+  await setup.renderOnce()
+  expect(copied).toEqual([content])
+  expect(setup.captureCharFrame()).toContain("Preview copied")
+  setup.mockInput.pressKey("y")
+  await Bun.sleep(0)
+  expect(copied).toEqual([content, content])
+})
+
 test("uses Space for an ephemeral opposite-pane preview while Tab still changes focus", async () => {
   const sent: unknown[] = []
   setup = await testRender(() => <App workspace={workspace} onCommand={(command) => { sent.push(command) }} preview={{
@@ -337,6 +387,25 @@ test("uses Space for an ephemeral opposite-pane preview while Tab still changes 
   await setup.renderOnce()
   expect(sent.at(-1)).toEqual({ action: "focus-next" })
   expect(setup.captureCharFrame()).not.toContain("opposite pane preview")
+})
+
+test("copies content from the wide Space quick preview", async () => {
+  const copied: string[] = []
+  const content = "quick\n\u9884\u89c8"
+  setup = await testRender(() => <App workspace={workspace} onCommand={() => true} onCopyText={(text) => { copied.push(text) }} preview={{
+    task_id: "1", generation: "2", pane: "left", target_pane: "right", kind: "text", state: "done",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    content, truncated: false,
+  }} />, { width: 120, height: 20 })
+
+  await setup.renderOnce()
+  setup.mockInput.pressKey(" ")
+  await setup.renderOnce()
+  const copyButton = setup.renderer.root.findDescendantById("preview-copy")
+  expect(copyButton).toBeDefined()
+  await setup.mockMouse.click(copyButton!.x, copyButton!.y)
+  await Bun.sleep(0)
+  expect(copied).toEqual([content])
 })
 
 test("falls back to the F3 full-screen viewer for Space in a narrow terminal", async () => {
@@ -466,6 +535,62 @@ test("keeps the C-owned cursor visible after it moves below the first viewport",
   expect(setup.captureCharFrame()).toContain("entry-35")
 })
 
+test("restores the parent directory scroll position after entering a child", async () => {
+  const parentEntries = Array.from({ length: 40 }, (_, index) => ({
+    ...snapshot.entries[0]!,
+    name_display: index === 35 ? "target-dir" : `entry-${String(index).padStart(2, "0")}`,
+    path_bytes_hex: `2f746d702f${index.toString(16).padStart(2, "0")}`,
+    kind: index === 35 ? "directory" as const : "file" as const,
+  }))
+  const parentWorkspace: WorkspaceSnapshotPayload = {
+    ...workspace,
+    left: {
+      ...workspace.left,
+      cwd_display: "/tmp",
+      cwd_bytes_hex: "2f746d70",
+      cursor: 39,
+      entry_count: parentEntries.length,
+      entries: parentEntries,
+    },
+  }
+  const childWorkspace: WorkspaceSnapshotPayload = {
+    ...parentWorkspace,
+    left: {
+      ...snapshot,
+      cwd_display: "/tmp/target-dir",
+      cwd_bytes_hex: "2f746d702f7461726765742d646972",
+      cursor: 0,
+      entry_count: 1,
+      entries: [{ ...snapshot.entries[0]!, name_display: "inside.txt", path_bytes_hex: "2f746d702f7461726765742d6469722f696e736964652e747874" }],
+    },
+  }
+  const [current, setCurrent] = createSignal(parentWorkspace)
+  setup = await testRender(() => <App workspace={current()} />, { width: 100, height: 12 })
+  await setup.renderOnce()
+  await Bun.sleep(5)
+  await setup.renderOnce()
+  setCurrent({ ...parentWorkspace, left: { ...parentWorkspace.left, cursor: 35 } })
+  await setup.renderOnce()
+  await Bun.sleep(5)
+  await setup.renderOnce()
+  const list = setup.renderer.root.findDescendantById("entries-left") as { scrollTop?: number } | undefined
+  expect(list).toBeDefined()
+  const parentScrollTop = list?.scrollTop ?? 0
+  expect(parentScrollTop).toBeGreaterThan(0)
+
+  setCurrent(childWorkspace)
+  await setup.renderOnce()
+  await Bun.sleep(5)
+  await setup.renderOnce()
+  setCurrent({ ...parentWorkspace, left: { ...parentWorkspace.left, cursor: 35 } })
+  await setup.renderOnce()
+  await Bun.sleep(5)
+  await setup.renderOnce()
+
+  expect(list?.scrollTop ?? 0).toBe(parentScrollTop)
+  expect(setup.captureCharFrame()).toContain("target-dir")
+})
+
 test("mouse clicks provide F3 and F4 fallbacks when the host captures function keys", async () => {
   let editedPath: string | undefined
   setup = await testRender(() => <App
@@ -492,6 +617,24 @@ test("mouse clicks provide F3 and F4 fallbacks when the host captures function k
   await setup.mockMouse.click(editButton!.x, editButton!.y)
   await setup.renderOnce()
   expect(editedPath).toBe("/tmp/file.txt")
+})
+
+test("keeps F3 clickable while the current preview is still loading", async () => {
+  setup = await testRender(() => <App workspace={workspace} preview={{
+    task_id: "1", generation: "2", pane: "left", kind: "text", state: "running",
+    cwd_bytes_hex: snapshot.cwd_bytes_hex, path_bytes_hex: snapshot.entries[0]!.path_bytes_hex,
+    truncated: false,
+  }} />, { width: 100, height: 20 })
+  await setup.renderOnce()
+
+  const viewButton = setup.renderer.root.findDescendantById("function-view")
+  expect(viewButton).toBeDefined()
+  await setup.mockMouse.click(viewButton!.x, viewButton!.y)
+  await setup.renderOnce()
+  const frame = setup.captureCharFrame()
+  expect(frame).toContain("F3 VIEW")
+  expect(frame).toContain("text · running · generation 2")
+  expect(frame).toContain("Loading preview...")
 })
 
 test("routes F4 edit through the shared action service", async () => {

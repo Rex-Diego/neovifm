@@ -357,13 +357,23 @@ function isUnsafeDisplayCodePoint(codePoint: number): boolean {
   )
 }
 
-export function sanitizeDisplayText(text: string): string {
+function sanitizeText(text: string, preserveWhitespace: boolean): string {
   let display = ""
   for (const character of text) {
     const codePoint = character.codePointAt(0)
-    display += codePoint !== undefined && isUnsafeDisplayCodePoint(codePoint) ? "�" : character
+    const safeWhitespace = preserveWhitespace && codePoint !== undefined &&
+      (codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d)
+    display += codePoint !== undefined && isUnsafeDisplayCodePoint(codePoint) && !safeWhitespace ? "�" : character
   }
   return display
+}
+
+export function sanitizeDisplayText(text: string): string {
+  return sanitizeText(text, false)
+}
+
+export function sanitizePreviewText(text: string): string {
+  return sanitizeText(text, true)
 }
 
 function displayString(value: unknown, path: string, allowEmpty = true, maximumBytes = MAX_DISPLAY_TEXT_BYTES): string {
@@ -735,7 +745,7 @@ function parsePreviewPayload(value: unknown): PreviewPayload {
   if (task.state === "done" && content === undefined) return invalid("payload.content", "must be present for completed preview")
   return frozen({
     ...task,
-    ...(content === undefined ? {} : { content: sanitizeDisplayText(content) }),
+    ...(content === undefined ? {} : { content: sanitizePreviewText(content) }),
     truncated: booleanValue(payload.truncated, "payload.truncated"),
   })
 }

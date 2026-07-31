@@ -136,6 +136,55 @@
 - Tests inject executable fake helpers and cover fuse-zip preference, archivemount fallback, SSH remote argument isolation, read-only flags, and missing configured helper errors. On this macOS host `/usr/local/bin/sshfs` and `/sbin/umount` exist; a local archivemount build was validated in a temporary prefix but is not left installed while the FUSE runtime is unavailable.
 - This is a preparation DTO, not a lifecycle implementation. The next archive/SSH slice must run specs in a cancellable background resource task, publish task events, retain mount ownership across tabs, and unmount on parent/close/exit/error before changing pane snapshots.
 
+## 2026-07-29 fileviewer preview boundary
+
+- The core session now reuses the bounded `MYVIFMRC` association loader for preview requests, while the preview queue owns a copied argv so the config object can be freed immediately after submission. This keeps preview selection core-owned and prevents OpenTUI from growing a second suffix map.
+- Vifm configurations commonly use bare helper names such as `zip` rather than absolute paths. `posix_spawnp` preserves the shell-free argv boundary while resolving those names through PATH; fixed built-in helpers remain selected from absolute candidates.
+- The existing client display sanitizer intentionally replaces control characters such as helper newlines with `�`; integration assertions therefore verify the stable custom prefix and raw path rather than requiring a literal line ending in the rendered DTO.
+- The current integration environment on this machine exports a personal `MYVIFMRC` containing `fileviewer *.zip zip -sf %c`. Tests that expect built-in archive listing must run with `MYVIFMRC` unset; the production core should continue honoring it.
+
+## 2026-07-30 previewprg priority boundary
+
+- Classic `previewprg` is an option rather than a filename rule, so it cannot be represented by appending another fileviewer rule in declaration order. The loader stores the last bounded option value separately, and the core creates a synthetic catch-all preview rule ahead of fileviewer rules.
+- An unsafe or unsupported `previewprg` command is rejected by the same shell-free resolver and then falls through to a matching fileviewer. This preserves usable preview behavior without interpreting classic shell pipelines in the OpenTUI process.
+- `%px/%py/%pw/%ph/%pc/%pd`, terminal suspend/restore, and preview cache ownership remain deliberately deferred; accepting the option syntax does not claim graphical or pass-through compatibility.
+
+## 2026-07-30 Preview Unicode and copy boundary
+
+- The previous C sanitizer treated every byte above ASCII as unsafe, so a valid UTF-8 character such as a CJK code point became several `?` characters. Validation now preserves complete Unicode sequences and replaces only malformed bytes/control bytes, without changing output bounds.
+- Newline/tab preservation must be scoped to preview content. Applying it to all display fields would let filenames or error messages alter the TUI layout, so the TypeScript parser keeps `sanitizeDisplayText` strict and uses a separate `sanitizePreviewText` only for v3 preview content.
+- OpenTUI text renderables support terminal selection when `selectable` is explicit and selection colors are provided. Since selection copy is terminal/runtime dependent, the UI also offers a deterministic `Copy` button and full-content `y` fallback; `Ctrl-Shift-C`/macOS `Cmd-C` uses the runtime selection object when present.
+
+## 2026-07-30 Media rendering continuation
+
+- The current image path is already capable of readable ASCII rendering: `/usr/local/bin/chafa --format symbols --symbols ascii --colors none ...` produces bounded text and the real core session publishes it as an `image` preview. The remaining user-visible gap is that PDF uses only `pdftotext`, and audio/video use only header metadata.
+- OpenTUI 0.4.3 exposes terminal capability fields for Kitty graphics and Sixel but no image renderable in the current client. Raw graphics bytes must therefore stay out of the JSONL protocol; the safe next slice is core-side PDF/video frame rasterization followed by the existing line-safe `chafa` path.
+- macOS provides `/usr/local/bin/pdftoppm`, `/usr/local/bin/ffprobe`, and `/usr/local/bin/ffmpeg`. Helper selection must remain absolute/configurable for tests, shell-free, bounded by the existing preview timeout/output cap, and fall back without turning an optional renderer failure into a hard preview error.
+
+## 2026-07-30 Media rendering implementation evidence
+
+- `preview_task.c` now creates a unique `mkstemp` prefix under `TMPDIR`, unlinks the prefix before helper execution, and removes both prefix/output artifacts on every terminal path. PDF invokes `pdftoppm -f 1 -l 1 -singlefile -png`; video invokes `ffmpeg -v error -y -i ... -frames:v 1 -f image2 ...`; both pass the resulting PNG through the existing ASCII chafa renderer.
+- `ffprobe` is invoked with bounded `format` and `stream` entries and the same nonblocking `posix_spawnp` executor. Optional helper failure is identified by the `preview-helper-*` error family; timeout/cancel and resource errors are not silently converted into a second expensive operation.
+- Media helper selection honors `NEOVIFM_PDF_RENDER_EXECUTABLE`, `NEOVIFM_PDF_TEXT_EXECUTABLE`, `NEOVIFM_FFMPEG_EXECUTABLE`, `NEOVIFM_FFPROBE_EXECUTABLE`, and `NEOVIFM_CHAFA_EXECUTABLE`, then checks fixed `/usr/local`, `/opt/homebrew`, and system candidates. No raw PNG or graphics escape sequence crosses the JSONL boundary.
+- A 2 second general preview deadline was too tight for cold-started macOS shell helpers in fixture runs; core now assigns 5 seconds to PDF/audio/video while retaining 2 seconds for ordinary text/image/archive previews. The queue's max remains 30 seconds and cancellation still terminates children.
+- Verification evidence: `make -C tests neovifm_snapshot` 9734 checks / 92 tests; `env -u VIFM -u MYVIFMRC make check` pass; TUI coverage 139/139, 85.51% functions and 89.35% lines; `bun run typecheck`, `bun audit`, `git diff --check`; core-session 11/11 and probe/keyboard/PTY 7/7 integration. Fake helper session also proves a path containing spaces.
+
+## 2026-07-30 Media viewer fallback boundary
+
+- A configured Vifm media viewer is still authoritative when it produces useful text. For image/audio/video/PDF only, a `preview-helper-*` failure or whitespace-only successful output is treated as an unavailable optional renderer and falls back to the builtin media path; timeout, cancellation, invalid request, and resource errors remain terminal.
+- This handles image-only PDFs with common `pdftotext` rules without discarding the user's Vifm mapping for textual PDFs. The core session test runs an isolated `MYVIFMRC`, fake `pdftotext`, `pdftoppm`, and `chafa`, and verifies the target-pane preview reaches a DONE event with ASCII content.
+
+## 2026-07-30 Search and cursor restoration boundary
+
+- Vifm-style name search belongs in the core session rather than a TUI-only filtered list: the core owns cursor movement, wraparound and per-pane query/direction state, while `/`/`?`/`n`/`N` remain thin key normalization in OpenTUI. The current matcher is bounded, ASCII case-insensitive substring search; Unicode-aware collation and marks/registers are separate follow-up capabilities.
+- A directory cursor cannot be restored from a display name alone because names are only unique within one directory and refresh/sort can reorder entries. The session now records raw entry path identity keyed by pane tab and directory identity before replacing a snapshot, then lets the existing sort comparator reposition the remembered path. The bounded history is in-memory and intentionally not cross-restart state.
+
+## 2026-07-30 Media timeout and PNG terminal priority
+
+- PDF rendering has a dedicated 30 second deadline because cold-started `pdftoppm` can exceed the normal 2 second preview budget; cancellation still terminates the child and output remains bounded. A 6 second fake rasterizer integration test guards this distinction.
+- A Vifm image `fileviewer` association can successfully return identify/metadata text while providing no terminal pixels. For image previews the worker therefore tries the builtin line-safe `chafa` renderer first when an association exists, and only falls back to the external association if builtin rendering is unavailable; this preserves readable PNG behavior without putting graphics escape sequences into JSONL.
+- The test fixtures create helper executables in the same directory as the media file, so initial sorting may place a helper before the target. Integration tests must explicitly issue `select-entry` before asserting a media marker; otherwise a passing renderer can be mistaken for a timeout or missing capability.
+
 ## 2026-07-29 Resource lifecycle and media/undo follow-up
 
 - The resource lifecycle is now core-owned and asynchronous: mount/unmount helpers run behind a bounded FIFO task queue, tab ownership is attached only after a terminal success event, and session shutdown submits unmount cleanup before freeing the queue. A completion event with missing mount ownership is treated as `resource-mount-result-invalid`.
@@ -143,3 +192,15 @@
 - Media preview deliberately stops at a safe fallback boundary: image dimensions/format, audio container, and video container metadata are available without graphic terminal protocols. `chafa` 1.18.2 is installed and now wired as an optional absolute-helper ASCII symbols fallback; graphical image/video rendering and audio cover extraction remain deferred rather than faked.
 - Copy/move undo can be advertised because the bridge records destination identities after successful actions and refuses replaced/symlinked targets. Permanent delete still has no undo because it does not yet reuse Vifm Trash/`fops_delete` semantics; redo is also not implemented.
 - The full integration suite can have a PTY-to-core startup timing flake when all files share one Bun process. Isolating the PTY and running the remaining integration files with `--max-concurrency 1` produces deterministic green results.
+
+## 2026-07-31 Media timeout and symbol correction
+
+- The visible `@@@@@@@@` output was Chafa's intentional ASCII symbol palette, not UTF-8 corruption. The line-safe renderer now requests `--symbols block`, preserving selectable UTF-8 text while avoiding the dense `@` palette.
+- The previous core mapping gave images the general 2 second deadline and audio/video only 5 seconds. Image, audio, and video now share the bounded 30 second media budget; PDF remains at 30 seconds. PDF rasterization also caps rendering at 72 dpi and 1200px to limit work on oversized pages.
+- RED/GREEN evidence: the Chafa argv regression failed against ASCII and passed with block symbols; a 6 second fake image renderer timed out before the change and completes after the media deadline update. Full verification is recorded in `progress.md` for this turn.
+
+## 2026-07-31 Cursor viewport restoration
+
+- Core cursor identity restoration was already correct for ordinary directory enter/parent flows. The remaining mismatch was visual: OpenTUI's scrollbox clamps its scrollTop when the child directory has fewer rows, then `scrollChildIntoView` places the restored parent entry at the nearest edge, commonly the last visible row.
+- `EntryList` now keeps a bounded per-directory scrollTop history per pane. On a directory transition it restores the saved position before applying the existing visibility correction; same-directory cursor moves continue to use `scrollChildIntoView` normally.
+- The regression starts with the target at the fifth row from the bottom, enters a one-row child, and returns. It failed with a four-row scrollTop drift before the change and passes after the change; typecheck and the focused app suite are green.

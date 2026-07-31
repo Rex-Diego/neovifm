@@ -254,6 +254,8 @@
         { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "move" }, "delta": { "enum": [-1, 1] } } },
         { "type": "object", "required": ["action", "delta"], "properties": { "action": { "const": "sort-cycle" }, "pane": { "enum": ["left", "right"] }, "delta": { "enum": [-1, 1] } } },
         { "type": "object", "required": ["action", "target"], "properties": { "action": { "const": "move-to" }, "target": { "enum": ["first", "last"] } } },
+        { "type": "object", "required": ["action", "query", "direction"], "properties": { "action": { "const": "search" }, "query": { "type": "string", "minLength": 1, "maxLength": 255 }, "direction": { "enum": [-1, 1] } } },
+        { "type": "object", "required": ["action", "direction"], "properties": { "action": { "const": "search-next" }, "direction": { "enum": [-1, 1] } } },
         { "type": "object", "required": ["action", "pane", "key"], "properties": { "action": { "const": "sort-by" }, "pane": { "enum": ["left", "right"] }, "key": { "enum": ["name", "extension", "size", "ctime", "mtime", "mode", "type", "other"] } } },
         { "type": "object", "required": ["action", "pane", "index", "toggle"], "properties": { "action": { "const": "select-entry" }, "pane": { "enum": ["left", "right"] }, "index": { "type": "integer", "minimum": 0, "maximum": 4095 }, "toggle": { "type": "boolean" } } },
         { "type": "object", "required": ["action", "pane"], "properties": { "action": { "const": "new-tab" }, "pane": { "enum": ["left", "right"] } } },

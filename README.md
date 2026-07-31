@@ -52,15 +52,25 @@ bun --version
 | --- | --- | --- |
 | `unzip`、`bsdtar` | ZIP/tar 清单预览 | 系统自带 |
 | `sshfs`、`umount` | F9 SSH 目录生命周期 | `brew install sshfs` 或 macFUSE 发行包；`umount` 系统自带 |
+| `pdftoppm` | PDF 首页栅格化，随后交给 `chafa` 做终端可读预览 | `brew install poppler` |
 | `pdftotext` | PDF 文本降级预览 | `brew install poppler` |
 | `mutool` | PDF/文档诊断与后续页面渲染 | `brew install mupdf` |
+| `ffmpeg` | 视频首帧提取，随后交给 `chafa` 做终端可读预览 | `brew install ffmpeg` |
 | `ffprobe` | 媒体探测与调试 | `brew install ffmpeg` |
-| `chafa` | 图像 ASCII symbols 降级预览（不传递 ANSI/Kitty/Sixel 原始序列） | `brew install chafa` |
+| `chafa` | 图像 Unicode block symbols 降级预览（不传递 ANSI/Kitty/Sixel 原始序列） | `brew install chafa` |
 | `archivemount` 或 `fuse-zip` | ZIP 作为目录挂载 | macOS 需要 macFUSE/FUSE-T；Homebrew core 中这两个 formula 当前标记为 Linux-only，不能直接安装 |
 
 本项目会按 `/usr/local/bin`、`/opt/homebrew/bin` 和系统路径探测 helper。macOS 上要启用真实 archive mount，需要先安装一个 FUSE runtime。任选其一：
 
-如需测试或指定其他安装位置，可将 `NEOVIFM_CHAFA_EXECUTABLE` 设为一个绝对路径；该变量只改变 helper 选择，不会改变参数校验或通过 shell 执行。
+如需测试或指定其他安装位置，可将以下变量设为绝对路径；变量只改变 helper 选择，不会改变参数校验或通过 shell 执行：
+
+```text
+NEOVIFM_CHAFA_EXECUTABLE
+NEOVIFM_PDF_RENDER_EXECUTABLE
+NEOVIFM_PDF_TEXT_EXECUTABLE
+NEOVIFM_FFMPEG_EXECUTABLE
+NEOVIFM_FFPROBE_EXECUTABLE
+```
 
 ```bash
 brew install --cask macfuse
@@ -87,7 +97,7 @@ archivemount --version
 检查当前环境：
 
 ```bash
-for tool in sshfs umount unzip bsdtar pdftotext mutool ffprobe chafa archivemount fuse-zip; do
+for tool in sshfs umount unzip bsdtar pdftoppm pdftotext mutool ffmpeg ffprobe chafa archivemount fuse-zip; do
   printf '%-12s' "$tool"
   command -v "$tool" || printf '%s' 'missing'
   printf '\n'

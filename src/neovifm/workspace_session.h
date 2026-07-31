@@ -15,9 +15,11 @@
 #include "../compat/neovifm_fs.h"
 
 #define NV_SESSION_MAX_NAME_BYTES 255U
+#define NV_SESSION_MAX_SEARCH_BYTES 255U
 #define NV_SESSION_MAX_ACTION_PATHS 64U
 #define NV_SESSION_MAX_TABS 8U
 #define NV_SESSION_MAX_TAB_CYCLE 999
+#define NV_SESSION_MAX_CURSOR_HISTORY 128U
 
 typedef enum
 {
@@ -39,6 +41,8 @@ typedef enum
 	NV_SESSION_MOVE_CURSOR,
 	NV_SESSION_MOVE_FIRST,
 	NV_SESSION_MOVE_LAST,
+	NV_SESSION_SEARCH,
+	NV_SESSION_SEARCH_NEXT,
 	NV_SESSION_ENTER,
 	NV_SESSION_MOUNT_SSH,
 	NV_SESSION_PARENT,
@@ -79,6 +83,9 @@ typedef struct
 	int delta;
 	nv_pane_sort_key_t sort_key;
 	char name[NV_SESSION_MAX_NAME_BYTES + 1U];
+	char *search_query;
+	int search_direction;
+	int owns_search_fields;
 	char *action_cwd_bytes_hex;
 	uint64_t action_snapshot_revision;
 	uint64_t action_cwd_device;
@@ -178,12 +185,31 @@ typedef struct
 
 typedef struct
 {
+	uint64_t tab_id;
+	char *directory_bytes_hex;
+	char *entry_path_bytes_hex;
+} nv_session_cursor_history_entry_t;
+
+typedef struct
+{
+	nv_session_cursor_history_entry_t entries[NV_SESSION_MAX_CURSOR_HISTORY];
+	size_t count;
+} nv_session_cursor_history_t;
+
+typedef struct
+{
 	nv_pane_snapshot_t left;
 	nv_pane_snapshot_t right;
 	nv_session_pane_t active_pane;
 	uint64_t next_snapshot_revision;
 	nv_session_tabs_t left_tabs;
 	nv_session_tabs_t right_tabs;
+	nv_session_cursor_history_t left_cursor_history;
+	nv_session_cursor_history_t right_cursor_history;
+	char *left_search_query;
+	char *right_search_query;
+	int left_search_direction;
+	int right_search_direction;
 	uint64_t next_tab_id;
 } nv_workspace_session_t;
 

@@ -40,6 +40,7 @@
 
 - [x] 以 `src/modes/normal.c`、`src/engine/keys.c`、Vifm 文档、`/Users/rex/soft/_refs/neovifm/viatc` 为来源，建立完整行为矩阵：按键序列、计数、模式、目标动作、当前支持度、冲突、验收用例和来源。
 - [ ] 第一批固定主线交互层：`F3--F10` + `hjkl`、`gg/G`、计数、`Ctrl-W`、`gt/gT`、搜索/next/previous、marks、registers、selection/visual、历史、pane 切换、刷新、打开/返回和退出语义。
+- [x] 当前搜索切片：`/`、`?`、`n/N` 已由 OpenTUI 标准化为 core-owned、按 pane 保存查询与方向并循环匹配；marks、registers、visual 和完整目录历史仍待补齐。
 - [ ] 第二批覆盖 Total Commander/ViATc 高频动作：同扩展名选择、反选、目录历史/常用目录、复制名称/完整路径、左右 pane 同步/交换、在另一 pane 或新 tab 打开。
 - [ ] 第三批单列高级动作：批量重命名、目录比较/同步、内容比较、快速搜索和命令浏览；逐项判断复用 Vifm、实现 adapter 或明确 defer。
 - [ ] 将 Vifm 的 key engine/command engine 作为语义来源；OpenTUI 只做按键事件标准化和 UI-local overlay 操作，不维护第二套独立 Vim 状态机。
@@ -63,6 +64,8 @@
 - [x] 在版本化 snapshot 中以 additive capability 提供 bounded/sanitized owner 与 group display（解析失败使用 uid/gid）；解析与缓存属于 C core，不在 TypeScript 中 shell-out，并避免 NSS/远程解析阻塞 UI 主循环。
 - [x] 按 pane 可用宽度响应式显示 owner/group；窄 pane 保留名称、大小、时间和权限。时间采用 hour-old/day-old/older 三档语义色，近期修改项更亮，但不得覆盖 cursor、selection、错误和 executable 等更高优先级状态。
 - [ ] 为 keymap、排序 comparator、协议边界、响应式 column、主题降级和 preview 生命周期分别补 unit/integration；正式 PTY 覆盖 Space/Tab 分离、快速移动 cursor、双 pane 状态不变、鼠标滚动以及 60/80/100/160 列。
+- [x] 返回父目录时按 `tab_id + directory_bytes_hex` 保存并恢复上次 cursor 的原始路径，刷新和排序后仍保持目标条目；增加 C 回归覆盖进入/返回闭环。
+- [x] TUI 额外按 pane/目录保存最近 128 个 scrollTop；进入子目录再返回时恢复原可视位置，目标 cursor 只在超出视口时校正，避免目标被推到最后一行。
 - **阶段验收：** 上述九项视觉/交互需求在 Unicode、ASCII、低色彩和窄宽终端均有稳定行为；经典 Vifm 排序和 OpenTUI 既有 tab/pane 操作无回归；形成一个独立提交。
 - **状态：** in_progress（Space/Tab、source-pane/target-pane preview intent、target-lane generation cancellation、目录优先 comparator、三行底栏、滚动条/active marker/sort/plus/权限时间/owner-group 信息层和 TaskCenter 取消/详情入口已落地；unit、真实 core session、PTY、ASCII/compact 基线已复验，完整低色彩与 60/80/100/160 列矩阵和阶段独立提交仍待补齐）。
 
@@ -139,18 +142,23 @@
 - [ ] 以 Vifm `previewprg -> fileviewer -> builtin fallback` 的优先级作为 viewer resolver，桥接 `quickview/vcache/background`、`%px/%py/%pw/%ph`、`%pc` 清理和 `%pd` pass-through 语义。
 - [ ] F3 继续打开全工作区 viewer，Space 使用 Phase 1A 定义的对面 pane 临时 viewer；两者共享 resolver/cache/cancellation，不恢复常驻第三 pane，也不修改目标 pane 的目录模型。
 - [ ] 明确主线语义：F3 是全屏“查看”，Space 是双栏快速查看；`l` 对普通文件进入查看路径，对目录/archive/remote 则执行 enter；不得把 classic quickview 的第三栏布局与 OpenTUI 临时渲染层混为一套 UI。
-- [x] 第一批切片：纯文本、Markdown 终端渲染、PDF 首页文本抽取；当前仍未接入 Vifm fileviewer 优先级。
-- [ ] 第一批剩余：代码高亮、PDF 图形/首页渲染、图片。
+- [x] 第一批切片：纯文本、Markdown 终端渲染、PDF 首页文本抽取，并接入有界 Vifm `previewprg -> fileviewer -> builtin` 预览优先级；仍未接入图形 passthrough 与完整 quickview 生命周期。
+- [ ] 第一批剩余：代码高亮；PDF 首页 block symbols 和图片 `chafa` 降级已在后续媒体切片完成。
 - [x] 第二批首个切片：archive listing 通过受限 `unzip -Z1`/`bsdtar -tf` 以结构化 argv 输出有界只读清单；仍不写回 archive、不改变 pane cwd。
 - [x] 第二批首个切片补充：常见二进制后缀由 core 以有界十六进制文本 fallback 预览；不执行外部 viewer，不把原始二进制直接送入终端文本渲染。
 - [x] 第二批元数据切片：图片尺寸/格式、音频格式、视频容器格式均提供有界 ASCII metadata fallback，不把二进制直送终端。
-- [x] 第二批补充：图片在当前 line-safe v3 协议中优先尝试绝对路径 `chafa` 的 ASCII symbols 输出；helper 缺失、损坏或非零退出时回退 metadata，不传递 ANSI/Kitty/Sixel 原始序列。
-- [ ] 第二批剩余：视频首帧、音频 duration/封面和图形协议渲染。
+- [x] 第二批补充：图片在当前 line-safe v3 协议中优先尝试绝对路径 `chafa` 的 Unicode block symbols 输出；helper 缺失、损坏或非零退出时回退 metadata，不传递 ANSI/Kitty/Sixel 原始序列。
+- [x] 预览文本修复：core 只替换非法 UTF-8/危险控制字节，保留合法 Unicode；协议层仅对 preview content 保留换行/制表符，路径和错误字段继续严格过滤；Viewer/Space 支持终端选区、`Copy` 按钮、`y` 全文复制和 `Ctrl-Shift-C`/macOS `Cmd-C` 选区复制。
+- [x] 本轮媒体渲染：PDF 首页和视频首帧先有界栅格化为 PNG，再复用 `chafa` 的 Unicode block symbols 输出；helper 缺失、损坏或非零退出时分别回退 PDF 文本和 ffprobe/头部 metadata，取消/超时保持结构化终态。
+- [x] 本轮媒体稳定性：图片、音频、视频统一使用 30 秒 bounded deadline，PDF 保持独立 30 秒预算；带 `fileviewer` metadata 规则的 PNG 优先尝试终端安全的内建 `chafa` block 输出，避免“能识别但看不到图”，PDF 栅格化限制为 72 dpi/1200px。
+- [x] 本轮媒体信息：音频/视频优先用 `ffprobe` 输出有界的格式、时长、编码、尺寸/采样信息，不能执行或解析失败时保留现有安全 metadata fallback。
+- [x] 本轮媒体验收：注入 fake `pdftoppm`/`ffmpeg`/`ffprobe`/`chafa` 覆盖成功路径、带空格路径和安全回退；真实 core session 覆盖 PDF/视频/音频终态，以及 `MYVIFMRC` 空输出 PDF viewer 回退；TUI F3/Space 既有可读 viewer 流程保持通过。
+- [ ] 第二批剩余：音频封面、原生图形协议渲染；视频首帧和音频 duration 已完成。
 - [ ] 图片能力顺序由终端 capability 决定：可用协议渲染、`chafa` 降级、纯文本 metadata 最终降级；无 Nerd Font/低色彩仍可读。
 - [ ] 复用本地 `/Users/rex/soft/_refs/neovifm/vifm-sixel-preview`、`vifmimg` 和 Yazi 作为行为参考，先做许可证/来源审查，不直接复制代码。
 - [ ] 所有外部 viewer 使用结构化 argv、明确 cwd、超时、输出上限、取消和清理，不执行 display path，不拼接未验证 shell 输入。
 - **阶段验收：** 图片/PDF/Markdown/代码/视频/音频在宽窄终端、支持/不支持图形协议、快速移动 cursor、helper 缺失和损坏文件下行为稳定；形成独立提交。
-- **状态：** in_progress（文本/Markdown/PDF 文本、archive listing、binary hex、图片 `chafa` ASCII symbols 降级和 image/audio/video metadata fallback 已完成；图形图片、PDF 页面、视频首帧、音频封面以及 Vifm `fileviewer` 优先级仍待补齐）。
+- **状态：** in_progress（文本/Markdown/PDF 文本与首页 block symbols、archive listing、binary hex、图片 `chafa` block symbols 降级、PDF/视频首帧、ffprobe 音视频信息、metadata fallback、有界 `previewprg -> fileviewer -> builtin` 优先级、媒体外部 viewer 空输出回退和 UTF-8/预览复制体验已完成；图形图片、音频封面、完整 MIME/候选语义和 quickview 生命周期仍待补齐）。
 
 ### Phase 7：主线联调与计划收口
 

@@ -16,6 +16,11 @@
 #define NV_PREVIEW_MAX_BYTES (64U*1024U)
 #define NV_PREVIEW_MAX_PATH_BYTES (16U*1024U)
 #define NV_PREVIEW_MAX_TIMEOUT_MS 30000U
+#define NV_PREVIEW_DEFAULT_TIMEOUT_MS 2000U
+#define NV_PREVIEW_MEDIA_TIMEOUT_MS 30000U
+#define NV_PREVIEW_PDF_TIMEOUT_MS 30000U
+#define NV_PREVIEW_MAX_VIEWER_ARGS 32U
+#define NV_PREVIEW_MAX_VIEWER_ARG_BYTES (16U*1024U)
 
 typedef enum
 {
@@ -58,6 +63,10 @@ typedef struct
 	nv_preview_kind_t kind;
 	size_t max_bytes;
 	unsigned int timeout_ms;
+	/* Optional shell-free Vifm fileviewer argv.  The queue copies it before
+	 * returning, so callers retain ownership of the input pointers. */
+	const char *const *viewer_argv;
+	size_t viewer_argc;
 } nv_preview_request_t;
 
 typedef struct

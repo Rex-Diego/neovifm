@@ -184,6 +184,7 @@ TEST(vifm_config_loads_patterns_commands_and_continuations)
 {
 	const char path[] = SANDBOX_PATH "/vifmrc";
 	make_file(path,
+			"setl previewprg='previewer --flag %c'\n"
 			"filetype {*.md,*.markdown} editor --wait %f,other %f\n"
 			"fileviewer {*.md} markdown %f\n"
 			"filetype {*.txt,\n"
@@ -193,6 +194,7 @@ TEST(vifm_config_loads_patterns_commands_and_continuations)
 	nv_open_error_t error = {};
 	assert_success(nv_open_config_load(path, &config, &error));
 	assert_int_equal(6, config.rule_count);
+	assert_string_equal("previewer --flag %c", config.previewprg);
 	assert_string_equal("*.md", config.rules[0].pattern);
 	assert_string_equal("editor --wait %f", config.rules[0].command);
 	assert_string_equal("*.markdown", config.rules[1].pattern);

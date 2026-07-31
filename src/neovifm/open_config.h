@@ -19,6 +19,9 @@ typedef struct
 {
 	nv_open_association_rule_t *rules;
 	size_t rule_count;
+	/* Last bounded previewprg option.  The core prepends it at preview
+	 * resolution time so it retains priority over fileviewer rules. */
+	char *previewprg;
 	char **owned_strings;
 	size_t owned_string_count;
 } nv_open_config_t;

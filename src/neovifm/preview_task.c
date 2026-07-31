@@ -39,6 +39,8 @@ struct nv_preview_task_t
 	char *path;
 	char *cwd_hex;
 	char *path_hex;
+	char **viewer_argv;
+	size_t viewer_argc;
 	int cancelled;
 	int terminal_emitted;
 	uint64_t deadline_ms;
@@ -97,7 +99,24 @@ static int preview_video(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_builtin(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
 static void sanitize_preview_text(char content[], size_t length);
+#ifndef _WIN32
+static int preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		const char helper[], char *const argv[], char **content,
+		int *truncated, const char **error_code, int *os_error);
+static int preview_chafa_path(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		const char image_path[], char **content, int *truncated,
+		const char **error_code, int *os_error);
+static int preview_pdf_frame(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_video_frame(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error);
+static int preview_ffprobe_metadata(nv_preview_queue_t *queue,
+		nv_preview_task_t *task, char **content, int *truncated,
+		const char **error_code, int *os_error);
+#endif
 
 int
 nv_preview_hex_encode(const char input[], char output[], size_t output_size)
@@ -155,7 +174,25 @@ static int
 request_valid(const nv_preview_request_t *request)
 {
 	char *cwd = NULL, *path = NULL;
-	const int valid = request != NULL && request->generation != 0U &&
+	int viewer_valid = request != NULL && request->viewer_argc <= NV_PREVIEW_MAX_VIEWER_ARGS &&
+		(request->viewer_argc == 0U || request->viewer_argv != NULL);
+	if(viewer_valid && request->viewer_argc != 0U)
+	{
+		for(size_t i = 0U; i < request->viewer_argc; ++i)
+		{
+			if(request->viewer_argv[i] == NULL || request->viewer_argv[i][0] == '\0')
+			{
+				viewer_valid = 0;
+				break;
+			}
+			if(strlen(request->viewer_argv[i]) > NV_PREVIEW_MAX_VIEWER_ARG_BYTES)
+			{
+				viewer_valid = 0;
+				break;
+			}
+		}
+	}
+	const int valid = request != NULL && viewer_valid && request->generation != 0U &&
 			(request->pane == NV_PREVIEW_PANE_LEFT || request->pane == NV_PREVIEW_PANE_RIGHT) &&
 			(request->has_target_pane == 0 || request->has_target_pane == 1) &&
 			(!request->has_target_pane ||
@@ -193,15 +230,57 @@ task_expired(const nv_preview_task_t *task)
 	return task->deadline_ms != 0U && now_ms() >= task->deadline_ms;
 }
 
+static size_t
+valid_utf8_sequence_length(const unsigned char content[], size_t remaining)
+{
+	const unsigned char first = content[0];
+	if(first >= 0xc2U && first <= 0xdfU)
+		return remaining >= 2U && content[1] >= 0x80U && content[1] <= 0xbfU ? 2U : 0U;
+	if(first == 0xe0U)
+		return remaining >= 3U && content[1] >= 0xa0U && content[1] <= 0xbfU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU ? 3U : 0U;
+	if((first >= 0xe1U && first <= 0xecU) || (first >= 0xeeU && first <= 0xefU))
+		return remaining >= 3U && content[1] >= 0x80U && content[1] <= 0xbfU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU ? 3U : 0U;
+	if(first == 0xedU)
+		return remaining >= 3U && content[1] >= 0x80U && content[1] <= 0x9fU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU ? 3U : 0U;
+	if(first == 0xf0U)
+		return remaining >= 4U && content[1] >= 0x90U && content[1] <= 0xbfU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU &&
+			content[3] >= 0x80U && content[3] <= 0xbfU ? 4U : 0U;
+	if(first >= 0xf1U && first <= 0xf3U)
+		return remaining >= 4U && content[1] >= 0x80U && content[1] <= 0xbfU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU &&
+			content[3] >= 0x80U && content[3] <= 0xbfU ? 4U : 0U;
+	if(first == 0xf4U)
+		return remaining >= 4U && content[1] >= 0x80U && content[1] <= 0x8fU &&
+			content[2] >= 0x80U && content[2] <= 0xbfU &&
+			content[3] >= 0x80U && content[3] <= 0xbfU ? 4U : 0U;
+	return 0U;
+}
+
 static void
 sanitize_preview_text(char content[], size_t length)
 {
-	for(size_t i = 0U; i < length; ++i)
+	for(size_t i = 0U; i < length;)
 	{
 		const unsigned char value = (unsigned char)content[i];
 		if(value == '\n' || value == '\r' || value == '\t' ||
-			(value >= 0x20U && value <= 0x7eU)) continue;
+			(value >= 0x20U && value <= 0x7eU))
+		{
+			++i;
+			continue;
+		}
+		const size_t sequence_length = valid_utf8_sequence_length(
+				(const unsigned char *)content + i, length - i);
+		if(sequence_length != 0U)
+		{
+			i += sequence_length;
+			continue;
+		}
 		content[i] = '?';
+		++i;
 	}
 }
 
@@ -263,6 +342,8 @@ task_free(nv_preview_task_t *task)
 	if(task == NULL) return;
 	free(task->cwd);
 	free(task->path);
+	for(size_t i = 0U; i < task->viewer_argc; ++i) free(task->viewer_argv[i]);
+	free(task->viewer_argv);
 	free(task->cwd_hex);
 	free(task->path_hex);
 	free(task);
@@ -345,6 +426,26 @@ nv_preview_queue_submit(nv_preview_queue_t *queue,
 	{
 		task_free(task);
 		return -1;
+	}
+	if(request->viewer_argc != 0U)
+	{
+		task->viewer_argv = calloc(request->viewer_argc + 1U,
+				sizeof(*task->viewer_argv));
+		if(task->viewer_argv == NULL)
+		{
+			task_free(task);
+			return -1;
+		}
+		task->viewer_argc = request->viewer_argc;
+		for(size_t i = 0U; i < request->viewer_argc; ++i)
+		{
+			task->viewer_argv[i] = strdup(request->viewer_argv[i]);
+			if(task->viewer_argv[i] == NULL)
+			{
+				task_free(task);
+				return -1;
+			}
+		}
 	}
 	pthread_mutex_lock(&queue->mutex);
 	if(queue->stopping)
@@ -858,6 +959,19 @@ static int
 preview_audio(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
+#ifndef _WIN32
+	const int probed = preview_ffprobe_metadata(queue, task, content, truncated,
+			error_code, os_error);
+	if(probed >= 0) return probed;
+	if(*error_code == NULL || strncmp(*error_code, "preview-helper-",
+			strlen("preview-helper-")) != 0)
+	{
+		return probed;
+	}
+	*error_code = NULL;
+	*os_error = 0;
+	*truncated = 0;
+#endif
 	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_AUDIO, content,
 			truncated, error_code, os_error);
 }
@@ -866,6 +980,30 @@ static int
 preview_video(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
+#ifndef _WIN32
+	const int rendered = preview_video_frame(queue, task, content, truncated,
+			error_code, os_error);
+	if(rendered >= 0) return rendered;
+	if(*error_code == NULL || strncmp(*error_code, "preview-helper-",
+			strlen("preview-helper-")) != 0)
+	{
+		return rendered;
+	}
+	*error_code = NULL;
+	*os_error = 0;
+	*truncated = 0;
+	const int probed = preview_ffprobe_metadata(queue, task, content, truncated,
+			error_code, os_error);
+	if(probed >= 0) return probed;
+	if(*error_code == NULL || strncmp(*error_code, "preview-helper-",
+			strlen("preview-helper-")) != 0)
+	{
+		return probed;
+	}
+	*error_code = NULL;
+	*os_error = 0;
+	*truncated = 0;
+#endif
 	return preview_media_metadata(queue, task, NV_PREVIEW_KIND_VIDEO, content,
 			truncated, error_code, os_error);
 }
@@ -897,7 +1035,10 @@ preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		return -1;
 	}
 	pid_t child = 0;
-	const int spawned = posix_spawn(&child, helper, &actions, NULL, argv, environ);
+	/* Vifm fileviewer rules conventionally name helpers through PATH (for
+	 * example, `zip` or `pdftotext`).  `posix_spawnp` preserves the shell-free
+	 * argv boundary while retaining that native command lookup behavior. */
+	const int spawned = posix_spawnp(&child, helper, &actions, NULL, argv, environ);
 	(void)posix_spawn_file_actions_destroy(&actions);
 	close(output_pipe[1]);
 	if(spawned != 0)
@@ -997,28 +1138,36 @@ preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
 }
 
 static const char *
-select_chafa_helper(void)
+select_preview_helper(const char environment_name[],
+		const char *const candidates[])
 {
-	const char *const configured = getenv("NEOVIFM_CHAFA_EXECUTABLE");
+	const char *const configured = getenv(environment_name);
 	if(configured != NULL && configured[0] == '/' && configured[1] != '\0' &&
 			access(configured, X_OK) == 0)
 	{
 		return configured;
 	}
-	static const char *const candidates[] = {
-		"/usr/local/bin/chafa", "/opt/homebrew/bin/chafa",
-		"/usr/bin/chafa", "/bin/chafa",
-	};
-	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
+	for(size_t i = 0U; candidates != NULL && candidates[i] != NULL; ++i)
 	{
 		if(access(candidates[i], X_OK) == 0) return candidates[i];
 	}
 	return NULL;
 }
 
+static const char *
+select_chafa_helper(void)
+{
+	static const char *const candidates[] = {
+		"/usr/local/bin/chafa", "/opt/homebrew/bin/chafa",
+		"/usr/bin/chafa", "/bin/chafa", NULL,
+	};
+	return select_preview_helper("NEOVIFM_CHAFA_EXECUTABLE", candidates);
+}
+
 static int
-preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
-		int *truncated, const char **error_code, int *os_error)
+preview_chafa_path(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		const char image_path[], char **content, int *truncated,
+		const char **error_code, int *os_error)
 {
 	const char *const helper = select_chafa_helper();
 	if(helper == NULL)
@@ -1027,13 +1176,14 @@ preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content
 		*os_error = ENOENT;
 		return -1;
 	}
-	/* Symbols/ASCII and no colors keep this optional renderer inside the
-	 * line-safe protocol.  Raw Kitty/Sixel/iTerm escape sequences are not
-	 * allowed to cross the core/client boundary. */
+	/* Unicode block symbols and no colors keep this optional renderer inside
+	 * the line-safe protocol while avoiding the dense '@' output of the ASCII
+	 * symbol set.  Raw Kitty/Sixel/iTerm escape sequences are not allowed to
+	 * cross the core/client boundary. */
 	char *const argv[] = {
-		(char *)helper, "--format", "symbols", "--symbols", "ascii",
+		(char *)helper, "--format", "symbols", "--symbols", "block",
 		"--colors", "none", "--polite", "on", "--relative", "off",
-		"--animate", "off", "--size", "40x16", task->path, NULL,
+		"--animate", "off", "--size", "40x16", (char *)image_path, NULL,
 	};
 	const int result = preview_external(queue, task, helper, argv, content, truncated,
 			error_code, os_error);
@@ -1049,18 +1199,199 @@ preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content
 }
 
 static int
-preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+preview_chafa(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
-	const char *helper = NULL;
+	return preview_chafa_path(queue, task, task->path, content, truncated,
+			error_code, os_error);
+}
+
+static int
+create_preview_image_path(char prefix[], size_t prefix_size, char image_path[],
+		size_t image_path_size, const char **error_code, int *os_error)
+{
+	const char *base = getenv("TMPDIR");
+	if(base == NULL || base[0] != '/' || strlen(base) > NV_PREVIEW_MAX_PATH_BYTES/2U)
+		base = "/tmp";
+	const size_t base_length = strlen(base);
+	const int separator = base_length != 0U && base[base_length - 1U] != '/';
+	const int written = snprintf(prefix, prefix_size, "%s%sneovifm-preview-XXXXXX",
+			base, separator ? "/" : "");
+	if(written < 0 || (size_t)written >= prefix_size)
+	{
+		*error_code = "preview-helper-temp-failed";
+		*os_error = ENAMETOOLONG;
+		return -1;
+	}
+	const int fd = mkstemp(prefix);
+	if(fd < 0)
+	{
+		*error_code = "preview-helper-temp-failed";
+		*os_error = errno;
+		return -1;
+	}
+	const int close_error = close(fd);
+	const int unlink_error = unlink(prefix);
+	if(close_error != 0 || unlink_error != 0)
+	{
+		const int error = errno;
+		(void)unlink(prefix);
+		*error_code = "preview-helper-temp-failed";
+		*os_error = error;
+		return -1;
+	}
+	const int image_written = snprintf(image_path, image_path_size, "%s.png", prefix);
+	if(image_written < 0 || (size_t)image_written >= image_path_size)
+	{
+		*error_code = "preview-helper-temp-failed";
+		*os_error = ENAMETOOLONG;
+		return -1;
+	}
+	return 0;
+}
+
+static void
+cleanup_preview_image(const char prefix[], const char image_path[])
+{
+	if(prefix != NULL && prefix[0] != '\0') (void)unlink(prefix);
+	if(image_path != NULL && image_path[0] != '\0') (void)unlink(image_path);
+}
+
+static int
+preview_pdf_frame(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	static const char *const candidates[] = {
+		"/usr/local/bin/pdftoppm", "/opt/homebrew/bin/pdftoppm",
+		"/usr/bin/pdftoppm", NULL,
+	};
+	const char *const raster = select_preview_helper("NEOVIFM_PDF_RENDER_EXECUTABLE",
+			candidates);
+	if(raster == NULL || select_chafa_helper() == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	char prefix[NV_PREVIEW_MAX_PATH_BYTES + 1U] = {};
+	char image_path[NV_PREVIEW_MAX_PATH_BYTES + 8U] = {};
+	if(create_preview_image_path(prefix, sizeof(prefix), image_path,
+			sizeof(image_path), error_code, os_error) != 0)
+		return -1;
+	char *const argv[] = {
+		(char *)raster, "-f", "1", "-l", "1", "-singlefile", "-png",
+		"-r", "72", "-scale-to", "1200",
+		task->path, prefix, NULL,
+	};
+	char *raster_output = NULL;
+	int raster_truncated = 0;
+	int result = preview_external(queue, task, raster, argv, &raster_output,
+			&raster_truncated, error_code, os_error);
+	free(raster_output);
+	if(result == 0 && access(image_path, R_OK) == 0)
+	{
+		result = preview_chafa_path(queue, task, image_path, content, truncated,
+				error_code, os_error);
+	}
+	else if(result == 0)
+	{
+		*error_code = "preview-helper-failed";
+		*os_error = ENOENT;
+		result = -1;
+	}
+	cleanup_preview_image(prefix, image_path);
+	return result;
+}
+
+static int
+preview_video_frame(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	static const char *const candidates[] = {
+		"/usr/local/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg",
+		"/usr/bin/ffmpeg", NULL,
+	};
+	const char *const ffmpeg = select_preview_helper("NEOVIFM_FFMPEG_EXECUTABLE",
+			candidates);
+	if(ffmpeg == NULL || select_chafa_helper() == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	char prefix[NV_PREVIEW_MAX_PATH_BYTES + 1U] = {};
+	char image_path[NV_PREVIEW_MAX_PATH_BYTES + 8U] = {};
+	if(create_preview_image_path(prefix, sizeof(prefix), image_path,
+			sizeof(image_path), error_code, os_error) != 0)
+		return -1;
+	char *const argv[] = {
+		(char *)ffmpeg, "-v", "error", "-y", "-i", task->path,
+		"-frames:v", "1", "-f", "image2", image_path, NULL,
+	};
+	char *ffmpeg_output = NULL;
+	int ffmpeg_truncated = 0;
+	int result = preview_external(queue, task, ffmpeg, argv, &ffmpeg_output,
+			&ffmpeg_truncated, error_code, os_error);
+	free(ffmpeg_output);
+	if(result == 0 && access(image_path, R_OK) == 0)
+	{
+		result = preview_chafa_path(queue, task, image_path, content, truncated,
+				error_code, os_error);
+	}
+	else if(result == 0)
+	{
+		*error_code = "preview-helper-failed";
+		*os_error = ENOENT;
+		result = -1;
+	}
+	cleanup_preview_image(prefix, image_path);
+	return result;
+}
+
+static int
+preview_ffprobe_metadata(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error)
+{
+	static const char *const candidates[] = {
+		"/usr/local/bin/ffprobe", "/opt/homebrew/bin/ffprobe",
+		"/usr/bin/ffprobe", NULL,
+	};
+	const char *const helper = select_preview_helper("NEOVIFM_FFPROBE_EXECUTABLE",
+			candidates);
+	if(helper == NULL)
+	{
+		*error_code = "preview-helper-unavailable";
+		*os_error = ENOENT;
+		return -1;
+	}
+	char *const argv[] = {
+		(char *)helper, "-v", "error", "-show_entries",
+		"format=format_name,duration:stream=index,codec_type,codec_name,width,height,sample_rate,channels",
+		"-of", "default=noprint_wrappers=1:nokey=0", task->path, NULL,
+	};
+	const int result = preview_external(queue, task, helper, argv, content, truncated,
+			error_code, os_error);
+	if(result == 0 && (content == NULL || *content == NULL || (*content)[0] == '\0'))
+	{
+		free(content == NULL ? NULL : *content);
+		if(content != NULL) *content = NULL;
+		*error_code = "preview-helper-failed";
+		*os_error = EINVAL;
+		return -1;
+	}
+	return result;
+}
+
+static int
+preview_pdf_text(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
 	static const char *const candidates[] = {
 		"/usr/local/bin/pdftotext", "/opt/homebrew/bin/pdftotext",
-		"/usr/bin/pdftotext",
+		"/usr/bin/pdftotext", NULL,
 	};
-	for(size_t i = 0U; i < sizeof(candidates)/sizeof(candidates[0]); ++i)
-	{
-		if(access(candidates[i], X_OK) == 0) { helper = candidates[i]; break; }
-	}
+	const char *const helper = select_preview_helper("NEOVIFM_PDF_TEXT_EXECUTABLE",
+			candidates);
 	if(helper == NULL)
 	{
 		*error_code = "preview-helper-unavailable";
@@ -1072,6 +1403,24 @@ preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 	};
 	return preview_external(queue, task, helper, argv, content, truncated,
 			error_code, os_error);
+}
+
+static int
+preview_pdf(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
+		int *truncated, const char **error_code, int *os_error)
+{
+	const int rendered = preview_pdf_frame(queue, task, content, truncated,
+			error_code, os_error);
+	if(rendered >= 0) return rendered;
+	if(*error_code == NULL || strncmp(*error_code, "preview-helper-",
+			strlen("preview-helper-")) != 0)
+	{
+		return rendered;
+	}
+	*error_code = NULL;
+	*os_error = 0;
+	*truncated = 0;
+	return preview_pdf_text(queue, task, content, truncated, error_code, os_error);
 }
 
 static int
@@ -1165,6 +1514,69 @@ preview_archive(nv_preview_queue_t *queue, nv_preview_task_t *task, char **conte
 }
 #endif
 
+static int
+preview_builtin(nv_preview_queue_t *queue, nv_preview_task_t *task,
+		char **content, int *truncated, const char **error_code, int *os_error)
+{
+	switch(task->request.kind)
+	{
+		case NV_PREVIEW_KIND_DIRECTORY:
+			return preview_directory(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_ARCHIVE:
+			return preview_archive(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_BINARY:
+			return preview_binary(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_IMAGE:
+			return preview_image(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_AUDIO:
+			return preview_audio(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_VIDEO:
+			return preview_video(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_PDF:
+			return preview_pdf(queue, task, content, truncated, error_code, os_error);
+		case NV_PREVIEW_KIND_TEXT:
+		case NV_PREVIEW_KIND_MARKDOWN:
+			return preview_text(queue, task, content, truncated, error_code, os_error);
+	}
+	*error_code = "preview-kind-invalid";
+	return -1;
+}
+
+#ifndef _WIN32
+static int
+preview_content_blank(const char content[])
+{
+	if(content == NULL) return 1;
+	for(size_t i = 0U; content[i] != '\0'; ++i)
+	{
+		if(content[i] != ' ' && content[i] != '\n' && content[i] != '\r' &&
+				content[i] != '\t')
+			return 0;
+	}
+	return 1;
+}
+
+static int
+preview_content_metadata_only(const char content[])
+{
+	return content == NULL || strstr(content, "mode: metadata-only") != NULL;
+}
+
+static int
+preview_helper_error(const char error_code[])
+{
+	return error_code != NULL && strncmp(error_code, "preview-helper-",
+			strlen("preview-helper-")) == 0;
+}
+
+static int
+preview_media_can_fallback_from_viewer(nv_preview_kind_t kind)
+{
+	return kind == NV_PREVIEW_KIND_IMAGE || kind == NV_PREVIEW_KIND_AUDIO ||
+		kind == NV_PREVIEW_KIND_VIDEO || kind == NV_PREVIEW_KIND_PDF;
+}
+#endif
+
 static void *
 preview_worker(void *data)
 {
@@ -1193,22 +1605,66 @@ preview_worker(void *data)
 		char *content = NULL;
 		int truncated = 0, os_error = 0;
 		const char *error_code = NULL;
-		int outcome = task->cancelled ? 1 :
-			(task->request.kind == NV_PREVIEW_KIND_DIRECTORY ?
-				preview_directory(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_ARCHIVE ?
-				preview_archive(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_BINARY ?
-				preview_binary(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_IMAGE ?
-				preview_image(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_AUDIO ?
-				preview_audio(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_VIDEO ?
-				preview_video(queue, task, &content, &truncated, &error_code, &os_error) :
-			 task->request.kind == NV_PREVIEW_KIND_PDF ?
-				preview_pdf(queue, task, &content, &truncated, &error_code, &os_error) :
-				preview_text(queue, task, &content, &truncated, &error_code, &os_error));
+		int outcome = task->cancelled ? 1 : 0;
+#ifndef _WIN32
+		if(!task->cancelled && task->viewer_argc != 0U)
+		{
+			/* Common Vifm image associations invoke `convert -identify` or a
+			 * desktop viewer.  Those commands produce useful metadata but not
+			 * terminal pixels, so prefer the line-safe built-in renderer when it
+			 * can provide an actual chafa frame. */
+			if(task->request.kind == NV_PREVIEW_KIND_IMAGE)
+			{
+				outcome = preview_builtin(queue, task, &content, &truncated,
+						&error_code, &os_error);
+				const int builtin_visual = outcome == 0 &&
+						!preview_content_blank(content) &&
+						!preview_content_metadata_only(content);
+				if(!builtin_visual)
+				{
+					free(content);
+					content = NULL;
+					truncated = 0;
+					if(outcome >= 0 || preview_helper_error(error_code))
+					{
+						error_code = NULL;
+						os_error = 0;
+					}
+					if(outcome >= 0 || error_code == NULL ||
+							strcmp(error_code, "preview-timeout") != 0)
+						outcome = preview_external(queue, task, task->viewer_argv[0],
+								task->viewer_argv, &content, &truncated, &error_code,
+								&os_error);
+				}
+			}
+			else
+			{
+				outcome = preview_external(queue, task, task->viewer_argv[0],
+						task->viewer_argv, &content, &truncated, &error_code, &os_error);
+			}
+			if(preview_media_can_fallback_from_viewer(task->request.kind) &&
+					((outcome < 0 && preview_helper_error(error_code)) ||
+					 (outcome == 0 && preview_content_blank(content))))
+			{
+				free(content);
+				content = NULL;
+				truncated = 0;
+				error_code = NULL;
+				os_error = 0;
+				outcome = preview_builtin(queue, task, &content, &truncated,
+						&error_code, &os_error);
+			}
+		}
+		else if(!task->cancelled)
+		{
+			outcome = preview_builtin(queue, task, &content, &truncated,
+					&error_code, &os_error);
+		}
+#else
+		if(!task->cancelled)
+			outcome = preview_builtin(queue, task, &content, &truncated,
+					&error_code, &os_error);
+#endif
 		if(outcome == 0 && task_expired(task))
 		{
 			free(content);

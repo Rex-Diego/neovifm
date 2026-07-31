@@ -91,6 +91,7 @@ type DialogState =
       cwd_ctime_unix_ns: string
     }>
   | Readonly<{ kind: "mount-ssh"; pane: PaneId }>
+  | Readonly<{ kind: "search"; direction: -1 | 1 }>
   | Readonly<{ kind: "delete"; target: string; command: CoreSessionCommand }>
 
 function entryColor(entry: SnapshotPayload["entries"][number]): string {
@@ -228,7 +229,32 @@ function PermissionValue(props: { readonly entry: SnapshotPayload["entries"][num
   </box>
 }
 
-function QuickPreview(props: { readonly preview?: PreviewPayload }) {
+function PreviewCopyButton(props: { readonly content?: string; readonly onCopy: (text: string) => void }) {
+  const enabled = () => props.content !== undefined
+  return <text
+    id="preview-copy"
+    width={8}
+    height={1}
+    justifyContent="center"
+    bg={enabled() ? COLORS.surface1 : COLORS.mantle}
+    fg={enabled() ? COLORS.text : COLORS.overlay1}
+    onMouseDown={(event) => {
+      if (event.button !== MouseButton.LEFT || props.content === undefined) return
+      event.preventDefault()
+      event.stopPropagation()
+      props.onCopy(props.content)
+    }}
+  > Copy </text>
+}
+
+function PreviewFooter(props: { readonly quick: boolean; readonly content?: string; readonly onCopy: (text: string) => void }) {
+  return <box width="100%" height={1} flexDirection="row" alignItems="center">
+    <text flexGrow={1} fg={COLORS.subtext0}>{props.quick ? "Space/Esc closes · Tab switches pane" : "F3 or Esc to close"}</text>
+    <PreviewCopyButton content={props.content} onCopy={props.onCopy} />
+  </box>
+}
+
+function QuickPreview(props: { readonly preview?: PreviewPayload; readonly onCopy: (text: string) => void }) {
   const preview = () => props.preview
   return <box flexGrow={1} width="100%" flexDirection="column" backgroundColor={COLORS.base} border borderStyle="rounded" borderColor={COLORS.teal} paddingX={1} title="SPACE QUICK VIEW" titleColor={COLORS.teal}>
     <text height={1} fg={COLORS.subtext0}>{preview() === undefined ? "loading preview" : `${preview()!.kind} · ${preview()!.state}`}</text>
@@ -238,9 +264,9 @@ function QuickPreview(props: { readonly preview?: PreviewPayload }) {
       backgroundColor={COLORS.base}
       verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: COLORS.teal, backgroundColor: COLORS.surface0 } }}
     >
-      <text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>
+      <text id="preview-content" selectable selectionBg={COLORS.selected} selectionFg={COLORS.text} fg={COLORS.text} wrapMode="word">{previewIsLoading(preview()) ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>
     </scrollbox>
-    <text height={1} fg={COLORS.subtext0}>Space/Esc closes · Tab switches pane</text>
+    <PreviewFooter quick content={preview()?.content} onCopy={props.onCopy} />
   </box>
 }
 
@@ -259,6 +285,7 @@ function CompactMetadata(props: {
 
 function EntryList(props: {
   readonly pane: PaneId
+  readonly tabId: string
   readonly snapshot: SnapshotPayload
   readonly detailed: boolean
   readonly showOwners: boolean
@@ -268,11 +295,35 @@ function EntryList(props: {
   const compactKey = () => compactMetadataKey(props.snapshot)
   let list: ScrollBoxRenderable | undefined
   let scrollTimer: ReturnType<typeof setTimeout> | undefined
+  let activeLocationKey: string | undefined
+  const scrollPositions = new Map<string, number>()
+  const rememberScrollPosition = (locationKey: string, position: number) => {
+    if (!Number.isFinite(position) || position < 0) return
+    scrollPositions.delete(locationKey)
+    scrollPositions.set(locationKey, position)
+    while (scrollPositions.size > 128) {
+      const oldest = scrollPositions.keys().next().value
+      if (oldest === undefined) break
+      scrollPositions.delete(oldest)
+    }
+  }
   createEffect(() => {
+    const directory = props.snapshot.cwd_bytes_hex
+    const locationKey = `${props.tabId}:${directory}`
     const cursor = props.snapshot.cursor
-    if (cursor < 0) return
+    const directoryChanged = activeLocationKey !== locationKey
+    if (directoryChanged && activeLocationKey !== undefined && list !== undefined) {
+      rememberScrollPosition(activeLocationKey, list.scrollTop)
+    }
+    activeLocationKey = locationKey
+    const rememberedScrollTop = directoryChanged ? scrollPositions.get(locationKey) : undefined
     if (scrollTimer !== undefined) clearTimeout(scrollTimer)
-    scrollTimer = setTimeout(() => list?.scrollChildIntoView(`entry-${props.pane}-${cursor}`), 0)
+    scrollTimer = setTimeout(() => {
+      if (list === undefined) return
+      if (rememberedScrollTop !== undefined) list.scrollTop = rememberedScrollTop
+      if (cursor >= 0) list.scrollChildIntoView(`entry-${props.pane}-${cursor}`)
+      rememberScrollPosition(locationKey, list.scrollTop)
+    }, 0)
     onCleanup(() => {
       if (scrollTimer !== undefined) clearTimeout(scrollTimer)
     })
@@ -409,7 +460,9 @@ function Pane(props: {
   readonly onNewTab: (pane: PaneId) => void
   readonly showQuickPreview: boolean
   readonly quickPreview?: PreviewPayload
+  readonly onCopy: (text: string) => void
 }) {
+  const activeTabId = () => props.tabs.find((tab) => tab.active)?.id ?? `${props.pane}-default`
   return <box
     flexGrow={1}
     height="100%"
@@ -421,8 +474,8 @@ function Pane(props: {
   >
     <PaneTabs pane={props.pane} tabs={props.tabs} activePane={props.active} iconMode={props.iconMode} enabled={props.tabsEnabled} onActivate={props.onActivateTab} onClose={props.onCloseTab} onNew={props.onNewTab} />
     <PaneColumns pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} showOwners={props.showOwners} iconMode={props.iconMode} onSortDirection={props.onSortDirection} onSortCycle={props.onSortCycle} />
-    <Show when={props.showQuickPreview} fallback={<EntryList pane={props.pane} snapshot={props.snapshot} detailed={props.detailed} showOwners={props.showOwners} iconMode={props.iconMode} onSelect={props.onSelect} />}>
-      <QuickPreview preview={props.quickPreview} />
+    <Show when={props.showQuickPreview} fallback={<EntryList pane={props.pane} tabId={activeTabId()} snapshot={props.snapshot} detailed={props.detailed} showOwners={props.showOwners} iconMode={props.iconMode} onSelect={props.onSelect} />}>
+      <QuickPreview preview={props.quickPreview} onCopy={props.onCopy} />
     </Show>
   </box>
 }
@@ -442,6 +495,7 @@ function Workspace(props: {
   readonly onNewTab: (pane: PaneId) => void
   readonly quickPreviewPane?: PaneId
   readonly quickPreview?: PreviewPayload
+  readonly onCopy: (text: string) => void
 }) {
   const tabs = (pane: PaneId): readonly PaneTabPayload[] => props.workspace[`${pane}_tabs`] ?? [{
     id: "0",
@@ -464,6 +518,7 @@ function Workspace(props: {
     onNewTab: props.onNewTab,
     showQuickPreview: props.quickPreviewPane !== undefined && props.quickPreviewPane !== pane,
     quickPreview: props.quickPreview,
+    onCopy: props.onCopy,
   })
   return <box flexGrow={1} width="100%" flexDirection="row" gap={1}>
     <Show when={props.wide} fallback={props.workspace.active_pane === "left"
@@ -489,18 +544,22 @@ function LoadingPanel() {
   </box>
 }
 
-function Viewer(props: { readonly preview?: PreviewPayload; readonly quick?: boolean }) {
+function previewIsLoading(preview: PreviewPayload | undefined): boolean {
+  return preview === undefined || preview.state === "queued" || preview.state === "running"
+}
+
+function Viewer(props: { readonly preview?: PreviewPayload; readonly quick?: boolean; readonly onCopy: (text: string) => void }) {
   const preview = () => props.preview
   const title = () => props.quick ? "SPACE QUICK VIEW" : "F3 VIEW"
   const markdown = () => preview()?.kind === "markdown" && preview()?.content !== undefined
   return <box flexGrow={1} width="100%" flexDirection="column" border borderStyle="double" borderColor={props.quick ? COLORS.teal : COLORS.lavender} backgroundColor={COLORS.base} paddingX={1} title={title()} titleColor={props.quick ? COLORS.teal : COLORS.lavender}>
     <text height={1} fg={COLORS.subtext0}>{preview() === undefined ? "loading preview" : `${preview()!.kind} · ${preview()!.state} · generation ${preview()!.generation}`}</text>
     <scrollbox flexGrow={1} width="100%" backgroundColor={COLORS.base} verticalScrollbarOptions={{ showArrows: false, trackOptions: { width: 1, foregroundColor: props.quick ? COLORS.teal : COLORS.lavender, backgroundColor: COLORS.surface0 } }}>
-      <Show when={markdown()} fallback={<text fg={COLORS.text} wrapMode="word">{preview() === undefined ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>}>
-        <markdown flexGrow={1} width="100%" fg={COLORS.text} content={preview()!.content!} syntaxStyle={SyntaxStyle.create()} conceal />
+      <Show when={markdown()} fallback={<text id="preview-content" selectable selectionBg={COLORS.selected} selectionFg={COLORS.text} fg={COLORS.text} wrapMode="word">{previewIsLoading(preview()) ? "Loading preview..." : preview()!.content ?? preview()!.error_code ?? "Preview unavailable"}</text>}>
+        <markdown id="preview-content" flexGrow={1} width="100%" fg={COLORS.text} content={preview()!.content!} syntaxStyle={SyntaxStyle.create()} conceal />
       </Show>
     </scrollbox>
-    <text height={1} fg={COLORS.subtext0}>{props.quick ? "Space or Esc to close" : "F3 or Esc to close"}</text>
+    <PreviewFooter quick={props.quick === true} content={preview()?.content} onCopy={props.onCopy} />
   </box>
 }
 
@@ -510,19 +569,23 @@ function ActionDialog(props: {
   readonly onCancel: () => void
 }) {
   return <box flexGrow={1} width="100%" flexDirection="column" justifyContent="center" alignItems="center" backgroundColor={COLORS.mantle}>
-    <box width="70%" flexDirection="column" border borderStyle="double" borderColor={props.state.kind === "delete" ? COLORS.red : COLORS.lavender} backgroundColor={COLORS.base} padding={1} title={props.state.kind === "mkdir" ? "F7 MKDIR" : props.state.kind === "mount-ssh" ? "F9 SSH" : "F8 DELETE"}>
-      <Show when={props.state.kind === "mkdir"} fallback={<Show when={props.state.kind === "mount-ssh"} fallback={<>
-        <text fg={COLORS.text}>Delete {props.state.kind === "delete" ? props.state.target : ""}?</text>
-        <text fg={COLORS.subtext0}>Enter/Y confirms · Esc/N cancels</text>
-      </>}>
-        <text fg={COLORS.text}>Remote</text>
-        <input id="mount-ssh-input" focused placeholder="user@host:/path" maxLength={16384} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
-        <text fg={COLORS.subtext0}>Enter mounts read-only · Esc cancels</text>
-      </Show>}>
+    <box width="70%" flexDirection="column" border borderStyle="double" borderColor={props.state.kind === "delete" ? COLORS.red : COLORS.lavender} backgroundColor={COLORS.base} padding={1} title={props.state.kind === "mkdir" ? "F7 MKDIR" : props.state.kind === "mount-ssh" ? "F9 SSH" : props.state.kind === "search" ? (props.state.direction === 1 ? "/ SEARCH" : "? SEARCH") : "F8 DELETE"}>
+      {props.state.kind === "search" ? <>
+        <text fg={COLORS.text}>Search name</text>
+        <input id="search-input" focused placeholder="file name" maxLength={255} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
+        <text fg={COLORS.subtext0}>Enter searches · Esc cancels · n/N repeat</text>
+      </> : props.state.kind === "mkdir" ? <>
         <text fg={COLORS.text}>Directory name</text>
         <input id="mkdir-input" focused placeholder="new-directory" maxLength={255} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
         <text fg={COLORS.subtext0}>Enter creates · Esc cancels</text>
-      </Show>
+      </> : props.state.kind === "mount-ssh" ? <>
+        <text fg={COLORS.text}>Remote</text>
+        <input id="mount-ssh-input" focused placeholder="user@host:/path" maxLength={16384} onSubmit={(value) => props.onSubmit(typeof value === "string" ? value : undefined)} />
+        <text fg={COLORS.subtext0}>Enter mounts read-only · Esc cancels</text>
+      </> : <>
+        <text fg={COLORS.text}>Delete {props.state.target}?</text>
+        <text fg={COLORS.subtext0}>Enter/Y confirms · Esc/N cancels</text>
+      </>}
     </box>
   </box>
 }
@@ -1072,6 +1135,21 @@ export function App(props: AppProps) {
       (error) => setNotice(`Copy failed: ${error instanceof Error ? error.message : String(error)}`),
     )
   }
+  const copyPreview = (content: string) => {
+    if (props.onCopyText === undefined) {
+      setNotice("Clipboard is unavailable")
+      return
+    }
+    void Promise.resolve().then(() => props.onCopyText!(content)).then(
+      () => setNotice("Preview copied"),
+      (error) => setNotice(`Copy failed: ${error instanceof Error ? error.message : String(error)}`),
+    )
+  }
+  const copySelectedPreview = () => {
+    const content = renderer.getSelection()?.getSelectedText() ?? ""
+    if (content.length === 0) setNotice("No preview text selected")
+    else copyPreview(content)
+  }
   const dispatchFunction = (action: FunctionAction) => {
     if (dialog() !== undefined) return
     if (action === "quit") {
@@ -1259,7 +1337,14 @@ export function App(props: AppProps) {
   const closeDialog = () => setDialog(undefined)
   const submitDialog = (value?: string) => {
     const state = dialog()
-    if (state?.kind === "mkdir") {
+    if (state?.kind === "search") {
+      const query = value ?? ""
+      if (query.length === 0 || query.length > 255 || query.includes("\0") || query.includes("\n") || query.includes("\r")) {
+        setNotice("Invalid search query")
+        return
+      }
+      sendCommand({ action: "search", query, direction: state.direction })
+    } else if (state?.kind === "mkdir") {
       const name = value?.trim() ?? ""
       if (name.length === 0 || new TextEncoder().encode(name).byteLength > 255 ||
         name === "." || name === ".." || name.includes("/") || name.includes("\\") || name.includes("\0")) {
@@ -1330,6 +1415,23 @@ export function App(props: AppProps) {
       }
       return
     }
+    const previewOpen = viewerOpen() || quickPreviewOpen()
+    const copySelection = previewOpen && key.name.toLowerCase() === "c" &&
+      ((key.ctrl && key.shift) || (key.meta && !key.ctrl && !key.shift))
+    if (copySelection) {
+      key.preventDefault()
+      key.stopPropagation()
+      copySelectedPreview()
+      return
+    }
+    if (previewOpen && !key.ctrl && !key.meta && !key.shift && key.name.toLowerCase() === "y") {
+      key.preventDefault()
+      key.stopPropagation()
+      const content = matchingPreview()?.content
+      if (content === undefined) setNotice("Preview content unavailable")
+      else copyPreview(content)
+      return
+    }
     if (quickPreviewOpen() && escape) {
       key.preventDefault()
       key.stopPropagation()
@@ -1353,6 +1455,10 @@ export function App(props: AppProps) {
     }
     if (result.kind === "function") {
       dispatchFunction(result.action)
+      return
+    }
+    if (result.kind === "search") {
+      setDialog({ kind: "search", direction: result.direction })
       return
     }
     if (result.kind === "tab-index") {
@@ -1388,9 +1494,9 @@ export function App(props: AppProps) {
       <Show when={taskCenterOpen()} fallback={props.error !== undefined
         ? <ErrorPanel message={props.error} />
         : viewerOpen()
-          ? <Viewer preview={matchingPreview()} />
+          ? <Viewer preview={matchingPreview()} onCopy={copyPreview} />
           : quickPreviewOpen() && !wide()
-            ? <Viewer preview={matchingPreview()} />
+            ? <Viewer preview={matchingPreview()} onCopy={copyPreview} />
           : props.workspace !== undefined
             ? <Workspace
                 workspace={props.workspace}
@@ -1407,6 +1513,7 @@ export function App(props: AppProps) {
                 onNewTab={(pane) => { sendCommand({ action: "new-tab", pane }) }}
                 quickPreviewPane={quickPreviewPane()}
                 quickPreview={matchingPreview()}
+                onCopy={copyPreview}
               />
             : props.loading
               ? <LoadingPanel />
@@ -1419,6 +1526,6 @@ export function App(props: AppProps) {
     }>
       <ExitDialog taskCount={activeTaskCount()} stacked={dimensions().width < 110} onWait={waitForTasks} onCancel={cancelAndQuit} onReturn={() => setExitPrompt(false)} />
     </Show>
-    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={matchingPreview()?.content !== undefined} canFileActions={canFileActions()} canResourceTasks={canResourceTasks()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
+    <BottomBars workspace={props.workspace} tasks={props.tasks} actionTasks={props.actionTasks} resourceTasks={props.resourceTasks} compact={dimensions().width < 90} stacked={dimensions().width < 72} notice={props.commandError ?? notice()} canView={currentEntry() !== undefined} canFileActions={canFileActions()} canResourceTasks={canResourceTasks()} iconMode={iconMode()} onAction={dispatchFunction} pathMode={pathMode()} homeDirectory={props.homeDirectory ?? process.env.HOME ?? process.env.USERPROFILE} onTogglePath={() => setPathMode((mode) => mode === "absolute" ? "home" : "absolute")} onCopyPath={copyStatusPath} onOpenTasks={() => setTaskCenterOpen((open) => !open)} />
   </box>
 }

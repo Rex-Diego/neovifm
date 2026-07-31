@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -92,6 +92,113 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
     await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === "a")
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected explicit preview session")
     expect(state.workspace.right).toEqual(rightBeforePreview)
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session preserves Vifm directional name search state", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-search-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-search-right-"))
+  await writeFile(resolve(left, "alpha.txt"), "a")
+  await writeFile(resolve(left, "beta.txt"), "b")
+  await writeFile(resolve(left, "ALPHA-two.txt"), "c")
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready search session")
+    const firstSequence = state.commandSequence + 1
+    expect(await session.send({ action: "search", query: "alpha", direction: 1 })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === firstSequence && state.workspace.left.entries[state.workspace.left.cursor]?.name_display === "alpha.txt")
+    const nextSequence = state.commandSequence + 1
+    expect(await session.send({ action: "search-next", direction: 1 })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === nextSequence && state.workspace.left.entries[state.workspace.left.cursor]?.name_display === "ALPHA-two.txt")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session applies MYVIFMRC fileviewer argv before builtin preview", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-fileviewer-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-fileviewer-right-"))
+  const file = resolve(left, "read me.txt")
+  const helper = resolve(left, "viewer.sh")
+  const config = resolve(left, "vifmrc")
+  const launcher = resolve(left, "zz-core-wrapper.sh")
+  await writeFile(file, "builtin content")
+  await writeFile(helper, "#!/bin/sh\nprintf '%s:%s\\n' \"$1\" \"$2\"\n")
+  await chmod(helper, 0o700)
+  await writeFile(config, "setl previewprg=viewer.sh --preview %f\nfileviewer *.txt viewer.sh --fileviewer %f\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  const path = `${left}:${process.env.PATH ?? ""}`
+  await writeFile(launcher, `#!/bin/sh\nexec env MYVIFMRC=${shellQuote(config)} PATH=${shellQuote(path)} ${shellQuote(executable)} \"$@\"\n`)
+  await chmod(launcher, 0o700)
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.content?.startsWith(`--preview:${file}`) === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected fileviewer session")
+    expect(state.preview).toMatchObject({ kind: "text", state: "done", truncated: false })
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session falls back to fileviewer when previewprg is unsafe", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-previewprg-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-previewprg-right-"))
+  const file = resolve(left, "read me.txt")
+  const helper = resolve(left, "viewer.sh")
+  const config = resolve(left, "vifmrc")
+  const launcher = resolve(left, "zz-core-wrapper.sh")
+  await writeFile(file, "builtin content")
+  await writeFile(helper, "#!/bin/sh\nprintf '%s:%s\\n' \"$1\" \"$2\"\n")
+  await chmod(helper, 0o700)
+  await writeFile(config, "setl previewprg=viewer.sh --unsafe %f | cat\nfileviewer *.txt viewer.sh --fileviewer %f\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  const path = `${left}:${process.env.PATH ?? ""}`
+  await writeFile(launcher, `#!/bin/sh\nexec env MYVIFMRC=${shellQuote(config)} PATH=${shellQuote(path)} ${shellQuote(executable)} \"$@\"\n`)
+  await chmod(launcher, 0o700)
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.preview?.content?.startsWith(`--fileviewer:${file}`) === true)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected fileviewer fallback session")
+    expect(state.preview).toMatchObject({ kind: "text", state: "done", truncated: false })
+    expect(errors).toEqual([])
   } finally {
     session.close()
     await session.completion
@@ -283,6 +390,272 @@ test("real v3 session renders image media metadata with dimensions", async () =>
     expect(state.preview).toMatchObject({ kind: "image", state: "done", truncated: false })
     expect(state.preview?.content).toContain("format: PNG")
     expect(state.preview?.content).toContain("metadata-only")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session prefers terminal PNG rendering over metadata fileviewer rules", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-image-viewer-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-image-viewer-right-"))
+  const imagePath = resolve(left, "photo.png")
+  const viewer = resolve(left, "convert")
+  const chafa = resolve(left, "chafa")
+  const config = resolve(left, "vifmrc")
+  const launcher = resolve(left, "image-viewer-wrapper.sh")
+  await writeFile(imagePath, Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  ]))
+  await writeFile(viewer, "#!/bin/sh\nprintf 'METADATA-VIEWER\n'\n")
+  await writeFile(chafa, "#!/bin/sh\nprintf 'PNG-ASCII\n'\n")
+  await writeFile(config, `fileviewer *.png ${viewer} %f\n`)
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  await writeFile(launcher,
+    `#!/bin/sh\nexec env MYVIFMRC=${shellQuote(config)} NEOVIFM_CHAFA_EXECUTABLE=${shellQuote(chafa)} ${shellQuote(resolve(executable))} "$@"\n`)
+  await Promise.all([chmod(viewer, 0o700), chmod(chafa, 0o700), chmod(launcher, 0o700)])
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected PNG viewer session")
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "photo.png"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected PNG viewer session")
+    const imageIndex = state.workspace.left.entries.findIndex((entry) => entry.name_display === "photo.png")
+    expect(imageIndex).toBeGreaterThanOrEqual(0)
+    const commandSequence = state.commandSequence + 1
+    expect(await session.send({ action: "select-entry", pane: "left", index: imageIndex, toggle: false })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === commandSequence && state.preview?.kind === "image" && state.preview.content?.includes("PNG-ASCII") === true)
+    expect(state.preview).toMatchObject({ kind: "image", state: "done", truncated: false })
+    expect(state.preview?.content).not.toContain("METADATA-VIEWER")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session renders PDF and video frames and probes audio metadata", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-media-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-media-right-"))
+  const pdfPath = resolve(left, "read me.pdf")
+  const videoPath = resolve(left, "movie clip.mp4")
+  const audioPath = resolve(left, "track.mp3")
+  const pdfRaster = resolve(left, "pdftoppm")
+  const ffmpeg = resolve(left, "ffmpeg")
+  const ffprobe = resolve(left, "ffprobe")
+  const chafa = resolve(left, "chafa")
+  const launcher = resolve(left, "media-core-wrapper.sh")
+  await writeFile(pdfPath, "%PDF-1.4\n")
+  await writeFile(videoPath, "fake video")
+  await writeFile(audioPath, "ID3\x04\x00\x00")
+  await writeFile(pdfRaster, "#!/bin/sh\nfor arg do output=\"$arg\"; done\nprintf 'fake-png' > \"$output.png\"\n")
+  await writeFile(ffmpeg, "#!/bin/sh\nfor arg do output=\"$arg\"; done\nprintf 'fake-png' > \"$output\"\n")
+  await writeFile(ffprobe, "#!/bin/sh\nprintf 'format_name=mp3\\nduration=12.500000\\ncodec_name=mp3\\n'\n")
+  await writeFile(chafa, "#!/bin/sh\nprintf 'MEDIA-ASCII\\n'\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  await writeFile(launcher,
+    `#!/bin/sh\nexec env NEOVIFM_PDF_RENDER_EXECUTABLE=${shellQuote(pdfRaster)} NEOVIFM_FFMPEG_EXECUTABLE=${shellQuote(ffmpeg)} NEOVIFM_FFPROBE_EXECUTABLE=${shellQuote(ffprobe)} NEOVIFM_CHAFA_EXECUTABLE=${shellQuote(chafa)} ${shellQuote(resolve(executable))} "$@"\n`)
+  await Promise.all([chmod(pdfRaster, 0o700), chmod(ffmpeg, 0o700), chmod(ffprobe, 0o700), chmod(chafa, 0o700), chmod(launcher, 0o700)])
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready media session")
+    const previewPath = async (path: string, kind: "pdf" | "video" | "audio", marker: string) => {
+      if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready media session")
+      const pane = state.workspace.left
+      const entry = pane.entries.find((candidate) => candidate.path_bytes_hex === Array.from(new TextEncoder().encode(path), (byte) => byte.toString(16).padStart(2, "0")).join(""))
+      if (entry === undefined || pane.cwd_device === undefined || pane.cwd_inode === undefined || pane.cwd_ctime_unix_ns === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+        throw new Error(`expected media entry: ${path}`)
+      }
+      const commandSequence = state.commandSequence + 1
+      expect(await session.send({
+        action: "preview",
+        pane: "left",
+        target_pane: "right",
+        cwd_bytes_hex: pane.cwd_bytes_hex,
+        snapshot_revision: pane.snapshot_revision,
+        cwd_device: pane.cwd_device,
+        cwd_inode: pane.cwd_inode,
+        cwd_ctime_unix_ns: pane.cwd_ctime_unix_ns,
+        path_bytes_hex: entry.path_bytes_hex,
+        device: entry.device,
+        inode: entry.inode,
+        ctime_unix_ns: entry.ctime_unix_ns,
+      })).toBe(true)
+      await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === commandSequence && state.preview?.kind === kind && state.preview.state === "done" && state.preview.content?.includes(marker) === true)
+    }
+
+    await previewPath(pdfPath, "pdf", "MEDIA-ASCII")
+    await previewPath(videoPath, "video", "MEDIA-ASCII")
+    await previewPath(audioPath, "audio", "duration=12.500000")
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session falls back to builtin PDF preview after an empty MYVIFMRC viewer", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-media-fallback-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-media-fallback-right-"))
+  const pdfPath = resolve(left, "read me.pdf")
+  const pdfRaster = resolve(left, "pdftoppm")
+  const emptyViewer = resolve(left, "pdftotext")
+  const chafa = resolve(left, "chafa")
+  const config = resolve(left, "vifmrc")
+  const launcher = resolve(left, "media-fallback-wrapper.sh")
+  await writeFile(pdfPath, "%PDF-1.4\n")
+  await writeFile(emptyViewer, "#!/bin/sh\nexit 0\n")
+  await writeFile(pdfRaster, "#!/bin/sh\nfor arg do output=\"$arg\"; done\nprintf 'fake-png' > \"$output.png\"\n")
+  await writeFile(chafa, "#!/bin/sh\nprintf 'MEDIA-FALLBACK-ASCII\\n'\n")
+  await writeFile(config, "fileviewer *.pdf pdftotext %f\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  const path = `${left}:${process.env.PATH ?? ""}`
+  await writeFile(launcher,
+    `#!/bin/sh\nexec env MYVIFMRC=${shellQuote(config)} PATH=${shellQuote(path)} NEOVIFM_PDF_RENDER_EXECUTABLE=${shellQuote(pdfRaster)} NEOVIFM_CHAFA_EXECUTABLE=${shellQuote(chafa)} ${shellQuote(resolve(executable))} "$@"\n`)
+  await Promise.all([chmod(emptyViewer, 0o700), chmod(pdfRaster, 0o700), chmod(chafa, 0o700), chmod(launcher, 0o700)])
+
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state)
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected ready media fallback session")
+    const pane = state.workspace.left
+    const entry = pane.entries.find((candidate) => candidate.path_bytes_hex === Array.from(new TextEncoder().encode(pdfPath), (byte) => byte.toString(16).padStart(2, "0")).join(""))
+    if (entry === undefined || pane.cwd_device === undefined || pane.cwd_inode === undefined || pane.cwd_ctime_unix_ns === undefined || entry.device === undefined || entry.inode === undefined || entry.ctime_unix_ns === undefined) {
+      throw new Error("expected PDF entry for empty viewer fallback")
+    }
+    const commandSequence = state.commandSequence + 1
+    expect(await session.send({
+      action: "preview",
+      pane: "left",
+      target_pane: "right",
+      cwd_bytes_hex: pane.cwd_bytes_hex,
+      snapshot_revision: pane.snapshot_revision,
+      cwd_device: pane.cwd_device,
+      cwd_inode: pane.cwd_inode,
+      cwd_ctime_unix_ns: pane.cwd_ctime_unix_ns,
+      path_bytes_hex: entry.path_bytes_hex,
+      device: entry.device,
+      inode: entry.inode,
+      ctime_unix_ns: entry.ctime_unix_ns,
+    })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === commandSequence && state.preview?.kind === "pdf" && state.preview.state === "done" && state.preview.content?.includes("MEDIA-FALLBACK-ASCII") === true)
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session allows a slow but bounded PDF rasterization to finish", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-slow-pdf-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-slow-pdf-right-"))
+  const pdfPath = resolve(left, "slow.pdf")
+  const raster = resolve(left, "pdftoppm")
+  const chafa = resolve(left, "chafa")
+  const launcher = resolve(left, "slow-pdf-wrapper.sh")
+  await writeFile(pdfPath, "%PDF-1.4\n")
+  await writeFile(raster, "#!/bin/sh\nsleep 6\nfor arg do output=\"$arg\"; done\nprintf 'slow-png' > \"$output.png\"\n")
+  await writeFile(chafa, "#!/bin/sh\nprintf 'SLOW-PDF-ASCII\\n'\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  await writeFile(launcher,
+    `#!/bin/sh\nexec env NEOVIFM_PDF_RENDER_EXECUTABLE=${shellQuote(raster)} NEOVIFM_CHAFA_EXECUTABLE=${shellQuote(chafa)} ${shellQuote(resolve(executable))} "$@"\n`)
+  await Promise.all([chmod(raster, 0o700), chmod(chafa, 0o700), chmod(launcher, 0o700)])
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "slow.pdf"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected slow PDF session")
+    const pdfIndex = state.workspace.left.entries.findIndex((entry) => entry.name_display === "slow.pdf")
+    expect(pdfIndex).toBeGreaterThanOrEqual(0)
+    const commandSequence = state.commandSequence + 1
+    expect(await session.send({ action: "select-entry", pane: "left", index: pdfIndex, toggle: false })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === commandSequence && state.preview?.kind === "pdf" && state.preview.state === "done" && state.preview.content?.includes("SLOW-PDF-ASCII") === true, 20000)
+    expect(errors).toEqual([])
+  } finally {
+    session.close()
+    await session.completion
+  }
+}, { timeout: 30000 })
+
+test("real v3 session allows a slow but bounded image renderer to finish", async () => {
+  const executable = process.env.NEOVIFM_CORE_SESSION
+  if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
+  left = await mkdtemp(resolve(tmpdir(), "neovifm-session-slow-image-left-"))
+  right = await mkdtemp(resolve(tmpdir(), "neovifm-session-slow-image-right-"))
+  const imagePath = resolve(left, "slow.png")
+  const chafa = resolve(left, "chafa")
+  const launcher = resolve(left, "slow-image-wrapper.sh")
+  await writeFile(imagePath, Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  ]))
+  await writeFile(chafa, "#!/bin/sh\nsleep 6\nprintf 'SLOW-IMAGE-BLOCK\\n'\n")
+  const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'"
+  await writeFile(launcher,
+    `#!/bin/sh\nexec env NEOVIFM_CHAFA_EXECUTABLE=${shellQuote(chafa)} ${shellQuote(resolve(executable))} "$@"\n`)
+  await Promise.all([chmod(chafa, 0o700), chmod(launcher, 0o700)])
+  let state: ProbeState = initialProbeState()
+  const errors: Error[] = []
+  const session = startCoreSession({
+    executable: launcher,
+    leftPath: left,
+    rightPath: right,
+    onRecord: (record) => { state = reduceProbeState(state, record) },
+    onError: (error) => errors.push(error),
+  })
+  try {
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "slow.png"))
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected slow image session")
+    const imageIndex = state.workspace.left.entries.findIndex((entry) => entry.name_display === "slow.png")
+    expect(imageIndex).toBeGreaterThanOrEqual(0)
+    const commandSequence = state.commandSequence + 1
+    expect(await session.send({ action: "select-entry", pane: "left", index: imageIndex, toggle: false })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === commandSequence && state.preview?.kind === "image" && state.preview.state === "done" && state.preview.content?.includes("SLOW-IMAGE-BLOCK") === true, 20000)
     expect(errors).toEqual([])
   } finally {
     session.close()

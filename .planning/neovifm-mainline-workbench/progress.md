@@ -195,3 +195,71 @@
 - 等待/取消均设置退出 pending 状态，只有 reducer 观察到活动任务数归零后才销毁 renderer；取消路径只发送结构化 `cancel-action`/`cancel-resource`，不把任务提升为常驻 daemon。
 - 退出选项在窄终端自动纵向排列，避免 60 列布局中的横排按钮溢出；新增窄屏渲染测试覆盖三项入口仍可见。
 - RED/GREEN 证据：新增 app test 先验证旧实现会直接销毁渲染器，再验证鼠标入口、返回、取消和任务清空后的退出；窄终端测试覆盖纵排布局。最终 TUI unit/coverage 为 136 tests / 517 expects、85.50% functions / 89.38% lines，`bun run typecheck`、`bun audit`、真实 integration 15 tests / 98 expects、C snapshot 9639 checks / 87 tests、串行 `env -u VIFM -u MYVIFMRC make check` 与 `git diff --check` 均通过。
+
+## 2026-07-29 F3 preview loading flicker fix
+
+- 根因是 F3 function key 的可用状态错误绑定到 `matchingPreview()?.content`；预览在 queued/running/terminal 事件之间切换时，按钮会在禁用和启用样式之间抖动，鼠标点击也会在加载阶段被吞掉。
+- 改为只要当前 pane 有选中条目就保持 F3 可用。F3 鼠标和键盘路径因此一致，查看器仍可在预览内容尚未到达时打开并展示任务状态。
+- queued/running 预览现在统一显示 `Loading preview...`，只有终态且没有内容时才显示错误码或 `Preview unavailable`；F3 与 Space viewer 共用这个判断。
+- RED/GREEN 证据：新增加载态鼠标回归测试先在旧实现失败，按钮修复后通过；加载文案断言随后先失败，再通过；TUI 全量 137 tests / 521 expects，coverage 85.51% functions / 89.38% lines，`bun run typecheck`、`bun audit` 和 `git diff --check` 通过。
+
+## 2026-07-29 Vifm fileviewer preview argv
+
+- 预览队列现在接受最多 32 个、每项最多 16 KiB 的结构化 `viewer_argv`，入队时深拷贝；worker 通过 `posix_spawnp` 按 PATH 查找 Vifm `fileviewer` 命令，不经过 shell，仍共享既有输出上限、取消和超时处理。
+- core session 在 F3/Space 自动或显式预览提交前读取有界 `MYVIFMRC`，按已有 Vifm `fileviewer` resolver 展开 `%f/%c/%%` 和 glob 规则；无匹配、配置未设置或配置错误时回退内建 preview，队列失败不会阻塞 UI。
+- 真实集成覆盖带空格路径、临时 PATH 命令和本机默认 `fileviewer *.zip zip -sf %c`；`make -C tests neovifm_snapshot` 通过 9657 checks / 88 tests，`make -C src neovifm-core-session` 通过，清除用户配置后分组串行 integration 通过 17 tests / 102 expects，串行 `env -u VIFM -u MYVIFMRC make check` 通过。
+- 当前边界仍是安全的第一步：`previewprg` 优先级、多个逗号候选的可执行性回退、图形终端 passthrough，以及 archive/SSH 挂载生命周期尚未接入；用户本机已有 `MYVIFMRC` 会影响未清环境的旧集成夹具，因此验证命令需清除该变量。
+
+## 2026-07-30 Vifm previewprg priority
+
+- `MYVIFMRC` loader 现在识别 `set`/`setl`/`setg`/long-form scope 的 `previewprg=`，保留最后一个有界值并去除 option 外层引号；配置释放时一并释放该值，旧 association rule DTO 保持兼容。
+- F3/Space 的 core resolver 现在按 classic 优先级先尝试全局 `previewprg`，命令不安全或不可解析时再尝试匹配的 `fileviewer`，没有可用 association 才回退内建 preview。所有命令仍经结构化 argv、PATH 查找、输出上限、取消和超时边界。
+- RED/GREEN 证据：配置单测先因缺少 `previewprg` 字段失败，随后通过；真实 core session 覆盖 `previewprg` 胜过 `fileviewer`，以及含管道的 unsafe `previewprg` 回退到 `fileviewer`；当前 C snapshot 为 9657 checks / 88 tests，focused previewprg integration 两项均通过。
+- 尚未宣称完整 Vifm parity：`%px/%py/%pw/%ph/%pc/%pd`、终端暂停/恢复、多个逗号候选可执行性回退、preview cache 和图形协议传输仍留在 Phase 6 后续切片。
+
+## 2026-07-30 Preview Unicode and copy behavior
+
+- C preview sanitizer 现在按 UTF-8 code point 边界验证合法的 2/3/4-byte 序列；合法中文和其他 Unicode 原样保留，非法字节及不允许的控制字符才替换为 `?`，外部 fileviewer/chafa 输出沿用同一边界。
+- JSONL 客户端保持路径、错误等 display 字段的严格控制字符过滤，只对 preview content 保留 `\n`、`\r`、`\t`，避免预览复制丢失换行又不让文件名注入布局控制。
+- F3 Viewer 与宽终端 Space quick preview 的文本内容显式启用 OpenTUI selection/highlight；新增 `Copy` 入口复制全文，预览内 `y` 复制全文，`Ctrl-Shift-C` 与 macOS `Cmd-C` 复制当前终端选区。
+- RED/GREEN 证据：C snapshot suite 通过 9672 checks / 89 tests；TUI 全量 139 tests / 528 expects，coverage 85.51% functions / 89.35% lines，`bun run typecheck`、`bun audit` 和 `git diff --check` 通过；真实 core-probe/session/keyboard/production PTY 分组通过 17 tests / 102 expects，串行 `env -u VIFM -u MYVIFMRC make check` 通过。
+
+## 2026-07-30 Media rendering continuation started
+
+- 用户反馈仍无法预览多媒体；现场核对确认当前 image 的 chafa ASCII 输出可工作，但 PDF 只走 `pdftotext`，audio/video 只返回 header metadata。
+- 本轮实现边界已写入 Phase 6：PDF 首页和视频首帧走临时 PNG + chafa 的有界文本降级，音频/视频补 ffprobe 信息；任何 helper 失败仍回退已有安全路径，不引入原始图形协议字节。
+
+## 2026-07-30 Media preview rendering completed
+
+- PDF 预览先用可配置/固定候选 `pdftoppm` 将首页渲染到受限临时 PNG，再复用 `chafa --format symbols --symbols ascii --colors none` 输出 line-safe ASCII；栅格器、chafa 缺失或非零退出时回退 `pdftotext`。
+- 视频预览先用可配置/固定候选 `ffmpeg` 提取首帧 PNG，再复用同一 chafa ASCII 路径；失败时先回退 ffprobe 信息，再回退已有头部格式/字节 metadata。
+- 音频和视频的 metadata 优先经 `ffprobe` 输出有界的 format/duration/codec/尺寸/采样字段；helper 不可用、损坏或失败时仍不阻塞，保留安全 header fallback。PDF/媒体请求使用 5 秒 bounded deadline，其他预览保持 2 秒。
+- 所有 helper 仍走 shell-free `posix_spawnp`、输出上限、取消/超时和临时文件清理；二进制帧不进入 JSONL，终端只收到可选择、可复制的 UTF-8 文本。
+- TDD/验收：C snapshot `9734 checks / 92 tests` 通过；真实 core session 注入 fake `pdftoppm`/`ffmpeg`/`ffprobe`/`chafa` 覆盖带空格 PDF/视频/音频终态；`make check` 通过；TUI `139 pass / 0 fail / 528 expects`，coverage `85.51% funcs / 89.35% lines`，typecheck/audit 通过；core-session 11/11 与 probe/keyboard/PTY 7/7 integration 通过。
+- README 已补齐 `pdftoppm`/`ffmpeg` 依赖、helper 环境变量和检查/卸载说明；图形 passthrough、音频封面、完整 MIME/candidate 语义和 quickview cache/lifecycle 仍留在 Phase 6 后续范围。
+
+## 2026-07-30 Media viewer fallback verification
+
+- 现场配置中的 `fileviewer *.pdf pdftotext ...` 可能对图形 PDF 正常退出但返回空内容；preview worker 现在只对 image/audio/video/PDF 在 helper 错误或空白成功结果时回退内建媒体 renderer，文本和 Markdown 仍尊重非空外部 viewer 结果，取消/超时不被吞掉。
+- 新增 C queue 回归和真实 core-session 回归：空输出 `MYVIFMRC` PDF viewer 仍得到 `pdftoppm` + `chafa` ASCII；外部 viewer 输出非空时继续保持 Vifm association 优先级。
+- 最新验收：C snapshot `9737 checks / 92 tests`、串行 `env -u VIFM -u MYVIFMRC make check`、TUI `bun run typecheck`、`bun audit`、coverage `139 pass / 528 expects / 85.51% funcs / 89.35% lines`、core-session `12 pass / 60 expects`、probe/keyboard/PTY `7 pass / 48 expects`、`git diff --check` 均通过。
+
+## 2026-07-30 Search, cursor history and media stability
+
+- 依据 Vifm gap audit，先实现当前主线最直接的缺口：`/` 正向搜索、`?` 反向搜索、`n/N` 循环重复搜索。查询和方向由 C session 按 pane 保存，协议与 TUI 只传有界结构化命令；marks、registers、visual、完整目录历史、批量重命名和 compare/sync 继续标为后续缺口。
+- 返回父目录的 cursor 现在按 `tab_id + directory_bytes_hex` 保存原始 `path_bytes_hex`，目录刷新、进入/返回和排序后优先恢复该条目；历史限制为每 pane 128 条，session 释放时清理。新增 C 进入/返回回归，避免退回目录总是落到第一项。
+- PDF 栅格化 deadline 从媒体通用预算中分离为 30 秒，普通预览保持 2 秒，取消、输出上限和 helper 清理边界不变。新增 6 秒 fake `pdftoppm` core-session 回归，验证不会误报 `preview-timeout`。
+- 对图片关联增加终端安全优先级：当 `fileviewer` 规则只会给出 metadata/桌面命令时，先尝试内建 `chafa` ASCII；内建 renderer 不可用时再回退到外部 viewer/metadata。新增带空格路径的 PNG 集成回归。
+- 最新验收：C snapshot `9803 checks / 95 tests`；TUI `141 pass / 535 expects`，coverage `85.52% funcs / 89.35% lines`；core-session `15 pass / 71 expects`；`bun run typecheck`、`bun audit`、串行 `env -u VIFM -u MYVIFMRC make check`、`git diff --check` 全部通过。
+
+## 2026-07-31 Media timeout and symbol correction
+
+- 根因已确认：`@` 来自 Chafa 被固定为 `--symbols ascii`，不是 UTF-8 sanitizer 产生的乱码。图片、PDF 首页和视频首帧现在统一使用 `--symbols block`，仍保持无色、无 ANSI/Kitty/Sixel 原始序列、可选择复制的 line-safe UTF-8 文本；真实仓库 PNG 的 core session 输出已验证为块字符且不含 `@`。
+- 图片、音频、视频的 core 预览 deadline 从普通 2 秒/媒体 5 秒统一提升为有界 30 秒；PDF 保持独立 30 秒。PDF `pdftoppm` 追加 72 dpi 与 1200px 上限，降低超大页面栅格化超时风险。
+- TDD RED/GREEN：Chafa argv 回归在旧 ASCII 实现下失败，改为 block 后通过；新增 6 秒 fake PNG renderer 在旧图片 2 秒预算下触发 `preview-timeout`，媒体预算修复后完成。完整验收：C snapshot `9803 checks / 95 tests`；TUI `141 pass / 535 expects`，coverage `85.52% funcs / 89.35% lines`；core-session integration `16 pass / 74 expects`；`bunx tsc --noEmit`、`bun audit`、串行 `env -u VIFM -u MYVIFMRC make check`、`git diff --check` 全部通过。
+
+## 2026-07-31 Cursor viewport restoration
+
+- core 的路径身份恢复已确认正确；真正造成“返回后目标跑到最后一行”的是 TUI scrollbox：进入只有少量条目的子目录后 scrollTop 被压回 0，返回父目录时只做 nearest-edge `scrollChildIntoView`。
+- `EntryList` 现在按 pane/目录缓存最多 128 个 scrollTop。目录切换先恢复该目录的位置，再执行现有 cursor 可见性校正；同一目录内上下移动仍由 cursor 驱动滚动，刷新/排序不会重置目录历史。
+- RED/GREEN：新增父目录 40 项、目标原本在可视区域倒数第五行、子目录仅 1 项的回归；旧实现返回时 scrollTop 从 37 漂到 33，修复后保持原值。全量 TUI `142 pass / 539 expects`，coverage `85.52% funcs / 89.35% lines`；`bunx tsc --noEmit`、`bun audit`、`git diff --check` 通过。

@@ -23,6 +23,7 @@
 
 #include "snapshot_json.h"
 #include "undo_bridge.h"
+#include "open_config.h"
 #include "workspace_session.h"
 #include "../utils/parson.h"
 
@@ -85,6 +86,10 @@ static int process_command_line(nv_workspace_session_t *session, char line[],
 		nv_pending_resource_context_t **pending_resources);
 static int submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation);
+static int submit_preview_request(nv_preview_queue_t *queue, uint64_t *generation,
+		nv_session_pane_t source_pane, nv_session_pane_t target_pane,
+		const char cwd_bytes_hex[], const char path_bytes_hex[],
+		nv_preview_kind_t kind);
 static int active_entry_is_archive(const nv_workspace_session_t *session);
 static int active_tab_has_resource(const nv_workspace_session_t *session);
 static int validate_preview_identity(const nv_workspace_session_t *session,
@@ -276,6 +281,8 @@ open_hex_string_valid(const char value[])
 
 static int copy_action_string(JSON_Object *payload, const char field[],
 		char **result);
+static int copy_search_string(JSON_Object *payload, const char field[],
+		char **result);
 static int parse_u64_field(JSON_Object *object, const char field[],
 		uint64_t *result);
 
@@ -334,6 +341,17 @@ copy_action_string(JSON_Object *payload, const char field[], char **result)
 {
 	const char *const value = json_object_get_string(payload, field);
 	if(value == NULL || strlen(value) > 32U*1024U) return -1;
+	*result = strdup(value);
+	return *result == NULL ? -1 : 0;
+}
+
+static int
+copy_search_string(JSON_Object *payload, const char field[], char **result)
+{
+	const char *const value = json_object_get_string(payload, field);
+	if(value == NULL || value[0] == '\0' ||
+			strlen(value) > NV_SESSION_MAX_SEARCH_BYTES)
+		return -1;
 	*result = strdup(value);
 	return *result == NULL ? -1 : 0;
 }
@@ -549,6 +567,28 @@ parse_command(const char line[], unsigned int previous_sequence,
 		}
 		command->kind = strcmp(target, "first") == 0 ?
 			NV_SESSION_MOVE_FIRST : NV_SESSION_MOVE_LAST;
+	}
+	else if(strcmp(action, "search") == 0 || strcmp(action, "search-next") == 0)
+	{
+		const double direction = json_object_get_number(payload, "direction");
+		if(direction != -1.0 && direction != 1.0)
+		{
+			json_value_free(value);
+			return -1;
+		}
+		command->kind = strcmp(action, "search") == 0 ?
+			NV_SESSION_SEARCH : NV_SESSION_SEARCH_NEXT;
+		command->search_direction = (int)direction;
+		if(command->kind == NV_SESSION_SEARCH)
+		{
+			command->owns_search_fields = 1;
+			if(copy_search_string(payload, "query", &command->search_query) != 0)
+			{
+				nv_session_command_free(command);
+				json_value_free(value);
+				return -1;
+			}
+		}
 	}
 	else if(strcmp(action, "enter") == 0) command->kind = NV_SESSION_ENTER;
 	else if(strcmp(action, "mount-ssh") == 0)
@@ -1637,6 +1677,86 @@ active_tab_has_resource(const nv_workspace_session_t *session)
 	return resource != NULL && resource->active;
 }
 
+static void
+resolve_preview_association(const char path[], nv_open_resolution_t *resolution)
+{
+	if(resolution == NULL) return;
+	*resolution = (nv_open_resolution_t){};
+	const char *const config_path = getenv("MYVIFMRC");
+	if(config_path == NULL || config_path[0] == '\0') return;
+	nv_open_config_t config = {};
+	nv_open_error_t error = {};
+	if(nv_open_config_load_env(&config, &error) != 0)
+	{
+		fprintf(stderr, "neovifm-core-session: preview config ignored: %s\n",
+			error.message == NULL ? "failed to load MYVIFMRC" : error.message);
+		nv_open_error_free(&error);
+		return;
+	}
+	if(config.previewprg != NULL)
+	{
+		const nv_open_association_rule_t preview_rule = {
+			.kind = NV_OPEN_ASSOC_FILEVIEWER,
+			.pattern = "*",
+			.command = config.previewprg,
+		};
+		if(nv_open_resolve_rules(NV_OPEN_INTENT_PREVIEW, path,
+				&preview_rule, 1U, resolution, &error) == 0)
+		{
+			nv_open_error_free(&error);
+			nv_open_config_free(&config);
+			return;
+		}
+		/* An invalid previewprg must not hide a usable fileviewer rule. */
+		nv_open_resolution_free(resolution);
+		nv_open_error_free(&error);
+	}
+	if(nv_open_resolve_rules(NV_OPEN_INTENT_PREVIEW, path, config.rules,
+			config.rule_count, resolution, &error) != 0 &&
+			(error.code == NULL || strcmp(error.code, "no-association") != 0))
+	{
+		fprintf(stderr, "neovifm-core-session: preview association ignored: %s\n",
+			error.message == NULL ? "failed to resolve fileviewer" : error.message);
+		nv_open_resolution_free(resolution);
+	}
+	nv_open_error_free(&error);
+	nv_open_config_free(&config);
+}
+
+static int
+submit_preview_request(nv_preview_queue_t *queue, uint64_t *generation,
+		nv_session_pane_t source_pane, nv_session_pane_t target_pane,
+		const char cwd_bytes_hex[], const char path_bytes_hex[],
+		nv_preview_kind_t kind)
+{
+	if(queue == NULL || generation == NULL || cwd_bytes_hex == NULL ||
+			path_bytes_hex == NULL) return -1;
+	char *const path = open_hex_decode(path_bytes_hex);
+	nv_open_resolution_t resolution = {};
+	if(path != NULL) resolve_preview_association(path, &resolution);
+	const nv_preview_request_t request = {
+		.pane = source_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
+			NV_PREVIEW_PANE_RIGHT,
+		.target_pane = target_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
+			NV_PREVIEW_PANE_RIGHT,
+		.has_target_pane = 1,
+		.generation = ++*generation,
+		.cwd_bytes_hex = cwd_bytes_hex,
+		.path_bytes_hex = path_bytes_hex,
+		.kind = kind,
+		.max_bytes = NV_PREVIEW_MAX_BYTES,
+		.timeout_ms = kind == NV_PREVIEW_KIND_PDF ? NV_PREVIEW_PDF_TIMEOUT_MS :
+			(kind == NV_PREVIEW_KIND_IMAGE || kind == NV_PREVIEW_KIND_AUDIO || kind == NV_PREVIEW_KIND_VIDEO) ?
+			NV_PREVIEW_MEDIA_TIMEOUT_MS : NV_PREVIEW_DEFAULT_TIMEOUT_MS,
+		.viewer_argv = (const char *const *)resolution.argv,
+		.viewer_argc = resolution.argc,
+	};
+	const int result = nv_preview_queue_submit(queue, &request, NULL);
+	nv_open_resolution_free(&resolution);
+	free(path);
+	return result;
+}
+
 static int
 submit_active_preview(const nv_workspace_session_t *session,
 		nv_preview_queue_t *queue, uint64_t *generation)
@@ -1645,20 +1765,9 @@ submit_active_preview(const nv_workspace_session_t *session,
 	const nv_pane_snapshot_t *const snapshot = nv_workspace_session_active(session);
 	if(snapshot == NULL || snapshot->cursor < 0) return 0;
 	const nv_pane_entry_t *const entry = &snapshot->entries[snapshot->cursor];
-	const nv_preview_request_t request = {
-		.pane = session->active_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
-			NV_PREVIEW_PANE_RIGHT,
-		.target_pane = session->active_pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
-			NV_PREVIEW_PANE_RIGHT,
-		.has_target_pane = 1,
-		.generation = ++*generation,
-		.cwd_bytes_hex = snapshot->cwd_bytes_hex,
-		.path_bytes_hex = entry->path_bytes_hex,
-		.kind = preview_kind_for_entry(entry->kind, entry->name_display),
-		.max_bytes = NV_PREVIEW_MAX_BYTES,
-		.timeout_ms = 2000U,
-	};
-	return nv_preview_queue_submit(queue, &request, NULL);
+	return submit_preview_request(queue, generation, session->active_pane,
+		session->active_pane, snapshot->cwd_bytes_hex, entry->path_bytes_hex,
+		preview_kind_for_entry(entry->kind, entry->name_display));
 }
 
 static int
@@ -1755,20 +1864,9 @@ submit_requested_preview(const nv_workspace_session_t *session,
 {
 	if(session == NULL || command == NULL || queue == NULL || generation == NULL)
 		return -1;
-	const nv_preview_request_t request = {
-		.pane = command->pane == NV_SESSION_LEFT ? NV_PREVIEW_PANE_LEFT :
-			NV_PREVIEW_PANE_RIGHT,
-		.target_pane = command->preview_target_pane == NV_SESSION_LEFT ?
-			NV_PREVIEW_PANE_LEFT : NV_PREVIEW_PANE_RIGHT,
-		.has_target_pane = 1,
-		.generation = ++*generation,
-		.cwd_bytes_hex = command->preview_cwd_bytes_hex,
-		.path_bytes_hex = command->preview_path_bytes_hex,
-		.kind = preview_kind_for_entry(kind, entry_name),
-		.max_bytes = NV_PREVIEW_MAX_BYTES,
-		.timeout_ms = 2000U,
-	};
-	return nv_preview_queue_submit(queue, &request, NULL);
+	return submit_preview_request(queue, generation, command->pane,
+		command->preview_target_pane, command->preview_cwd_bytes_hex,
+		command->preview_path_bytes_hex, preview_kind_for_entry(kind, entry_name));
 }
 
 static int

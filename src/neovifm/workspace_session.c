@@ -10,6 +10,7 @@
 #include "workspace_session.h"
 
 #include <errno.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -35,15 +36,32 @@ static nv_pane_snapshot_t *tab_snapshot(nv_workspace_session_t *session,
 		nv_session_pane_t pane, size_t index);
 static nv_session_resource_t *tab_resource(nv_workspace_session_t *session,
 		nv_session_pane_t pane, size_t index);
+static nv_session_cursor_history_t *pane_cursor_history(
+		nv_workspace_session_t *session, nv_session_pane_t pane);
+static void cursor_history_free(nv_session_cursor_history_t *history);
+static int cursor_history_record(nv_session_cursor_history_t *history,
+		uint64_t tab_id, const char directory_bytes_hex[],
+		const char entry_path_bytes_hex[], nv_snapshot_error_t *error);
+static const char *cursor_history_lookup(
+		const nv_session_cursor_history_t *history, uint64_t tab_id,
+		const char directory_bytes_hex[]);
+static char **pane_search_query(nv_workspace_session_t *session,
+		nv_session_pane_t pane);
+static int *pane_search_direction(nv_workspace_session_t *session,
+		nv_session_pane_t pane);
+static int search_snapshot(nv_pane_snapshot_t *snapshot, const char query[],
+		int direction, nv_snapshot_error_t *error);
 static int find_tab_index(const nv_session_tabs_t *tabs, uint64_t id,
 		size_t *index);
 static int replace_snapshot(nv_workspace_session_t *session,
-		nv_pane_snapshot_t *current, const char path[],
+		nv_pane_snapshot_t *current, nv_session_pane_t pane, uint64_t tab_id,
+		const char path[],
 		nv_snapshot_error_t *error);
 static char *hex_decode(const char hex[]);
 static char *parent_path(const char path[]);
 static int refresh_snapshot(nv_workspace_session_t *session,
-		nv_pane_snapshot_t *snapshot, nv_snapshot_error_t *error);
+		nv_pane_snapshot_t *snapshot, nv_session_pane_t pane, uint64_t tab_id,
+		nv_snapshot_error_t *error);
 
 static void
 resource_free(nv_session_resource_t *resource)
@@ -130,6 +148,147 @@ tab_resource(nv_workspace_session_t *session, nv_session_pane_t pane,
 	nv_session_tabs_t *const tabs = pane_tabs(session, pane);
 	if(tabs->count == 0U || index >= tabs->count) return NULL;
 	return &tabs->items[index].resource;
+}
+
+static nv_session_cursor_history_t *
+pane_cursor_history(nv_workspace_session_t *session, nv_session_pane_t pane)
+{
+	return pane == NV_SESSION_LEFT ? &session->left_cursor_history :
+		&session->right_cursor_history;
+}
+
+static void
+cursor_history_free(nv_session_cursor_history_t *history)
+{
+	if(history == NULL) return;
+	for(size_t i = 0U; i < history->count; ++i)
+	{
+		free(history->entries[i].directory_bytes_hex);
+		free(history->entries[i].entry_path_bytes_hex);
+	}
+	*history = (nv_session_cursor_history_t){};
+}
+
+static int
+cursor_history_record(nv_session_cursor_history_t *history, uint64_t tab_id,
+		const char directory_bytes_hex[], const char entry_path_bytes_hex[],
+		nv_snapshot_error_t *error)
+{
+	if(history == NULL || tab_id == 0U || directory_bytes_hex == NULL ||
+			entry_path_bytes_hex == NULL)
+		return set_error(error, "invalid-cursor-history",
+				"cursor history entry is invalid");
+	for(size_t i = 0U; i < history->count; ++i)
+	{
+		if(history->entries[i].tab_id == tab_id &&
+				strcmp(history->entries[i].directory_bytes_hex,
+					directory_bytes_hex) == 0)
+		{
+			char *const replacement = strdup(entry_path_bytes_hex);
+			if(replacement == NULL)
+				return set_error(error, "out-of-memory",
+						"failed to update cursor history");
+			free(history->entries[i].entry_path_bytes_hex);
+			history->entries[i].entry_path_bytes_hex = replacement;
+			return 0;
+		}
+	}
+	char *const directory = strdup(directory_bytes_hex);
+	char *const entry = strdup(entry_path_bytes_hex);
+	if(directory == NULL || entry == NULL)
+	{
+		free(directory);
+		free(entry);
+		return set_error(error, "out-of-memory",
+				"failed to allocate cursor history");
+	}
+	if(history->count == NV_SESSION_MAX_CURSOR_HISTORY)
+	{
+		free(history->entries[history->count - 1U].directory_bytes_hex);
+		free(history->entries[history->count - 1U].entry_path_bytes_hex);
+		--history->count;
+	}
+	for(size_t i = history->count; i > 0U; --i)
+		history->entries[i] = history->entries[i - 1U];
+	history->entries[0] = (nv_session_cursor_history_entry_t){
+		.tab_id = tab_id,
+		.directory_bytes_hex = directory,
+		.entry_path_bytes_hex = entry,
+	};
+	++history->count;
+	return 0;
+}
+
+static const char *
+cursor_history_lookup(const nv_session_cursor_history_t *history,
+		uint64_t tab_id, const char directory_bytes_hex[])
+{
+	if(history == NULL || tab_id == 0U || directory_bytes_hex == NULL) return NULL;
+	for(size_t i = 0U; i < history->count; ++i)
+	{
+		if(history->entries[i].tab_id == tab_id &&
+				strcmp(history->entries[i].directory_bytes_hex,
+					directory_bytes_hex) == 0)
+			return history->entries[i].entry_path_bytes_hex;
+	}
+	return NULL;
+}
+
+static char **
+pane_search_query(nv_workspace_session_t *session, nv_session_pane_t pane)
+{
+	return pane == NV_SESSION_LEFT ? &session->left_search_query :
+		&session->right_search_query;
+}
+
+static int *
+pane_search_direction(nv_workspace_session_t *session, nv_session_pane_t pane)
+{
+	return pane == NV_SESSION_LEFT ? &session->left_search_direction :
+		&session->right_search_direction;
+}
+
+static int
+name_contains_case_insensitive(const char name[], const char query[])
+{
+	if(name == NULL || query == NULL || query[0] == '\0') return 0;
+	for(size_t start = 0U; name[start] != '\0'; ++start)
+	{
+		size_t offset = 0U;
+		while(query[offset] != '\0' && name[start + offset] != '\0' &&
+				tolower((unsigned char)name[start + offset]) ==
+					tolower((unsigned char)query[offset])) ++offset;
+		if(query[offset] == '\0') return 1;
+	}
+	return 0;
+}
+
+static int
+search_snapshot(nv_pane_snapshot_t *snapshot, const char query[], int direction,
+		nv_snapshot_error_t *error)
+{
+	if(snapshot == NULL || query == NULL || query[0] == '\0' ||
+			(direction != -1 && direction != 1))
+		return set_error(error, "invalid-search", "search query is invalid");
+	if(snapshot->entry_count == 0U)
+		return set_error(error, "search-not-found", "no search match");
+	const size_t current = snapshot->cursor < 0 ?
+		(direction > 0 ? snapshot->entry_count - 1U : 0U) :
+		(size_t)snapshot->cursor;
+	for(size_t step = 1U; step <= snapshot->entry_count; ++step)
+	{
+		const size_t index = direction > 0 ?
+			(current + step) % snapshot->entry_count :
+			(current + snapshot->entry_count - step % snapshot->entry_count) %
+				snapshot->entry_count;
+		if(name_contains_case_insensitive(snapshot->entries[index].name_display,
+				query))
+		{
+			snapshot->cursor = (int)index;
+			return 0;
+		}
+	}
+	return set_error(error, "search-not-found", "no search match");
 }
 
 static uint64_t
@@ -318,24 +477,24 @@ clone_snapshot(const nv_pane_snapshot_t *source, nv_pane_snapshot_t *clone,
 	for(size_t i = 0U; i < source->entry_count; ++i)
 	{
 		next.entries[i] = source->entries[i];
-			next.entries[i].name_display = NULL;
-			next.entries[i].name_bytes_hex = NULL;
-			next.entries[i].path_display = NULL;
-			next.entries[i].path_bytes_hex = NULL;
-			next.entries[i].owner_display = NULL;
-			next.entries[i].group_display = NULL;
-			if(clone_string(&next.entries[i].name_display,
-						source->entries[i].name_display) != 0 ||
-					clone_string(&next.entries[i].name_bytes_hex,
-						source->entries[i].name_bytes_hex) != 0 ||
-					clone_string(&next.entries[i].path_display,
-						source->entries[i].path_display) != 0 ||
-					clone_string(&next.entries[i].path_bytes_hex,
-						source->entries[i].path_bytes_hex) != 0 ||
-					clone_string(&next.entries[i].owner_display,
-						source->entries[i].owner_display) != 0 ||
-					clone_string(&next.entries[i].group_display,
-						source->entries[i].group_display) != 0)
+		next.entries[i].name_display = NULL;
+		next.entries[i].name_bytes_hex = NULL;
+		next.entries[i].path_display = NULL;
+		next.entries[i].path_bytes_hex = NULL;
+		next.entries[i].owner_display = NULL;
+		next.entries[i].group_display = NULL;
+		if(clone_string(&next.entries[i].name_display,
+				source->entries[i].name_display) != 0 ||
+				clone_string(&next.entries[i].name_bytes_hex,
+					source->entries[i].name_bytes_hex) != 0 ||
+				clone_string(&next.entries[i].path_display,
+					source->entries[i].path_display) != 0 ||
+				clone_string(&next.entries[i].path_bytes_hex,
+					source->entries[i].path_bytes_hex) != 0 ||
+				clone_string(&next.entries[i].owner_display,
+					source->entries[i].owner_display) != 0 ||
+				clone_string(&next.entries[i].group_display,
+					source->entries[i].group_display) != 0)
 		{
 			next.entry_count = i + 1U;
 			goto failed;
@@ -353,18 +512,35 @@ failed:
 
 static int
 replace_snapshot(nv_workspace_session_t *session, nv_pane_snapshot_t *current,
-		const char path[], nv_snapshot_error_t *error)
+		nv_session_pane_t pane, uint64_t tab_id, const char path[],
+		nv_snapshot_error_t *error)
 {
 	const nv_pane_sort_key_t sort_key = current->sort_key;
 	const int sort_descending = current->sort_descending;
-	char *const cursor_name = current->cursor < 0 ? NULL :
-		strdup(current->entries[current->cursor].name_bytes_hex);
+	char *const cursor_name = current->cursor < 0 ||
+			(size_t)current->cursor >= current->entry_count ? NULL :
+			strdup(current->entries[current->cursor].name_bytes_hex);
+	char *const cursor_path = current->cursor < 0 ||
+			(size_t)current->cursor >= current->entry_count ? NULL :
+			strdup(current->entries[current->cursor].path_bytes_hex);
 	nv_pane_snapshot_t next = {};
 	if(nv_pane_snapshot_build(path, &next, error) != 0)
 	{
 		free(cursor_name);
+		free(cursor_path);
 		return -1;
 	}
+	if(cursor_path != NULL && cursor_history_record(
+			pane_cursor_history(session, pane), tab_id,
+				current->cwd_bytes_hex, cursor_path, error) != 0)
+	{
+		free(cursor_name);
+		free(cursor_path);
+		nv_pane_snapshot_free(&next);
+		return -1;
+	}
+	const char *const remembered_path = cursor_history_lookup(
+			pane_cursor_history(session, pane), tab_id, next.cwd_bytes_hex);
 	for(size_t i = 0U; i < next.entry_count; ++i)
 	{
 		for(size_t j = 0U; j < current->entry_count; ++j)
@@ -379,25 +555,29 @@ replace_snapshot(nv_workspace_session_t *session, nv_pane_snapshot_t *current,
 				break;
 			}
 		}
+		if(remembered_path != NULL && strcmp(next.entries[i].path_bytes_hex,
+				remembered_path) == 0) next.cursor = (int)i;
 	}
 	nv_pane_snapshot_sort(&next, sort_key, sort_descending);
 	next.snapshot_revision = session->next_snapshot_revision++;
 	free(cursor_name);
 	nv_pane_snapshot_free(current);
 	*current = next;
+	free(cursor_path);
 	return 0;
 }
 
 static int
 refresh_snapshot(nv_workspace_session_t *session, nv_pane_snapshot_t *snapshot,
-		nv_snapshot_error_t *error)
+		nv_session_pane_t pane, uint64_t tab_id, nv_snapshot_error_t *error)
 {
 	char *const path = hex_decode(snapshot->cwd_bytes_hex);
 	if(path == NULL)
 	{
 		return set_error(error, "invalid-path", "directory identity is invalid");
 	}
-	const int result = replace_snapshot(session, snapshot, path, error);
+	const int result = replace_snapshot(session, snapshot, pane, tab_id, path,
+			error);
 	free(path);
 	return result;
 }
@@ -414,7 +594,10 @@ nv_workspace_session_refresh_pane(nv_workspace_session_t *session,
 	nv_snapshot_error_free(error);
 	nv_pane_snapshot_t *const snapshot = pane == NV_SESSION_LEFT ?
 		&session->left : &session->right;
-	return refresh_snapshot(session, snapshot, error);
+	if(ensure_tabs(session, error) != 0) return -1;
+	return refresh_snapshot(session, snapshot, pane,
+		nv_workspace_session_tab_id(session, pane,
+		nv_workspace_session_active_tab_index(session, pane)), error);
 }
 
 int
@@ -430,7 +613,7 @@ nv_workspace_session_refresh_tab(nv_workspace_session_t *session,
 		return set_error(error, "invalid-tab", "tab does not exist");
 	nv_pane_snapshot_t *const snapshot = index == tabs->active ?
 		pane_snapshot(session, pane) : &tabs->items[index].snapshot;
-	return refresh_snapshot(session, snapshot, error);
+	return refresh_snapshot(session, snapshot, pane, tab_id, error);
 }
 
 int
@@ -484,7 +667,7 @@ nv_workspace_session_attach_resource(nv_workspace_session_t *session,
 		resource_free(&next);
 		return set_error(error, "out-of-memory", "failed to store resource origin");
 	}
-	if(replace_snapshot(session, snapshot, mount_point, error) != 0)
+	if(replace_snapshot(session, snapshot, pane, tab_id, mount_point, error) != 0)
 	{
 		resource_free(&next);
 		return -1;
@@ -521,7 +704,8 @@ nv_workspace_session_detach_resource(nv_workspace_session_t *session,
 		free(origin_entry);
 		return set_error(error, "out-of-memory", "failed to restore resource origin");
 	}
-	if(replace_snapshot(session, snapshot, origin_directory, error) != 0)
+	if(replace_snapshot(session, snapshot, pane, tab_id, origin_directory,
+			error) != 0)
 	{
 		free(origin_directory);
 		free(origin_entry);
@@ -919,6 +1103,39 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		return -1;
 	}
 	nv_snapshot_error_free(error);
+	if(ensure_tabs(session, error) != 0) return -1;
+	if(command->kind == NV_SESSION_SEARCH ||
+			command->kind == NV_SESSION_SEARCH_NEXT)
+	{
+		char **const stored_query = pane_search_query(session, session->active_pane);
+		int *const stored_direction = pane_search_direction(session,
+				session->active_pane);
+		if(command->kind == NV_SESSION_SEARCH)
+		{
+			if(command->search_query == NULL || command->search_query[0] == '\0' ||
+					strlen(command->search_query) > NV_SESSION_MAX_SEARCH_BYTES ||
+					(command->search_direction != -1 && command->search_direction != 1))
+				return set_error(error, "invalid-search", "search query is invalid");
+			char *const replacement = strdup(command->search_query);
+			if(replacement == NULL)
+				return set_error(error, "out-of-memory", "failed to store search query");
+			free(*stored_query);
+			*stored_query = replacement;
+			*stored_direction = command->search_direction;
+		}
+		else if(*stored_query == NULL || (*stored_query)[0] == '\0')
+		{
+			return set_error(error, "search-not-set", "no previous search query");
+		}
+		const int direction = command->kind == NV_SESSION_SEARCH ?
+			command->search_direction : command->search_direction != 0 ?
+			command->search_direction : *stored_direction;
+		if(direction != -1 && direction != 1)
+			return set_error(error, "invalid-search", "search direction is invalid");
+		if(command->kind == NV_SESSION_SEARCH_NEXT) *stored_direction = direction;
+		return search_snapshot(active_snapshot(session), *stored_query, direction,
+				error);
+	}
 	if(command->kind == NV_SESSION_FOCUS)
 	{
 		if(command->pane != NV_SESSION_LEFT && command->pane != NV_SESSION_RIGHT)
@@ -1019,6 +1236,9 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 		case NV_SESSION_MOVE_LAST:
 			if(snapshot->entry_count != 0U) snapshot->cursor = (int)snapshot->entry_count - 1;
 			return 0;
+		case NV_SESSION_SEARCH:
+		case NV_SESSION_SEARCH_NEXT:
+			break;
 		case NV_SESSION_MOVE_CURSOR:
 			if(snapshot->entry_count == 0U) return 0;
 			if(command->delta < 0 && snapshot->cursor > 0) --snapshot->cursor;
@@ -1053,7 +1273,11 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 			{
 				char *const path = hex_decode(snapshot->entries[snapshot->cursor].path_bytes_hex);
 				if(path == NULL) return set_error(error, "invalid-path", "directory identity is invalid");
-				const int result = replace_snapshot(session, snapshot, path, error);
+				const int result = replace_snapshot(session, snapshot,
+					session->active_pane,
+					nv_workspace_session_tab_id(session, session->active_pane,
+						nv_workspace_session_active_tab_index(session,
+							session->active_pane)), path, error);
 				free(path);
 				return result;
 			}
@@ -1064,12 +1288,19 @@ nv_workspace_session_apply(nv_workspace_session_t *session,
 				char *const parent = parent_path(path);
 				free(path);
 				if(parent == NULL) return set_error(error, "out-of-memory", "failed to build parent path");
-				const int result = replace_snapshot(session, snapshot, parent, error);
+				const int result = replace_snapshot(session, snapshot,
+						session->active_pane,
+						nv_workspace_session_tab_id(session, session->active_pane,
+							nv_workspace_session_active_tab_index(session,
+								session->active_pane)), parent, error);
 				free(parent);
 				return result;
 			}
 		case NV_SESSION_REFRESH:
-			return refresh_snapshot(session, snapshot, error);
+			return refresh_snapshot(session, snapshot, session->active_pane,
+				nv_workspace_session_tab_id(session, session->active_pane,
+					nv_workspace_session_active_tab_index(session,
+						session->active_pane)), error);
 		case NV_SESSION_SORT_CYCLE:
 			{
 				static const nv_pane_sort_key_t keys[] = {
@@ -1148,6 +1379,8 @@ nv_session_command_free(nv_session_command_t *command)
 	}
 	if(command->owns_resource_fields)
 		free(command->resource_remote);
+	if(command->owns_search_fields)
+		free(command->search_query);
 	memset(command, 0, sizeof(*command));
 }
 
@@ -1172,5 +1405,9 @@ nv_workspace_session_free(nv_workspace_session_t *session)
 		if(i != session->right_tabs.active)
 			nv_pane_snapshot_free(&session->right_tabs.items[i].snapshot);
 	}
+	cursor_history_free(&session->left_cursor_history);
+	cursor_history_free(&session->right_cursor_history);
+	free(session->left_search_query);
+	free(session->right_search_query);
 	memset(session, 0, sizeof(*session));
 }
