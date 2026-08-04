@@ -753,7 +753,6 @@ TEST(session_rejects_copying_a_directory_into_its_own_subtree)
 	assert_string_equal("copy-failed", error.code);
 	assert_failure(access(SANDBOX_PATH "/subtree-action/tree/nested/tree",
 			F_OK));
-
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	remove_file(SANDBOX_PATH "/subtree-action/tree/file");
@@ -843,6 +842,7 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 			NV_CLASSIC_PANE_LEFT, &workspace, &error));
 	assert_string_equal("left-file", workspace.left.entries[0].name_display);
 	assert_int_equal(NV_CLASSIC_PANE_RIGHT, workspace.active_pane);
+
 	nv_classic_workspace_snapshot_free(&workspace);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
