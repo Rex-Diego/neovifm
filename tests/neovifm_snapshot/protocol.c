@@ -458,9 +458,14 @@ TEST(snapshot_record_larger_than_m0_byte_limit_is_rejected_before_serialization)
 	char *const hex = malloc(NV_PANE_SNAPSHOT_MAX_HEX_BYTES + 1U);
 	const size_t entry_count = 44U;
 	nv_pane_entry_t *const entries = calloc(entry_count, sizeof(*entries));
-	assert_non_null(display);
-	assert_non_null(hex);
-	assert_non_null(entries);
+	if(display == NULL || hex == NULL || entries == NULL)
+	{
+		assert_fail("Failed to allocate oversized snapshot fixture");
+		free(entries);
+		free(hex);
+		free(display);
+		return;
+	}
 
 	memset(display, 'd', NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES);
 	display[NV_PANE_SNAPSHOT_MAX_DISPLAY_BYTES] = '\0';

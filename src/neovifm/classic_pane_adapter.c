@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "../filtering.h"
 #include "../ui/ui.h"
 #include "../utils/utf8proc.h"
 
@@ -195,8 +196,8 @@ nv_pane_snapshot_from_classic_view(const view_t *view,
 	next.filtered_count = view->filtered < 0 ? 0U : (size_t)view->filtered;
 	next.sort_key = sort_key(view->sort[0]);
 	next.sort_descending = view->sort[0] < 0;
-	next.filter_active = view->local_filter.filter.raw != NULL &&
-			!filter_is_empty(&view->local_filter.filter);
+	next.filter_active = view->local_filter.matchers != NULL &&
+			!local_filter_is_empty(view);
 	if(next.entry_count != 0U)
 	{
 		next.entries = calloc(next.entry_count, sizeof(*next.entries));

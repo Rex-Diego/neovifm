@@ -11,6 +11,7 @@
 #include "../../src/neovifm/classic_pane_adapter.h"
 #include "../../src/filelist.h"
 #include "../../src/ui/ui.h"
+#include "../../src/utils/matchers.h"
 
 #ifdef __APPLE__
 
@@ -814,7 +815,7 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 	left.dir_entry[0].type = right.dir_entry[0].type = FT_REG;
 	left.filtered = 3;
 	left.sort[0] = -SK_BY_SIZE;
-	left.local_filter.filter.raw = strdup("left-filter");
+	set_local_filter(&left, "left-filter");
 	right.dir_entry[0].selected = 1;
 	nv_classic_workspace_snapshot_t workspace = {};
 	nv_snapshot_error_t error = {};
@@ -842,13 +843,12 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 			NV_CLASSIC_PANE_LEFT, &workspace, &error));
 	assert_string_equal("left-file", workspace.left.entries[0].name_display);
 	assert_int_equal(NV_CLASSIC_PANE_RIGHT, workspace.active_pane);
-
 	nv_classic_workspace_snapshot_free(&workspace);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	free(left.dir_entry[0].name);
 	free(right.dir_entry[0].name);
-	free(left.local_filter.filter.raw);
+	matchers_free(left.local_filter.matchers);
 	free(left.dir_entry);
 	free(right.dir_entry);
 }

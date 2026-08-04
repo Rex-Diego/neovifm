@@ -175,6 +175,7 @@ override LDFLAGS := $(TESTS_LDFLAGS)
 ifdef unix_env
     MF := $(abspath $(B)../src/Makefile)
     core_probe_target := neovifm-core-probe
+    core_session_target := neovifm-core-session
     ifneq ($(wildcard $(MF)),)
         override LDFLAGS += \
             $(shell grep -m1    'LIBS =' $(MF) | sed 's/^[^=]*=//') \
@@ -270,7 +271,8 @@ $(vifm_obj) ../src/./tags.c: appsources
 	@# this receipt is needed to make Make recognize that targets were updated
 
 appsources: $(vifm_src)
-	$(MAKE) $(make_args) vifm$(exe_suffix) $(core_probe_target)
+	$(MAKE) $(make_args) vifm$(exe_suffix) $(core_probe_target) \
+		$(core_session_target)
 
 $(BUILD)test-support/%.o: test-support/%.c | $(BUILD)test-support
 	$(CC) -c -o $@ $(CFLAGS) $<

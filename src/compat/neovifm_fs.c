@@ -390,11 +390,13 @@ nv_fs_test_force_cross_device_move(int enabled)
 	test_cross_device_move = enabled;
 }
 
+#ifdef __APPLE__
 static void
 run_test_before_atomic_hook(const char path[])
 {
 	if(test_before_atomic_hook != NULL) test_before_atomic_hook(path);
 }
+#endif
 
 struct nv_dir_t
 {
@@ -880,6 +882,7 @@ copy_entry_at(int source_fd, const char source_name[], int destination_fd,
 	return result;
 }
 
+#ifdef __APPLE__
 static char *
 join_parent_name(const char parent[], const char name[])
 {
@@ -936,7 +939,6 @@ random_quarantine_name(char name[], size_t size)
 	return 0;
 }
 
-#ifdef __APPLE__
 static int
 create_quarantine_directory(int parent_fd, char name[], size_t size,
 		int *directory_fd)
