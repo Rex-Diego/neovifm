@@ -446,7 +446,7 @@ TEST(gf, IF(not_windows))
 	(void)vle_keys_exec_timed_out(WK_g WK_f);
 	assert_true(paths_are_same(dir_path, lwin.curr_dir));
 
-	chdir(cwd);
+	assert_success(chdir(cwd));
 	remove_file(SANDBOX_PATH "/link2");
 	remove_file(SANDBOX_PATH "/link1");
 	remove_dir(SANDBOX_PATH "/dir");
@@ -471,7 +471,7 @@ TEST(gF, IF(not_windows))
 	(void)vle_keys_exec_timed_out(WK_g WK_F);
 	assert_true(paths_are_same(dir_path, lwin.curr_dir));
 
-	chdir(cwd);
+	assert_success(chdir(cwd));
 	remove_file(SANDBOX_PATH "/link2");
 	remove_file(SANDBOX_PATH "/link1");
 	remove_dir(SANDBOX_PATH "/dir");
@@ -494,7 +494,7 @@ TEST(cl_on_file, IF(not_windows))
 	/* Save. */
 	(void)vle_keys_exec_timed_out(WK_CR);
 
-	chdir(cwd);
+	assert_success(chdir(cwd));
 
 	char target[PATH_MAX + 1];
 	assert_success(get_link_target(SANDBOX_PATH "/symlink", target,

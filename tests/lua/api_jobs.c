@@ -125,13 +125,13 @@ TEST(vifmjob_stdin_broken_pipe, IF(not_windows))
 			"job:wait()");
 
 	/* Broken pipe + likely dead parent VifmJob object. */
-	GLUA_EQ(vlua, "true",
-			"info = { cmd = 'no-such-command-exists', iomode = 'w' }"
-			"stdin = vifm.startjob(info):stdin()"
-			"vifm.startjob({ cmd = 'sleep 0.01' }):wait()"
-			"print(stdin:write('text') == stdin)");
-	check_bg_jobs();
 	BLUA_ENDS(vlua, ": attempt to use a closed file",
+			"info = { cmd = 'no-such-command-exists', iomode = 'w' }"
+			"job = vifm.startjob(info)"
+			"stdin = job:stdin()"
+			"job:wait()"
+			"job = nil;"
+			"collectgarbage()"
 			"print(stdin:write('text') == stdin)");
 }
 
