@@ -2,20 +2,21 @@
 
 ## 当前基线
 
-NeoVifm 当前主线是 Hybrid M0：C core 负责文件系统、Vifm 语义、任务和版本化 JSONL 协议；`clients/tui` 使用 TypeScript/Bun/OpenTUI/SolidJS 负责渲染和输入标准化。经典 Vifm 视图和配置兼容面仍然保留，OpenTUI 是默认产品入口。
+NeoVifm 当前阶段是 **Workbench Alpha 0 (unreleased)**。C core 负责文件系统、Vifm 语义、任务和 protocol v3；`clients/tui` 使用 TypeScript/Bun/OpenTUI/SolidJS 负责交互与渲染。经典 Vifm 继续作为兼容入口。
 
-当前分支为 `master`，上游 `upstream` 只读指向 `vifm/vifm`，`origin` 指向 NeoVifm fork。交接提交包含源码、测试、`AGENTS.md`、planning 文件和项目文档。
+平台事实、capability 和已知问题统一见 [`CURRENT_STATE.md`](CURRENT_STATE.md)，不要从旧 planning 的阶段名称推断当前能力。
 
-## 本次交接内容
+Git 远端约定：
 
-- 正常退出时保存 workspace 现场：左右 pane 路径、pane tab 顺序、活动 tab、活动 pane、排序状态和当前光标目标。
-- 无参数启动时恢复上次现场；显式传入路径时显式路径优先，但仍会在正常退出时更新状态。
-- 状态文件默认位于 `$XDG_STATE_HOME/neovifm/session.json`，否则为 `~/.local/state/neovifm/session.json`；可用 `NEOVIFM_SESSION_STATE` 覆盖。
-- 状态写入使用版本化、有界 JSON、`0600` 权限、同目录独占临时文件、同步和原子替换。损坏、过期或挂载资源状态会安全降级，不会把资源伪造成普通本地目录。
-- `↑/↓/←/→` 分别等同于 `k/j/h/l`；排序切换由排序控件和命令入口完成。
-- 快捷键矩阵、README、planning 的 findings/progress/task plan 已同步更新。
+- `origin`：`Rex-Diego/neovifm`。
+- `upstream`：只读 `vifm/vifm`，push URL 必须为 `DISABLED`。
+- 上游同步使用独立 merge commit，不与 NeoVifm 功能提交混合。
+
+Phase A 已把 Vifm 上游同步到 `6083f5297`，修复干净 Linux developer 构建，并增加 Linux、macOS、Windows GitHub Actions。`CI / gate` 只有三平台全部成功才通过。
 
 ## 启动与验证
+
+macOS：
 
 ```bash
 scripts/fix-timestamps
@@ -28,24 +29,24 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-显式指定初始 pane 可以运行 `bun run dev /path/to/left /path/to/right`。不传路径时会尝试恢复现场。状态文件可以用 `NEOVIFM_SESSION_STATE=/tmp/neovifm-session.json` 指向临时位置进行隔离验收。
+Linux 使用同一流程，但 configure 不需要 Apple Clang flag。完整验证命令见 `docs/CURRENT_STATE.md`。
 
-本次交接前已通过：
+Windows 当前只通过 `Makefile.win` 和 CI 构建基础二进制；不要把它描述成完整可用的 OpenTUI 产品。
 
-- `make -C tests neovifm_snapshot`：9849 checks / 96 tests
-- TUI unit：144 pass / 545 expects；coverage 85.57% functions / 89.37% lines
-- TUI integration：23 pass / 122 expects
-- `bunx tsc --noEmit`
-- `bun audit`
-- `env -u VIFM -u MYVIFMRC make check`
-- `git diff --check`
+## 当前功能
 
-## 已知边界与后续
+- 双 pane、pane tabs、排序、选择和当前目录文件名搜索。
+- protocol v3 preview/task/resource event。
+- 快速对面 pane 预览、task center 和结构化 open。
+- POSIX/macOS 正常退出 session 保存和恢复。
+- macOS `file-actions-v1` 文件任务和 undo bridge。
 
-- 现场保护针对正常退出；崩溃或强制 kill 不保证能写入最新状态。
-- 跨重启保存的是每个 tab 当前光标目标；目录级返回历史仍主要是当前进程内存状态。
-- ZIP/SSH 挂载 tab 不会作为虚假的本地目录恢复，真实挂载浏览仍依赖 helper 和运行时能力。
-- Vifm marks、registers、完整 visual/history、批量重命名、compare/sync、完整 background facade、真实 SSH/ZIP E2E 和原生图形协议预览仍按 planning 文件排队。
-- 安装和发布不作为当前主线完成门槛，继续留在后续独立计划。
+## 已知边界
 
-接手时先阅读 `AGENTS.md`、`docs/NEOVIFM_ARCHITECTURE.md`、`.planning/neovifm-mainline-workbench/task_plan.md`、`progress.md` 和 `findings.md`，再从当前 `master` 的最新提交开始工作。
+- Windows session state 默认路径和原子替换尚未完成。
+- Linux/Windows 不发布 `file-actions-v1`。
+- ZIP/SSH 真实挂载依赖 helper，跨平台 E2E 未完成。
+- Vifm marks、registers、完整 visual/history、批量重命名、compare/sync 和完整 background facade 未完成。
+- 安装、发布、插件 SDK、agent session 和全仓品牌重命名不属于 Alpha 0 基线。
+
+接手顺序：`AGENTS.md` → `docs/CURRENT_STATE.md` → `docs/NEOVIFM_ARCHITECTURE.md` → `protocol/README.md` → 当前 `.planning/` 计划。

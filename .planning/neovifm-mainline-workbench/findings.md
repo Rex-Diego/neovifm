@@ -1,5 +1,7 @@
 # NeoVifm 主线能力继承与任务工作台 Findings
 
+> 状态：**frozen**。内容保留供追溯，不再作为当前 capability 或平台支持声明。
+
 ## 2026-07-27 用户决策
 
 - OpenTUI 是 NeoVifm 默认产品入口；当前 C core + OpenTUI 的演进路径就是正式主线。

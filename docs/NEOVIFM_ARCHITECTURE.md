@@ -3,6 +3,8 @@
 状态：实施契约
 日期：2026-07-11
 
+当前交付阶段、平台 capability 和已知问题见 [`CURRENT_STATE.md`](CURRENT_STATE.md)。本文件描述长期架构约束，不用历史里程碑代替当前完成度。
+
 ## 产品定义
 
 NeoVifm 是键盘优先、双栏优先、异步优先的终端文件工作台。它把文件浏览、结构化预览、文件操作、外部命令、长期任务和可选智能代理放在一套统一交互中。
@@ -120,7 +122,7 @@ Renderers: text / code / image / table / tree / archive / hex
 - 插件声明 API 版本和 capability；加载失败不得破坏主界面。
 - OpenCode 集成先作为可选 session provider，而不是核心依赖。
 
-## 第一纵向切片：Hybrid M0 只读浏览
+## 历史第一纵向切片：Hybrid M0 只读浏览
 
 目标是先证明 C core 与现代 TUI 可以通过稳定边界协作，再逐步把 Vifm 的真实 pane、操作和任务能力移入 headless core。
 

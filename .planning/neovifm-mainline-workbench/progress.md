@@ -1,5 +1,7 @@
 # NeoVifm 主线能力继承与任务工作台 Progress
 
+> 状态：**frozen**。这是历史流水账，当前事实见 `../../docs/CURRENT_STATE.md`，当前计划见 `../neovifm-alpha0-baseline/`。
+
 ## 2026-07-27
 
 - 使用 `planning-with-files` 恢复当前活动计划与 dirty worktree，确认现有 tab/鼠标/路径改动已经记录完整验收但尚未提交。
