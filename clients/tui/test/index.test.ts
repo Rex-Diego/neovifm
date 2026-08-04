@@ -4,10 +4,13 @@ import { CoreClientError, type CoreSession, type CoreSessionRequest } from "../s
 import {
   appPropsFor,
   defaultCoreProbePath,
+  copyText,
   editorCommand,
   exitCodeFor,
   main,
+  openEditor,
   openFile,
+  openResolvedFile,
   renderUntilDestroyed,
   type MainDependencies,
   toUiErrorMessage,
@@ -124,6 +127,12 @@ test("opens a file through a structured platform argv without invoking a shell",
     stdout: "ignore",
     stderr: "pipe",
   })
+})
+
+test("rejects invalid editor, resolved-open, and clipboard input before spawning", async () => {
+  await expect(openEditor("")).rejects.toThrow("Editor path is invalid")
+  await expect(openResolvedFile([])).rejects.toThrow("Open command is empty")
+  await expect(copyText("x".repeat(1024 * 1024 + 1))).rejects.toThrow("limit is 1048576 bytes")
 })
 
 test("preserves structured core error context without rendering stderr", () => {

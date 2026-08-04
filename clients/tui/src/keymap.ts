@@ -34,6 +34,9 @@ export class VifmKeymap {
   #prefix: Prefix | undefined
   #count: number | undefined
 
+  // Bun 1.3.10 does not count an implicit constructor as covered.
+  constructor() {}
+
   handle(key: KeyLike): KeymapResult {
     const name = normalizedName(key)
     const prefix = this.#prefix

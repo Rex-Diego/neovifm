@@ -62,16 +62,25 @@ describe("probe state reducer", () => {
     expect(current).toMatchObject({ preview: { generation: "2", content: "new" }, sequence: 4 })
   })
 
-  test("accepts an action refresh before the matching structured action terminal", () => {
+  test("accepts async refreshes and replaces matching action and resource tasks", () => {
     const pane = { cwd_display: "/tmp", cwd_bytes_hex: "2f746d70", generated_at_unix_ms: "0", cursor: -1, entry_count: 0, entries: [] }
     const hello = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "hello", sequence: 0, payload: { implementation: "session", capabilities: ["preview-session-v3", "file-actions-v1"] } })
     const initial = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 1, payload: { command_sequence: 0, trigger: "initial", active_pane: "left", left: pane, right: pane } })
     const acknowledged = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 2, payload: { command_sequence: 1, trigger: "command", active_pane: "left", left: pane, right: pane } })
     const refreshed = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "workspace-snapshot", sequence: 3, payload: { command_sequence: 1, trigger: "action", active_pane: "left", left: pane, right: pane } })
     const action = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "action-task", sequence: 4, payload: { task_id: "3", command_sequence: 1, pane: "left", action: "mkdir", state: "done", completed_count: 1, total_count: 1, partial: false } })
+    const replacement = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "action-task", sequence: 5, payload: { task_id: "3", command_sequence: 1, pane: "left", action: "mkdir", state: "failed", completed_count: 0, total_count: 1, failed_index: 0, partial: false } })
+    const resource = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "resource-task", sequence: 6, payload: { task_id: "4", command_sequence: 1, pane: "left", tab_id: "1", resource: "mount-archive", state: "running" } })
+    const resourceReplacement = parseProtocolRecord({ protocol: "neovifm-core", version: 3, type: "resource-task", sequence: 7, payload: { task_id: "4", command_sequence: 1, pane: "left", tab_id: "1", resource: "mount-archive", state: "done" } })
     const state = reduceProbeState(reduceProbeState(reduceProbeState(reduceProbeState(initialProbeState(), hello), initial), acknowledged), refreshed)
     const complete = reduceProbeState(state, action)
-    expect(complete).toMatchObject({ commandSequence: 1, actionTasks: [{ task_id: "3", state: "done" }] })
+    const replaced = reduceProbeState(complete, replacement)
+    const mounted = reduceProbeState(reduceProbeState(replaced, resource), resourceReplacement)
+    expect(mounted).toMatchObject({
+      commandSequence: 1,
+      actionTasks: [{ task_id: "3", state: "failed" }],
+      resourceTasks: [{ task_id: "4", state: "done" }],
+    })
   })
 
   test("retains a core-owned open result and advances its command sequence", () => {
