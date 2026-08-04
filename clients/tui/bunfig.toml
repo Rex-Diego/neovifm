@@ -2,4 +2,5 @@ preload = ["@opentui/solid/preload"]
 
 [test]
 preload = ["@opentui/solid/preload"]
+coverageIgnoreSourcemaps = true
 coverageThreshold = { lines = 0.8, functions = 0.8 }

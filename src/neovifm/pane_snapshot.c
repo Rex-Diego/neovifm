@@ -43,7 +43,9 @@ static int append_entry(nv_pane_snapshot_t *snapshot,
 static void entry_free(nv_pane_entry_t *entry);
 static int set_error(nv_snapshot_error_t *error, const char code[],
 		int os_error, const char path[]);
+#ifndef _WIN32
 static char *identity_display(uint64_t id, int group);
+#endif
 static nv_entry_resource_kind_t entry_resource_kind(const char name[],
 		nv_entry_kind_t kind);
 
@@ -234,11 +236,11 @@ static int64_t
 milliseconds_from_parts(long double seconds, long nanoseconds)
 {
 	const long double value = seconds*1000.0L + nanoseconds/1000000.0L;
-	if(value > INT64_MAX)
+	if(value >= 0x1p63L)
 	{
 		return INT64_MAX;
 	}
-	if(value < INT64_MIN)
+	if(value <= -0x1p63L)
 	{
 		return INT64_MIN;
 	}
@@ -341,13 +343,12 @@ entry_resource_kind(const char name[], nv_entry_kind_t kind)
 	return NV_ENTRY_RESOURCE_NONE;
 }
 
+#ifndef _WIN32
 static char *
 identity_display(uint64_t id, int group)
 {
 	char numeric[32];
 	snprintf(numeric, sizeof(numeric), "%" PRIu64, id);
-
-#ifndef _WIN32
 	/* Avoid NSS/Directory Services in snapshot generation. A bounded local
 	 * file lookup is deterministic; remote or unavailable identities use the
 	 * numeric fallback below. */
@@ -383,11 +384,9 @@ identity_display(uint64_t id, int group)
 		}
 		fclose(file);
 	}
-#else
-	(void)group;
-#endif
 	return strdup(numeric);
 }
+#endif
 
 static void
 set_stat(nv_pane_entry_t *entry, const struct stat *st, int is_symlink)
