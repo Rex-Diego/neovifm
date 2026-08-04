@@ -2,3 +2,4 @@ preload = ["@opentui/solid/preload"]
 
 [test]
 preload = ["@opentui/solid/preload"]
+coverageThreshold = { lines = 0.8, functions = 0.8 }
