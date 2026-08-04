@@ -28,6 +28,12 @@
 #include "preview_task.h"
 #include "../compat/pthread.h"
 
+#if defined(O_NONBLOCK)
+#define NV_PREVIEW_READ_FLAGS (O_RDONLY | O_NONBLOCK)
+#else
+#define NV_PREVIEW_READ_FLAGS O_RDONLY
+#endif
+
 typedef struct nv_preview_task_t nv_preview_task_t;
 typedef struct nv_preview_event_node_t nv_preview_event_node_t;
 
@@ -511,7 +517,7 @@ preview_text(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 {
 	/* Do not let a FIFO/device selected by a stale snapshot block the only
 	 * worker before fstat() rejects its non-regular type. */
-	const int fd = open(task->path, O_RDONLY | O_NONBLOCK);
+	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
@@ -644,7 +650,7 @@ static int
 preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
-	const int fd = open(task->path, O_RDONLY | O_NONBLOCK);
+	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
@@ -768,7 +774,7 @@ preview_header(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		unsigned char header[], size_t header_size, size_t *header_length,
 		struct stat *stat_value, const char **error_code, int *os_error)
 {
-	const int fd = open(task->path, O_RDONLY | O_NONBLOCK);
+	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
