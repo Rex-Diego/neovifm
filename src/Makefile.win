@@ -101,12 +101,12 @@ vifm_SOURCES := $(cfg) $(compat) $(engine) $(int) $(io) $(lua) $(menus) \
                 signals.c sort.c status.c tags.c trash.c types.c undo.c \
 	vcache.c version.c viewcolumns_parser.c neovifm/classic_pane_adapter.c \
 	neovifm/pane_snapshot.c neovifm/workspace_session.c neovifm/preview_task.c \
-	vifmres.o vifm.c
+	compat/neovifm_fs.c vifmres.o vifm.c
 
 vifm_OBJECTS := $(vifm_SOURCES:.c=.o)
 vifm_EXECUTABLE := vifm.exe
 
-neovifm_core_probe_SOURCES := neovifm/core_probe.c neovifm/win_core_compat.c \
+neovifm_core_probe_SOURCES := neovifm/core_probe.c neovifm/win_core_compat_win.c \
 	neovifm/open_resolver.c neovifm/open_config.c neovifm/resource_mount.c \
 	neovifm/pane_snapshot.c \
 	neovifm/workspace_session.c neovifm/snapshot_json.c compat/neovifm_fs.c compat/reallocarray.c \
@@ -114,7 +114,7 @@ neovifm_core_probe_SOURCES := neovifm/core_probe.c neovifm/win_core_compat.c \
 neovifm_core_probe_OBJECTS := $(neovifm_core_probe_SOURCES:.c=.o)
 neovifm_core_probe_EXECUTABLE := neovifm-core-probe.exe
 
-neovifm_core_session_SOURCES := neovifm/core_session.c neovifm/win_core_compat.c \
+neovifm_core_session_SOURCES := neovifm/core_session.c neovifm/win_core_compat_win.c \
 	neovifm/open_resolver.c neovifm/open_config.c neovifm/resource_mount.c \
 	neovifm/pane_snapshot.c \
 	neovifm/workspace_session.c neovifm/undo_bridge.c neovifm/undo_compat.c \
