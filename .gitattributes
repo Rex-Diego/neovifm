@@ -1,2 +1,5 @@
 # Research captures preserve their original whitespace for source fidelity.
 research/total-commander-vifm/** -whitespace
+
+# Test fixtures are byte-exact inputs, not platform-native text files.
+tests/test-data/** -text

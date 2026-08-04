@@ -62,12 +62,7 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
 
     expect(await session.send({ action: "focus", pane: "left" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "left")
-    await writeFile(resolve(left, "left-refreshed"), "refresh")
-    expect(await session.send({ action: "refresh" })).toBe(true)
-    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "left-refreshed"))
-    expect(errors).toEqual([])
-
-    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected refreshed session")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected focused session")
     const source = state.workspace.left
     const entry = source.entries[source.cursor]
     if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined) {
@@ -93,6 +88,11 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
     await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === expectedPreviewContent)
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected explicit preview session")
     expect(state.workspace.right).toEqual(rightBeforePreview)
+
+    await writeFile(resolve(left, "left-refreshed"), "refresh")
+    expect(await session.send({ action: "refresh" })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((candidate) => candidate.name_display === "left-refreshed"))
+    expect(errors).toEqual([])
   } finally {
     session.close()
     await session.completion

@@ -354,7 +354,9 @@ TEST(select_and_unselect_consider_trailing_slash)
 	assert_false(lwin.dir_entry[3].selected);
 
 	/* Select only files inside given directory. */
-	assert_success(cmds_dispatch("select! {{*/a/**}}", &lwin, CIT_COMMAND));
+	char command[PATH_MAX + 32];
+	snprintf(command, sizeof(command), "select! {{%s/a/**}}", lwin.curr_dir);
+	assert_success(cmds_dispatch(command, &lwin, CIT_COMMAND));
 	assert_int_equal(0, lwin.selected_files);
 	assert_false(lwin.dir_entry[0].selected);
 	assert_false(lwin.dir_entry[1].selected);
