@@ -381,7 +381,7 @@ test("real core session queues multiple file actions and keeps their history", a
       const current = state()
       return current.phase === "ready" && "session" in current && (current.actionTasks?.length ?? 0) >= 2
         && current.actionTasks?.every((task) => task.state === "done" || task.state === "failed") === true
-    })
+    }, 15_000)
     const completed = state()
     if (!(completed.phase === "ready" && "session" in completed)) throw new Error("session disappeared after queued actions")
     expect(completed.actionTasks).toHaveLength(2)

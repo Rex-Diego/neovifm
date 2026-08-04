@@ -1026,7 +1026,8 @@ preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
 	posix_spawn_file_actions_t actions;
 	if(posix_spawn_file_actions_init(&actions) != 0 ||
 			posix_spawn_file_actions_adddup2(&actions, output_pipe[1], STDOUT_FILENO) != 0 ||
-			posix_spawn_file_actions_addclose(&actions, output_pipe[0]) != 0)
+			posix_spawn_file_actions_addclose(&actions, output_pipe[0]) != 0 ||
+			posix_spawn_file_actions_addclose(&actions, output_pipe[1]) != 0)
 	{
 		close(output_pipe[0]);
 		close(output_pipe[1]);

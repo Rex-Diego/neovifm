@@ -16,6 +16,12 @@
 
 #include "../undo.h"
 
+#if defined(ESTALE)
+#define NV_IDENTITY_STALE_ERRNO ESTALE
+#else
+#define NV_IDENTITY_STALE_ERRNO EIO
+#endif
+
 typedef enum
 {
 	NV_UNDO_RECORD_MKDIR,
@@ -126,7 +132,7 @@ perform_undo_operation(OPS op, void *data, const char src[], const char dst[])
 		if(current_identity(src, &current) != 0 ||
 				!identity_equal(current, record->child_identity))
 		{
-			if(errno == 0) errno = ESTALE;
+			if(errno == 0) errno = NV_IDENTITY_STALE_ERRNO;
 			return OPS_FAILED;
 		}
 		return nv_fs_remove(src, record->destination_parent_identity,
@@ -140,7 +146,7 @@ perform_undo_operation(OPS op, void *data, const char src[], const char dst[])
 		if(current_identity(src, &current) != 0 ||
 				!identity_equal(current, record->child_identity))
 		{
-			if(errno == 0) errno = ESTALE;
+			if(errno == 0) errno = NV_IDENTITY_STALE_ERRNO;
 			return OPS_FAILED;
 		}
 		return nv_fs_move(src, dst, record->destination_parent_identity,
