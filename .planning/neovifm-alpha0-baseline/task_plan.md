@@ -13,7 +13,7 @@
 - [x] 适配上游 matcher API，保持 classic adapter 语义。
 - [x] 添加三平台 CI 和 80% TUI 覆盖率门槛。
 - [x] 建立当前状态文档并冻结失真的旧计划。
-- [ ] fork Draft PR 的 `CI / gate` 三平台全绿。
+- [x] fork Draft PR 的 `CI / gate` 三平台全绿。
 
 ## 不在范围
 
