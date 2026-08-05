@@ -175,7 +175,6 @@ jobs:
         run: bun audit
 
       - name: Check generated worktree and whitespace
-        shell: msys2 {0}
         run: git diff --check
 
       - name: Upload Windows test logs on failure
