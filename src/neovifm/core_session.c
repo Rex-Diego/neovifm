@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 
 #ifndef _WIN32
+# include <sys/select.h>
 # include <unistd.h>
 #else
 # include <direct.h>
@@ -25,8 +26,6 @@
 #ifdef __APPLE__
 # include <fcntl.h>
 # include <sys/event.h>
-# include <sys/select.h>
-# include <unistd.h>
 #endif
 
 #include "snapshot_json.h"
@@ -175,6 +174,9 @@ static int watcher_handle_events(nv_session_watcher_t *watcher,
 		nv_workspace_session_t *session, unsigned int *output_sequence,
 		unsigned int command_sequence, int *stdin_ready,
 		nv_action_queue_t *action_queue);
+#endif
+
+#ifndef _WIN32
 static int poll_stdin(int *stdin_ready);
 #endif
 
@@ -2457,7 +2459,9 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 	}
 	return 0;
 }
+#endif
 
+#ifndef _WIN32
 static int
 poll_stdin(int *stdin_ready)
 {
@@ -2710,7 +2714,7 @@ main(int argc, char *argv[])
 	for(;;)
 	{
 		int stdin_ready = 0;
-#ifdef __APPLE__
+#ifndef _WIN32
 		if(poll_stdin(&stdin_ready) != 0)
 		{
 			result = 1;

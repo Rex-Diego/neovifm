@@ -67,6 +67,9 @@
  */
 
 /* This is the only unit that uses xxhash, so import it directly here. */
+#ifdef inline
+#undef inline
+#endif
 #define XXH_PRIVATE_API
 #include "utils/xxhash.h"
 

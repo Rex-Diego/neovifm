@@ -22,7 +22,7 @@ NeoVifm 是一款以 Vifm 为成熟底座的新一代终端文件工作台，而
 
 当前代码以 Vifm 0.15 开发版为兼容基线。经典二进制、配置目录和大部分公开 API 暂时仍使用 `vifm`，不得为了品牌切换进行全仓机械重命名。
 
-当前里程碑是 Hybrid M0：C core probe 通过版本化 JSONL 协议发布不可变目录快照，TypeScript/Bun/OpenTUI 客户端负责只读渲染。架构决策见 `docs/adr/0001-hybrid-core-opentui.md`。
+当前里程碑是 **Workbench Alpha 0 (unreleased)**：C core probe/session 通过 protocol v3 发布不可变 workspace、preview、task 和 resource 事件，TypeScript/Bun/OpenTUI 客户端负责交互与渲染。Hybrid M0 是已经完成的历史切片，不再代表当前功能范围。当前平台能力与已知问题以 `docs/CURRENT_STATE.md` 为准，架构决策见 `docs/adr/0001-hybrid-core-opentui.md`。
 
 ## 架构约束
 

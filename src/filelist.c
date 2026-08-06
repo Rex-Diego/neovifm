@@ -285,8 +285,11 @@ flist_free_view(view_t *view)
 	update_string(&view->local_filter.prev, NULL);
 	free(view->local_filter.poshist);
 	view->local_filter.poshist = NULL;
+	/* Non-zero value may imply non-NULL poshist field, so reset it. */
+	view->local_filter.poshist_len = 0;
 
-	filter_dispose(&view->local_filter.filter);
+	matchers_free(view->local_filter.matchers);
+	view->local_filter.matchers = NULL;
 	filter_dispose(&view->auto_filter);
 	matcher_free(view->manual_filter);
 	view->manual_filter = NULL;
@@ -4476,7 +4479,7 @@ add_directory_leaf(view_t *view, const char path[], int parent_pos)
 
 	/* If local filter isn't empty, assume that user is looking for something and
 	 * leafs will get in his way. */
-	if(!filter_is_empty(&view->local_filter.filter))
+	if(!local_filter_is_empty(view))
 	{
 		return 0;
 	}

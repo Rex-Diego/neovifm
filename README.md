@@ -6,15 +6,16 @@ NeoVifm 是一款正在建设中的终端文件工作台，以 Vifm 的 Vim 语�
 
 ## 当前状态
 
-NeoVifm 的主线入口是 OpenTUI，当前仍处于 Hybrid M0 原型阶段，尚未发布可安装版本。这里的 Hybrid 不是另一条客户端路线，而是“Vifm C core 负责文件系统、操作和兼容语义，OpenTUI 负责渲染与交互”的边界；经典 `vifm` 继续作为兼容入口。
+NeoVifm 的主线入口是 OpenTUI，当前阶段是 **Workbench Alpha 0 (unreleased)**，尚未发布可安装版本。这里的 Hybrid 是“Vifm C core 负责文件系统、操作和兼容语义，OpenTUI 负责渲染与交互”的架构边界，不再是只读 M0 的阶段名称；经典 `vifm` 继续作为兼容入口。
 
 - 当前代码基线：Vifm 0.15 开发版。
 - 经典二进制、配置目录和 Lua API 仍使用 `vifm`，用于保持兼容。
 - `neovifm-core-probe` 发布无用户配置污染的目录快照；`neovifm-core-session` 为 OpenTUI 提供版本化 JSONL 会话协议。
-- `clients/tui` 已接入双 pane、pane tab、Vifm 风格键位基础、异步 copy/move/mkdir、任务中心、undo、ZIP 清单预览、SSH mount 生命周期和 F3/Space 文本与媒体元数据预览。
+- `clients/tui` 已接入双 pane、pane tab、Vifm 风格键位基础、搜索、排序、任务中心、资源任务和 F3/Space 文本与媒体预览。
 - 当前仍未完成：完整 Vifm filetype/fileviewer/running 语义、删除/Trash undo、真实 ZIP/SSH 挂载 E2E、图形图片/PDF/视频/音频渲染和完整低色彩/终端尺寸验收。
-- 经典 Vifm 默认行为不被替换；OpenTUI 是实验性主线客户端，缺少 capability 时必须降级为可读的文本或结构化错误。
-- 架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol](protocol/README.md)；主线阶段计划见 [.planning/neovifm-mainline-workbench/task_plan.md](.planning/neovifm-mainline-workbench/task_plan.md)。
+- `file-actions-v1` 和 kqueue watcher 当前只在 macOS 提供；Windows 只承诺构建与基础测试，persistence 和文件操作仍未完成。
+- 经典 Vifm 默认行为不被替换；OpenTUI 缺少 capability 时必须降级为可读的文本或结构化错误。
+- 当前平台和能力事实见 [CURRENT_STATE](docs/CURRENT_STATE.md)，架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol](protocol/README.md)。
 
 ## 产品方向
 
@@ -30,7 +31,7 @@ NeoVifm 的主线入口是 OpenTUI，当前仍处于 Hybrid M0 原型阶段，�
 
 ### 必需依赖
 
-macOS 的 core 构建需要 Autotools，OpenTUI 需要 Bun 1.3 或更高版本。已安装时无需重复执行：
+Unix core 构建需要 Autotools 与 curses 开发库，OpenTUI 需要 Bun 1.3 或更高版本。macOS 已安装依赖时无需重复执行：
 
 ```bash
 brew install autoconf automake bun
@@ -151,7 +152,7 @@ bun run dev ../.. /tmp
 
 前两个路径参数分别是左、右 pane；省略右路径时会复制左路径。`q` 或 `Ctrl-C` 退出，`Tab` 切换当前 pane。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
 
-不传路径启动时，OpenTUI 会在正常退出后恢复上次现场：包括左右 pane 路径、每个 pane 的 tab 顺序与活动 tab、活动 pane 和各目录中的光标目标。状态默认保存到 `$XDG_STATE_HOME/neovifm/session.json`，未设置时使用 `~/.local/state/neovifm/session.json`；可用 `NEOVIFM_SESSION_STATE=/path/to/session.json` 覆盖。显式传入路径会以这些路径启动，但退出时仍会更新现场文件。已挂载的 ZIP/SSH 资源不会被伪造为普通本地目录恢复。
+不传路径启动时，OpenTUI 会在正常退出后恢复上次现场：包括左右 pane 路径、每个 pane 的 tab 顺序与活动 tab、活动 pane 和各目录中的光标目标。在 POSIX 环境，状态默认保存到 `$XDG_STATE_HOME/neovifm/session.json`，未设置时使用 `~/.local/state/neovifm/session.json`；可用 `NEOVIFM_SESSION_STATE=/path/to/session.json` 覆盖。Windows 默认状态目录和替换语义仍属于 Phase B，当前应显式设置 `NEOVIFM_SESSION_STATE`，不能宣称 persistence 已完成。已挂载的 ZIP/SSH 资源不会被伪造为普通本地目录恢复。
 
 方向键遵循 Vifm 直觉：`↑/↓/←/→` 分别等同于 `k/j/h/l`；排序切换保留在排序控件和命令入口，不再占用左右方向键。
 

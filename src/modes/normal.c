@@ -1307,7 +1307,7 @@ cmd_percent(key_info_t key_info, keys_info_t *keys_info)
 static void
 cmd_equal(key_info_t key_info, keys_info_t *keys_info)
 {
-	modcline_enter(CLS_FILTER, curr_view->local_filter.filter.raw);
+	modcline_enter(CLS_FILTER, local_filter_get(curr_view));
 }
 
 /* Continues navigation to word which starts with specified character in
@@ -1920,7 +1920,7 @@ free_list_of_file_indexes(keys_info_t *keys_info)
 	keys_info->count = 0;
 }
 
-/* Filter the files matching the filename filter. */
+/* Restore all filters (the opposite of zR). */
 static void
 cmd_zM(key_info_t key_info, keys_info_t *keys_info)
 {

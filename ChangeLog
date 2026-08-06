@@ -12,6 +12,9 @@
 	opened as before).  Thanks to David Sierra DiazGranados (a.k.a.
 	davidsierradz).
 
+	Changed output of `:filter?` to always state flags of the explicit filter
+	instead of referring to the value via `---->`.
+
 	Added <help> :*map argument that enables providing description for the
 	mapping with the same curly braces syntax as used by :file[x]type.
 
@@ -47,6 +50,13 @@
 
 	Added 'keepsel' option to retain selection across mode switches.  Patch by
 	cairo55.
+
+	Added angle-bracket notation for combinations Alt with comma and period.
+	Thanks to fugue.
+
+	Added +pattern syntax to local filter.  It is not a valid regular
+	expression but is used to specify patterns like `{*.pdf}!/abc/` after the
+	plus sign.  Thanks to filterfalse, tagwint and CaptainFantastic.
 
 	Updated utf8proc to v2.11.3.
 
@@ -122,6 +132,12 @@
 
 	Updated :diff command in sample vifmrc files to be more useful.  Thanks to
 	an anonymous at Vifm Q2A site.
+
+	Improved wording of documentation sections describing filters and
+	patterns.
+
+	Made 'title' set title of a tmux window when $TERM equals "tmux" or starts
+	with "tmux-".  Thanks to fugue.
 
 	Fixed 'trashdir' with "%r" on BSD-like systems (those with getmntinfo()
 	instead of getmntent() API).  The regression was apparently introduced in
@@ -262,6 +278,14 @@
 	message.
 
 	Fixed `--select path/to/broken/symlink` failing with an error.
+
+	Fixed invocation form of :locate that passes parameters without escaping
+	not being documented.
+
+	Fixed implementation of 'title' using tsl and fsl attributes from terminfo
+	only for restoring the title but not for setting it.
+
+	Fixed Alt-. command-line mode key not working on Windows.
 
 0.14-beta to 0.14 (2025-02-08)
 

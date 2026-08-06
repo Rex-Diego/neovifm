@@ -181,7 +181,7 @@ TEST(cl, IF(not_windows))
 	conf_setup();
 	undo_setup();
 
-	chdir(SANDBOX_PATH);
+	assert_success(chdir(SANDBOX_PATH));
 
 	assert_success(make_symlink("target", "symlink"));
 
@@ -211,7 +211,7 @@ TEST(cl, IF(not_windows))
 
 	assert_string_equal("1 link retargeted", ui_sb_last());
 
-	chdir(cwd);
+	assert_success(chdir(cwd));
 
 	char target[PATH_MAX + 1];
 	assert_success(get_link_target(SANDBOX_PATH "/symlink", target,

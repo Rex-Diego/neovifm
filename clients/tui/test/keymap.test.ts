@@ -100,6 +100,9 @@ test("keeps shifted navigation and quit/refresh keys aligned with Vifm", () => {
 test("falls back to sequence when a terminal leaves key name empty", () => {
   const map = new VifmKeymap()
   expect(map.handle(key("", { sequence: "j" }))).toEqual({ kind: "command", command: { action: "move", delta: 1 } })
+  expect(map.handle(key("", { sequence: "\t" }))).toEqual({ kind: "command", command: { action: "focus-next" } })
+  expect(map.handle(key("", { sequence: " " }))).toEqual({ kind: "function", action: "quick-view" })
+  expect(map.handle(key("", { sequence: "\u001b[A" }))).toEqual({ kind: "unhandled" })
 })
 
 test("exposes every Total Commander function key through the shared action dispatcher", () => {

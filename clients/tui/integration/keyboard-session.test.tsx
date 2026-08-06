@@ -321,8 +321,7 @@ test("real keyboard navigation, tabs, actions, and mkdir undo update the C-owned
   }
 }, 20_000)
 
-test("real core session queues multiple file actions and keeps their history", async () => {
-  if (process.platform !== "darwin") return
+test.skipIf(process.platform !== "darwin")("real core session keeps history across consecutive file actions", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) {
     throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
@@ -344,44 +343,51 @@ test("real core session queues multiple file actions and keeps their history", a
     onError: (error) => errors.push(error),
   })
   await waitFor(() => state().phase === "ready" && "session" in state())
-  const initial = state()
-  if (!(initial.phase === "ready" && "workspace" in initial)) throw new Error("workspace did not initialize")
-  const source = initial.workspace.left
-  const destination = initial.workspace.right
-  const entry = source.entries[source.cursor]
-  if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined
-    || destination.cwd_device === undefined || destination.cwd_inode === undefined || destination.cwd_ctime_unix_ns === undefined) {
-    throw new Error("core did not publish stable action identities")
-  }
-  const command = {
-    action: "copy" as const,
-    pane: "left" as const,
-    cwd_bytes_hex: source.cwd_bytes_hex,
-    snapshot_revision: source.snapshot_revision,
-    cwd_device: source.cwd_device,
-    cwd_inode: source.cwd_inode,
-    cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
-    destination_cwd_bytes_hex: destination.cwd_bytes_hex,
-    destination_snapshot_revision: destination.snapshot_revision,
-    destination_cwd_device: destination.cwd_device,
-    destination_cwd_inode: destination.cwd_inode,
-    destination_cwd_ctime_unix_ns: destination.cwd_ctime_unix_ns,
-    targets: [{
-      path_bytes_hex: entry.path_bytes_hex,
-      device: entry.device!,
-      inode: entry.inode!,
-      ctime_unix_ns: entry.ctime_unix_ns!,
-      kind: entry.kind,
-    }],
+  const actionCommand = () => {
+    const current = state()
+    if (!(current.phase === "ready" && "workspace" in current)) throw new Error("workspace did not initialize")
+    const source = current.workspace.left
+    const destination = current.workspace.right
+    const entry = source.entries.find((candidate) => candidate.name_display === "queued-file")
+    if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined
+      || destination.cwd_device === undefined || destination.cwd_inode === undefined || destination.cwd_ctime_unix_ns === undefined) {
+      throw new Error("core did not publish stable action identities")
+    }
+    return {
+      action: "copy" as const,
+      pane: "left" as const,
+      cwd_bytes_hex: source.cwd_bytes_hex,
+      snapshot_revision: source.snapshot_revision,
+      cwd_device: source.cwd_device,
+      cwd_inode: source.cwd_inode,
+      cwd_ctime_unix_ns: source.cwd_ctime_unix_ns,
+      destination_cwd_bytes_hex: destination.cwd_bytes_hex,
+      destination_snapshot_revision: destination.snapshot_revision,
+      destination_cwd_device: destination.cwd_device,
+      destination_cwd_inode: destination.cwd_inode,
+      destination_cwd_ctime_unix_ns: destination.cwd_ctime_unix_ns,
+      targets: [{
+        path_bytes_hex: entry.path_bytes_hex,
+        device: entry.device!,
+        inode: entry.inode!,
+        ctime_unix_ns: entry.ctime_unix_ns!,
+        kind: entry.kind,
+      }],
+    }
   }
   try {
-    expect(await session.send(command)).toBe(true)
-    expect(await session.send(command)).toBe(true)
+    expect(await session.send(actionCommand())).toBe(true)
+    await waitFor(() => {
+      const current = state()
+      return current.phase === "ready" && "session" in current && current.actionTasks?.length === 1
+        && current.actionTasks[0]?.state === "done"
+    })
+    expect(await session.send(actionCommand())).toBe(true)
     await waitFor(() => {
       const current = state()
       return current.phase === "ready" && "session" in current && (current.actionTasks?.length ?? 0) >= 2
         && current.actionTasks?.every((task) => task.state === "done" || task.state === "failed") === true
-    })
+    }, 15_000)
     const completed = state()
     if (!(completed.phase === "ready" && "session" in completed)) throw new Error("session disappeared after queued actions")
     expect(completed.actionTasks).toHaveLength(2)

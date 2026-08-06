@@ -16,10 +16,15 @@
  */
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "../compat/fs_limits.h"
 #include "../compat/neovifm_fs.h"
@@ -96,6 +101,22 @@ is_case_change(const char src[], const char dst[])
 	}
 	return *src == '\0' && *dst == '\0';
 }
+
+#ifdef _WIN32
+const char *
+attr_str(uint32_t attr)
+{
+	static char value[6];
+	size_t length = 0U;
+	if((attr & FILE_ATTRIBUTE_ARCHIVE) != 0U) value[length++] = 'A';
+	if((attr & FILE_ATTRIBUTE_HIDDEN) != 0U) value[length++] = 'H';
+	if((attr & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED) != 0U) value[length++] = 'I';
+	if((attr & FILE_ATTRIBUTE_READONLY) != 0U) value[length++] = 'R';
+	if((attr & FILE_ATTRIBUTE_SYSTEM) != 0U) value[length++] = 'S';
+	value[length] = '\0';
+	return value;
+}
+#endif
 
 void
 remove_last_path_component(char path[])

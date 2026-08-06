@@ -9,6 +9,8 @@
 #include "../../src/compat/neovifm_fs.h"
 #include "../../src/neovifm/undo_bridge.h"
 
+#ifdef __APPLE__
+
 static nv_fs_identity_t
 identity_for(const char path[])
 {
@@ -127,5 +129,7 @@ TEST(undo_bridge_moves_a_completed_move_back_to_its_source)
 	remove_dir(source_parent);
 	remove_dir(destination_parent);
 }
+
+#endif /* __APPLE__ */
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */

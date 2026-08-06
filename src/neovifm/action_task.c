@@ -505,7 +505,9 @@ static const char *
 failure_code(nv_session_command_kind_t kind, int os_error)
 {
 	if(os_error == ECANCELED) return "action-cancelled";
+#if defined(ESTALE)
 	if(os_error == ESTALE) return "stale-action";
+#endif
 	if(kind == NV_SESSION_MOVE_FILES && os_error == EXDEV)
 		return "cross-filesystem-move-unsupported";
 	if(os_error == EEXIST) return "destination-exists";

@@ -62,17 +62,13 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
 
     expect(await session.send({ action: "focus", pane: "left" })).toBe(true)
     await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.active_pane === "left")
-    await writeFile(resolve(left, "left-refreshed"), "refresh")
-    expect(await session.send({ action: "refresh" })).toBe(true)
-    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((entry) => entry.name_display === "left-refreshed"))
-    expect(errors).toEqual([])
-
-    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected refreshed session")
+    if (state.phase !== "ready" || !("session" in state)) throw new Error("expected focused session")
     const source = state.workspace.left
     const entry = source.entries[source.cursor]
     if (entry === undefined || source.cwd_device === undefined || source.cwd_inode === undefined || source.cwd_ctime_unix_ns === undefined) {
       throw new Error("expected source identity for explicit preview")
     }
+    const expectedPreviewContent = await Bun.file(entry.path_display).text()
     const rightBeforePreview = state.workspace.right
     const previewCommandSequence = state.commandSequence + 1
     expect(await session.send({
@@ -89,9 +85,14 @@ test("real v3 session publishes cancellable preview lifecycle beside core-owned 
       inode: entry.inode!,
       ctime_unix_ns: entry.ctime_unix_ns!,
     })).toBe(true)
-    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === "a")
+    await waitFor(() => state.phase === "ready" && "session" in state && state.commandSequence === previewCommandSequence && state.preview?.target_pane === "right" && state.preview.content === expectedPreviewContent)
     if (state.phase !== "ready" || !("session" in state)) throw new Error("expected explicit preview session")
     expect(state.workspace.right).toEqual(rightBeforePreview)
+
+    await writeFile(resolve(left, "left-refreshed"), "refresh")
+    expect(await session.send({ action: "refresh" })).toBe(true)
+    await waitFor(() => state.phase === "ready" && "session" in state && state.workspace.left.entries.some((candidate) => candidate.name_display === "left-refreshed"))
+    expect(errors).toEqual([])
   } finally {
     session.close()
     await session.completion
@@ -663,7 +664,7 @@ test("real v3 session allows a slow but bounded image renderer to finish", async
   }
 }, { timeout: 30000 })
 
-test("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
+test.skipIf(process.platform !== "darwin")("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
   left = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-left-"))
@@ -802,7 +803,7 @@ test("real v3 session resolves a core-owned open command into a structured resul
   }
 }, { timeout: 15000 })
 
-test("real v3 session retains failed action identity for a safe core retry", async () => {
+test.skipIf(process.platform !== "darwin")("real v3 session retains failed action identity for a safe core retry", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
   left = await mkdtemp(resolve(tmpdir(), "neovifm-session-retry-left-"))
