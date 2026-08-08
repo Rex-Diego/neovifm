@@ -953,6 +953,9 @@ record_action_undo(const nv_pending_action_context_t *context,
 		const nv_undo_bridge_location_t location = {
 			.pane = (unsigned int)context->source_pane,
 			.tab_id = context->source_tab_id,
+			.has_destination = context->has_destination,
+			.destination_pane = (unsigned int)context->destination_pane,
+			.destination_tab_id = context->destination_tab_id,
 		};
 		result = context->undo_action.kind == NV_SESSION_COPY ?
 			nv_undo_bridge_record_copy_group(transfers, count,
@@ -1056,8 +1059,17 @@ apply_undo_command(nv_workspace_session_t *session, nv_action_queue_t *queue,
 	if(location == NULL || location->tab_id == 0U || location->pane > NV_SESSION_RIGHT)
 		return set_error(error, "undo-location-invalid",
 				"undo target location is invalid");
-	return refresh_action_tab(session, (nv_session_pane_t)location->pane,
-			location->tab_id, error);
+	if(refresh_action_tab(session, (nv_session_pane_t)location->pane,
+			location->tab_id, error) != 0)
+		return -1;
+	if(!location->has_destination) return 0;
+	if(location->destination_tab_id == 0U ||
+			location->destination_pane > NV_SESSION_RIGHT)
+		return set_error(error, "undo-location-invalid",
+				"undo destination location is invalid");
+	return refresh_action_tab(session,
+			(nv_session_pane_t)location->destination_pane,
+			location->destination_tab_id, error);
 }
 
 static int

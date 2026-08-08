@@ -47,6 +47,7 @@ TEST(undo_bridge_removes_the_last_created_directory)
 	assert_int_equal(NV_UNDO_BRIDGE_SUCCESS, nv_undo_bridge_undo(&undone_location));
 	assert_int_equal(location.pane, undone_location.pane);
 	assert_int_equal(location.tab_id, undone_location.tab_id);
+	assert_false(undone_location.has_destination);
 	assert_failure(access(path, F_OK));
 	nv_undo_bridge_reset();
 	remove_dir(parent);
@@ -87,10 +88,20 @@ TEST(undo_bridge_removes_a_completed_copy_as_one_group)
 		.source_path = source, .destination_path = destination,
 		.source_identity = source_identity,
 	};
+	const nv_undo_bridge_location_t location = {
+		.pane = 0U, .tab_id = 2U, .has_destination = 1,
+		.destination_pane = 1U, .destination_tab_id = 3U,
+	};
 	assert_success(nv_undo_bridge_record_copy_group(&transfer, 1U,
-			identity_for(destination_parent), (nv_undo_bridge_location_t){
-				.pane = 0U, .tab_id = 2U }));
-	assert_int_equal(NV_UNDO_BRIDGE_SUCCESS, nv_undo_bridge_undo(NULL));
+			identity_for(destination_parent), location));
+	nv_undo_bridge_location_t undone_location = {};
+	assert_int_equal(NV_UNDO_BRIDGE_SUCCESS,
+			nv_undo_bridge_undo(&undone_location));
+	assert_true(undone_location.has_destination);
+	assert_int_equal(location.destination_pane,
+			undone_location.destination_pane);
+	assert_int_equal(location.destination_tab_id,
+			undone_location.destination_tab_id);
 	assert_success(access(source, F_OK));
 	assert_failure(access(destination, F_OK));
 	nv_undo_bridge_reset();
