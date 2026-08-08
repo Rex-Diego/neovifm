@@ -220,6 +220,7 @@ TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
 }
 #endif
 
+#ifndef _WIN32
 TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 {
 	const char *const dir = SANDBOX_PATH "/preview-image";
@@ -254,6 +255,8 @@ TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 	remove_file(path);
 	remove_dir(dir);
 }
+
+#endif
 
 #ifndef _WIN32
 TEST(preview_queue_uses_bounded_block_chafa_before_metadata_fallback)

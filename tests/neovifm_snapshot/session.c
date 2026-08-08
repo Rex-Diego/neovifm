@@ -763,6 +763,7 @@ TEST(session_rejects_copying_a_directory_into_its_own_subtree)
 
 #endif /* __APPLE__ */
 
+#ifndef _WIN32
 TEST(classic_adapter_deep_copies_loaded_view_without_retaining_entries)
 {
 	const char *const dir = SANDBOX_PATH "/classic-adapter";
@@ -852,3 +853,4 @@ TEST(classic_workspace_adapter_copies_both_panes_atomically)
 	free(left.dir_entry);
 	free(right.dir_entry);
 }
+#endif

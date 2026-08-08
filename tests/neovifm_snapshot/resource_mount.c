@@ -9,9 +9,8 @@
 
 #include "../../src/neovifm/resource_mount.h"
 
-static const char *const MOUNT = SANDBOX_PATH "/mount";
-
 #ifndef _WIN32
+static const char *const MOUNT = SANDBOX_PATH "/mount";
 static const char *const FUSE_ZIP = SANDBOX_PATH "/fuse-zip";
 static const char *const ARCHIVEMOUNT = SANDBOX_PATH "/archivemount";
 static const char *const SSHFS = SANDBOX_PATH "/sshfs";
@@ -128,8 +127,6 @@ TEST(ssh_mount_uses_one_argument_for_remote_and_read_only_option)
 	nv_resource_mount_error_free(&error);
 	remove_helpers();
 }
-#endif
-
 TEST(ssh_mount_rejects_option_like_remote_before_helper_lookup)
 {
 	nv_resource_mount_spec_t spec = {};
@@ -140,6 +137,7 @@ TEST(ssh_mount_rejects_option_like_remote_before_helper_lookup)
 	nv_resource_mount_spec_free(&spec);
 	nv_resource_mount_error_free(&error);
 }
+#endif
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */

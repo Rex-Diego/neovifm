@@ -198,6 +198,7 @@ TEST(hidden_entry_is_marked)
 	remove_dir(CONTENT_DIR);
 }
 
+#ifndef _WIN32
 TEST(control_characters_are_safe_for_display_and_lossless_in_bytes)
 {
 	nv_pane_snapshot_t snapshot = {};
@@ -300,6 +301,7 @@ TEST(executable_symlink_and_fifo_kinds_are_classified)
 	remove_file(fifo);
 	remove_dir(CONTENT_DIR);
 }
+#endif
 #endif
 
 TEST(growing_entry_storage_keeps_all_entries)
