@@ -553,7 +553,7 @@ stat_ctime_ns(const struct stat *st)
 #if defined(__APPLE__)
 	const time_t seconds = st->st_ctimespec.tv_sec;
 	const long nanoseconds = st->st_ctimespec.tv_nsec;
-#elif defined(HAVE_STRUCT_STAT_ST_CTIM)
+#elif defined(__linux__) || defined(HAVE_STRUCT_STAT_ST_CTIM)
 	const time_t seconds = st->st_ctim.tv_sec;
 	const long nanoseconds = st->st_ctim.tv_nsec;
 #else
