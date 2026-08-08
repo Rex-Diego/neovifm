@@ -2491,7 +2491,7 @@ core_main(int argc, char *argv[])
 		return 1;
 	}
 	nv_action_queue_t *action_queue = NULL;
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 	action_queue = nv_action_queue_alloc();
 	if(action_queue == NULL)
 	{

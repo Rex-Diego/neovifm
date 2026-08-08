@@ -44,7 +44,7 @@ TEST(preview_session_records_are_versioned_and_keep_task_identity)
 			1U));
 	assert_string_equal("pane-tabs-v1", json_array_get_string(capabilities,
 			2U));
-	#ifdef __APPLE__
+	#if defined(__APPLE__) || defined(__linux__)
 	assert_string_equal("file-actions-v1", json_array_get_string(capabilities,
 			3U));
 	assert_string_equal("open-v1", json_array_get_string(capabilities, 4U));

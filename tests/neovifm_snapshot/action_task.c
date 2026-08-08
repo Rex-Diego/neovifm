@@ -12,7 +12,7 @@
 #include "../../src/neovifm/action_task.h"
 #include "../../src/neovifm/preview_task.h"
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 
 static nv_pane_snapshot_t *
 pane_for(nv_workspace_session_t *session, nv_session_pane_t pane)
@@ -400,7 +400,7 @@ TEST(action_move_rolls_back_a_same_name_replacement_instead_of_moving_it)
 	remove_dir(right);
 }
 
-#endif /* __APPLE__ */
+#endif /* __APPLE__ || __linux__ */
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */

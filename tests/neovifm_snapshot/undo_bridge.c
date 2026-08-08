@@ -9,7 +9,7 @@
 #include "../../src/compat/neovifm_fs.h"
 #include "../../src/neovifm/undo_bridge.h"
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 
 static nv_fs_identity_t
 identity_for(const char path[])
@@ -130,6 +130,6 @@ TEST(undo_bridge_moves_a_completed_move_back_to_its_source)
 	remove_dir(destination_parent);
 }
 
-#endif /* __APPLE__ */
+#endif /* __APPLE__ || __linux__ */
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
