@@ -37,6 +37,11 @@ TEST(empty_association_uses_platform_fallback)
 	assert_int_equal(0, unsetenv("MYVIFMRC"));
 	nv_open_resolution_t resolution = {};
 	nv_open_error_t error = {};
+#ifdef _WIN32
+	assert_failure(nv_open_resolve(NV_OPEN_INTENT_OPEN, "/tmp/a b.pdf",
+			NULL, 0U, &resolution, &error));
+	assert_string_equal("unsupported-platform", error.code);
+#else
 	assert_success(nv_open_resolve(NV_OPEN_INTENT_OPEN, "/tmp/a b.pdf",
 			NULL, 0U, &resolution, &error));
 	assert_string_equal("platform", nv_open_source_name(resolution.source));
@@ -47,6 +52,7 @@ TEST(empty_association_uses_platform_fallback)
 	assert_string_equal("xdg-open", resolution.argv[0]);
 	#endif
 	assert_string_equal("/tmp/a b.pdf", resolution.argv[1]);
+#endif
 	nv_open_resolution_free(&resolution);
 	nv_open_error_free(&error);
 	if(old_copy == NULL)

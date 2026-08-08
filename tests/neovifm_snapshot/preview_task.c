@@ -179,6 +179,7 @@ TEST(preview_queue_treats_markdown_as_bounded_text)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
 {
 	const char *const dir = SANDBOX_PATH "/preview-fileviewer";
@@ -217,6 +218,7 @@ TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 {
@@ -253,6 +255,7 @@ TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_uses_bounded_block_chafa_before_metadata_fallback)
 {
 	const char *const dir = SANDBOX_PATH "/preview-chafa";
@@ -349,6 +352,7 @@ TEST(preview_queue_prefers_ascii_image_over_metadata_fileviewer)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
 {
@@ -396,6 +400,7 @@ TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_renders_pdf_first_page_after_empty_viewer_with_raster_helper)
 {
 	const char *const dir = SANDBOX_PATH "/preview-pdf-raster";
@@ -551,6 +556,7 @@ TEST(preview_queue_uses_ffprobe_for_audio_metadata_before_header_fallback)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 TEST(preview_queue_cancels_queued_generation_before_worker_runs_it)
 {
