@@ -19,10 +19,13 @@ afterEach(async () => {
   root = undefined
 })
 
-async function waitFor(predicate: () => boolean, timeoutMs = 15_000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 15_000, diagnostic?: () => string): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error("timed out waiting for Windows core session")
+    if (Date.now() >= deadline) {
+      const details = diagnostic?.()
+      throw new Error(`timed out waiting for Windows core session${details === undefined ? "" : `: ${details}`}`)
+    }
     await Bun.sleep(10)
   }
 }
@@ -36,20 +39,21 @@ function executable(name: "NEOVIFM_CORE_PROBE" | "NEOVIFM_CORE_SESSION"): string
 function startTracked(left: string, right: string, options: {
   readonly resume?: boolean
   readonly persist?: boolean
-} = {}): { readonly session: CoreSession; readonly state: () => ProbeState; readonly errors: Error[] } {
+} = {}): { readonly session: CoreSession; readonly state: () => ProbeState; readonly errors: Error[]; readonly records: unknown[] } {
   let current: ProbeState = initialProbeState()
   const errors: Error[] = []
+  const records: unknown[] = []
   const session = startCoreSession({
     executable: executable("NEOVIFM_CORE_SESSION"),
     leftPath: left,
     rightPath: right,
     resume: options.resume,
     persist: options.persist,
-    onRecord: (record) => { current = reduceProbeState(current, record) },
+    onRecord: (record) => { records.push(record); current = reduceProbeState(current, record) },
     onError: (error) => errors.push(error),
   })
   sessions.add(session)
-  return { session, state: () => current, errors }
+  return { session, state: () => current, errors, records }
 }
 
 async function closeTracked(session: CoreSession): Promise<void> {
@@ -79,7 +83,7 @@ test.skipIf(process.platform !== "win32")("real Windows cores handle Unicode pat
   await waitFor(() => {
     const state = running.state()
     return state.phase === "ready" && "session" in state && state.preview?.content === "alpha"
-  })
+  }, 15_000, () => JSON.stringify({ phase: running.state().phase, records: running.records.slice(0, 4), errors: running.errors.map(String) }))
   let state = running.state()
   if (!(state.phase === "ready" && "session" in state)) throw new Error("expected ready Windows session")
   expect(state.hello.capabilities).not.toContain("file-actions-v1")
@@ -123,7 +127,8 @@ test.skipIf(process.platform !== "win32")("Windows default state path restores a
   process.env.LOCALAPPDATA = localAppData
   try {
     const first = startTracked(left, right, { persist: true })
-    await waitFor(() => first.state().phase === "ready")
+    await waitFor(() => first.state().phase === "ready", 15_000,
+      () => JSON.stringify({ phase: first.state().phase, records: first.records.slice(0, 4), errors: first.errors.map(String) }))
     expect(await first.session.send({ action: "focus", pane: "right" })).toBe(true)
     expect(await first.session.send({ action: "new-tab", pane: "right" })).toBe(true)
     await waitFor(() => {
