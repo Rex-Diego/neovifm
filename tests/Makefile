@@ -160,6 +160,7 @@ override CC = $(CC_$(V))
 override AR = $(AR_$(V))
 override LD = $(LD_$(V))
 AT = $(AT_$(V))
+TEST_RUN_FLAGS ?= -s
 
 # setup compile and link flags (partially depends on OS)
 override CFLAGS := $(TESTS_CFLAGS) -MMD -MP -pipe \
@@ -355,18 +356,18 @@ endif
 
 $1: $$($1.bin)
 ifeq ($B,)
-	@$(TEST_RUN_PREFIX) $$< -s $(TEST_RUN_POST)
+	@$(TEST_RUN_PREFIX) $$< $(TEST_RUN_FLAGS) $(TEST_RUN_POST)
 else
-	@cd $B && $(TEST_RUN_PREFIX) $$< -s $(TEST_RUN_POST)
+	@cd $B && $(TEST_RUN_PREFIX) $$< $(TEST_RUN_FLAGS) $(TEST_RUN_POST)
 endif
 
 # this runs separate fixtures, targets are of the form dir.name
 .PHONY: $$($1.fixtures)
 $$($1.fixtures): $$($1.bin)
 ifeq ($B,)
-	@$(TEST_RUN_PREFIX) $$^ -s -f $$(subst .,/,$$@).c $(TEST_RUN_POST)
+	@$(TEST_RUN_PREFIX) $$^ $(TEST_RUN_FLAGS) -f $$(subst .,/,$$@).c $(TEST_RUN_POST)
 else
-	@cd $B && $(TEST_RUN_PREFIX) $$^ -s -f $$(subst .,/,$$@).c $(TEST_RUN_POST)
+	@cd $B && $(TEST_RUN_PREFIX) $$^ $(TEST_RUN_FLAGS) -f $$(subst .,/,$$@).c $(TEST_RUN_POST)
 endif
 
 build: $$($1.bin)
