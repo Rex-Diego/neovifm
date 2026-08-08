@@ -14,6 +14,7 @@
 
 char * nv_session_state_path(void);
 int nv_session_ensure_parent_directory(const char path[]);
+int nv_session_directory_exists(const char path[]);
 
 FILE * nv_session_fopen(const char path[], const char mode[]);
 int nv_session_open_temporary(const char path[], char **temporary);

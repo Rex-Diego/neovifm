@@ -899,8 +899,7 @@ persisted_directory_exists(const char bytes_hex[])
 {
 	char *const path = hex_decode(bytes_hex);
 	if(path == NULL) return 0;
-	struct stat info = {};
-	const int result = stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+	const int result = nv_session_directory_exists(path);
 	free(path);
 	return result;
 }

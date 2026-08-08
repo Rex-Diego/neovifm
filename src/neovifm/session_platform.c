@@ -191,6 +191,23 @@ nv_session_ensure_parent_directory(const char path[])
 #endif
 }
 
+int
+nv_session_directory_exists(const char path[])
+{
+	if(path == NULL || path[0] == '\0') return 0;
+#ifndef _WIN32
+	struct stat info = {};
+	return stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+#else
+	wchar_t *const wide = utf8_to_utf16(path);
+	if(wide == NULL) return 0;
+	const DWORD attributes = GetFileAttributesW(wide);
+	free(wide);
+	return attributes != INVALID_FILE_ATTRIBUTES &&
+		(attributes & FILE_ATTRIBUTE_DIRECTORY) != 0U;
+#endif
+}
+
 FILE *
 nv_session_fopen(const char path[], const char mode[])
 {
