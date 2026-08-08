@@ -31,7 +31,9 @@
 #include "preview_task.h"
 #include "../compat/pthread.h"
 
-#if defined(O_NONBLOCK)
+#if defined(_WIN32)
+#define NV_PREVIEW_READ_FLAGS (O_RDONLY | O_BINARY)
+#elif defined(O_NONBLOCK)
 #define NV_PREVIEW_READ_FLAGS (O_RDONLY | O_NONBLOCK)
 #else
 #define NV_PREVIEW_READ_FLAGS O_RDONLY
