@@ -401,6 +401,47 @@ TEST(action_move_rolls_back_a_same_name_replacement_instead_of_moving_it)
 	remove_dir(right);
 }
 
+TEST(action_delete_restores_source_when_trash_helper_fails)
+{
+	const char *const helper = SANDBOX_PATH "/neovifm-test-trash-failure";
+	const char *const left = SANDBOX_PATH "/delete-failure-left";
+	const char *const right = SANDBOX_PATH "/delete-failure-right";
+	const char *const path = SANDBOX_PATH "/delete-failure-left/file";
+	create_dir(left);
+	create_dir(right);
+	make_file(path, "content");
+	make_file(helper, "#!/bin/sh\nexit 1\n");
+	assert_success(chmod(helper, 0700));
+	assert_success(setenv("NEOVIFM_TRASH_EXECUTABLE", helper, 1));
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+	nv_session_command_t command = command_for(&session, NV_SESSION_LEFT,
+			NV_SESSION_DELETE);
+	nv_session_prepared_action_t action = {};
+	assert_success(nv_workspace_session_prepare_action(&session, &command,
+			&action, &error));
+	nv_action_queue_t *const queue = nv_action_queue_alloc();
+	assert_non_null(queue);
+	assert_success(nv_action_queue_submit(queue, &action, 1U, NULL));
+	int saw_queued = 0, saw_running = 0;
+	nv_action_event_t event = {};
+	assert_true(pop_terminal(queue, &event, &saw_queued, &saw_running));
+	assert_int_equal(NV_ACTION_TASK_FAILED, event.state);
+	assert_string_equal("delete-failed", event.error_code);
+	assert_success(access(path, F_OK));
+
+	nv_action_event_free(&event);
+	nv_action_queue_free(queue);
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	assert_success(unsetenv("NEOVIFM_TRASH_EXECUTABLE"));
+	remove_file(path);
+	remove_dir(left);
+	remove_dir(right);
+	remove_file(helper);
+}
+
 #endif /* __APPLE__ || __linux__ */
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
