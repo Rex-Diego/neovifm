@@ -2474,12 +2474,14 @@ core_main(int argc, char *argv[])
 		nv_snapshot_error_free(&error);
 		return 1;
 	}
+#ifndef _WIN32
 	if(nv_undo_bridge_init() != 0)
 	{
 		fputs("neovifm-core-session: failed to initialize undo bridge\n", stderr);
 		nv_workspace_session_free(&session);
 		return 1;
 	}
+#endif
 	nv_preview_queue_t *const preview_queue = nv_preview_queue_alloc();
 	if(preview_queue == NULL)
 	{
