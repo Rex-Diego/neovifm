@@ -39,11 +39,12 @@ Windows 使用 `scripts/appveyor/win/` 构建和运行 C tests；真实 core int
 - protocol v3 preview/task/resource event。
 - 快速对面 pane 预览、task center 和结构化 open。
 - POSIX/macOS 和 Windows 正常退出 session 保存和恢复。
-- macOS `file-actions-v1` 文件任务和 undo bridge。
+- macOS/Linux `file-actions-v1` 文件任务和 undo bridge；Windows 留到 B2b。
 
 ## 已知边界
 
-- Linux/Windows 不发布 `file-actions-v1`。
+- Windows 不发布 `file-actions-v1`；Linux 已发布。
+- Linux move 使用 `renameat2(RENAME_NOREPLACE)`，delete 默认通过 `/usr/bin/gio trash`，测试可注入 `NEOVIFM_TRASH_EXECUTABLE`。
 - Windows 没有 watcher 和默认 Win32 opener。
 - ZIP/SSH 真实挂载依赖 helper，跨平台 E2E 未完成。
 - Vifm marks、registers、完整 visual/history、批量重命名、compare/sync 和完整 background facade 未完成。

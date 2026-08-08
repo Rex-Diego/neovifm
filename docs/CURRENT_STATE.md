@@ -29,7 +29,7 @@ NeoVifm 当前处于 **Workbench Alpha 0 (unreleased)**。
 | `pane-tabs-v1` | 是 | 是 | 是 | pane tab 新建、切换、关闭和顺序 |
 | `open-v1` | 是 | 是 | 是 | 结构化 argv；Windows 没有默认平台 opener |
 | `resource-tasks-v1` | 是 | 是 | 是 | 协议入口存在；真实 mount 仍依赖平台 helper |
-| `file-actions-v1` | 是 | 否 | 否 | copy/move/mkdir/delete/undo 当前只在 macOS session 发布 |
+| `file-actions-v1` | 是 | 是 | 否 | copy/move/mkdir/delete/undo 已在 macOS、Linux session 发布；Windows 留到 B2b |
 
 不要把“capability 被发布”写成“所有 helper 和 E2E 都已经完成”。ZIP/SSH 的真实挂载、取消和恢复仍需要单独平台验收。
 
@@ -45,8 +45,10 @@ NeoVifm 当前处于 **Workbench Alpha 0 (unreleased)**。
 ### Linux
 
 - 是干净构建、focused C、完整 C 回归和 TUI integration 的 CI 基线。
-- protocol v3、导航、tabs、搜索、排序、预览与结构化 open 可构建和测试。
-- 不发布 `file-actions-v1`，也没有 macOS kqueue watcher。
+- protocol v3、导航、tabs、搜索、排序、预览、结构化 open 和 `file-actions-v1` 可构建和测试。
+- copy/move/mkdir/delete 使用 parent-FD-relative、no-follow、no-overwrite 规则；move 使用 `renameat2(RENAME_NOREPLACE)`，delete 默认调用 `/usr/bin/gio trash`。
+- undo 会刷新来源和目标 pane/tab；Trash helper 失败时保留原对象并恢复隔离文件。
+- 没有 macOS kqueue watcher。
 
 ### Windows
 
@@ -71,7 +73,7 @@ NeoVifm 当前处于 **Workbench Alpha 0 (unreleased)**。
 
 - 完整 Vifm keymap、marks、registers、visual、history 和命令语义。
 - 文件操作与 Vifm `ops`/`background`/`undo` 的最终收口。
-- Linux/Windows 文件操作和 Windows watcher/default opener。
+- Windows 文件操作、watcher/default opener；Linux watcher 仍未接入 NeoVifm session。
 - ZIP/SSH 跨平台真实挂载 E2E。
 - Kitty/Sixel 等原生图形协议、音频封面和完整媒体体验。
 - 安装器、发布包、稳定配置迁移和公开 release。
@@ -124,7 +126,7 @@ $env:NEOVIFM_CORE_SESSION = (Resolve-Path '..\..\src\neovifm-core-session.exe')
 bun test ./integration/core-probe.test.tsx ./integration/windows-baseline.test.ts
 ```
 
-三平台最终门槛见 `.github/workflows/ci.yml` 的 `CI / gate`。B1 证据为 GitHub Actions run `31243077034`：三平台和 gate 全绿；Windows real-core integration 为 5 tests，TUI 为 145 tests，函数/行覆盖率分别为 94.44%/98.33%。
+三平台最终门槛见 `.github/workflows/ci.yml` 的 `CI / gate`。B1 证据为 GitHub Actions run `31243466287`：三平台和 gate 全绿；Windows real-core integration 为 5 tests，TUI 为 145 tests，函数/行覆盖率分别为 94.44%/98.33%。B2a 当前本地 Linux 证据为 focused C `97 tests / 9880 checks`、TUI integration `21 pass / 4 skip`、TUI `145 pass`，函数/行覆盖率 `92.09%/96.85%`，serial `make check` 和 `bun audit` 通过；远端 CI 尚未为 B2a 运行。
 
 ## 文档优先级
 
