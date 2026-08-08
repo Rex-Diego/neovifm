@@ -17,10 +17,12 @@ make -C tests/ -j3 build "${test_args[@]}"
 # fixtures use separate processes on Windows so asynchronous helpers and
 # environment changes cannot leak into later fixtures.
 make -C tests/ check-excluding-neovifm-snapshot "${test_args[@]}"
+focused_status=0
 for source in tests/neovifm_snapshot/*.c; do
     fixture="$(basename "$source" .c)"
     case "$fixture" in
         action_task|suite|undo_bridge) continue ;;
     esac
-    make -C tests/ TEST_RUN_FLAGS=-v "neovifm_snapshot.$fixture" "${test_args[@]}"
+    make -C tests/ TEST_RUN_FLAGS=-v "neovifm_snapshot.$fixture" "${test_args[@]}" || focused_status=1
 done
+exit "$focused_status"
