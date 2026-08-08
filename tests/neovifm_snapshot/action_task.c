@@ -82,7 +82,8 @@ write_replacement(const char path[])
 	const int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
 	if(fd >= 0)
 	{
-		(void)write(fd, "replacement", 11U);
+		const ssize_t written = write(fd, "replacement", 11U);
+		(void)written;
 		(void)close(fd);
 	}
 }
