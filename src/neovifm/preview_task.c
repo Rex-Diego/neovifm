@@ -23,6 +23,9 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
+#else
+#include <io.h>
+#include "../utils/utf8.h"
 #endif
 
 #include "preview_task.h"
@@ -108,6 +111,21 @@ static int preview_directory(nv_preview_queue_t *queue, nv_preview_task_t *task,
 static int preview_builtin(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		char **content, int *truncated, const char **error_code, int *os_error);
 static void sanitize_preview_text(char content[], size_t length);
+#ifdef _WIN32
+static int open_preview_file(const char path[], int flags)
+{
+	wchar_t *const wide_path = utf8_to_utf16(path);
+	if(wide_path == NULL) return -1;
+	const int descriptor = _wopen(wide_path, flags);
+	free(wide_path);
+	return descriptor;
+}
+#else
+static int open_preview_file(const char path[], int flags)
+{
+	return open(path, flags);
+}
+#endif
 #ifndef _WIN32
 static int preview_external(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		const char helper[], char *const argv[], char **content,
@@ -517,7 +535,7 @@ preview_text(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 {
 	/* Do not let a FIFO/device selected by a stale snapshot block the only
 	 * worker before fstat() rejects its non-regular type. */
-	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
+	const int fd = open_preview_file(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
@@ -650,7 +668,7 @@ static int
 preview_binary(nv_preview_queue_t *queue, nv_preview_task_t *task, char **content,
 		int *truncated, const char **error_code, int *os_error)
 {
-	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
+	const int fd = open_preview_file(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
@@ -774,7 +792,7 @@ preview_header(nv_preview_queue_t *queue, nv_preview_task_t *task,
 		unsigned char header[], size_t header_size, size_t *header_length,
 		struct stat *stat_value, const char **error_code, int *os_error)
 {
-	const int fd = open(task->path, NV_PREVIEW_READ_FLAGS);
+	const int fd = open_preview_file(task->path, NV_PREVIEW_READ_FLAGS);
 	if(fd < 0)
 	{
 		*error_code = "preview-open-failed";
