@@ -270,6 +270,7 @@ TEST(rebuilding_replaces_snapshot_and_preserves_it_on_failure)
 	remove_dir(replacement_dir);
 }
 
+#ifndef _WIN32
 TEST(executable_symlink_and_fifo_kinds_are_classified)
 {
 	nv_pane_snapshot_t snapshot = {};
@@ -299,6 +300,7 @@ TEST(executable_symlink_and_fifo_kinds_are_classified)
 	remove_file(fifo);
 	remove_dir(CONTENT_DIR);
 }
+#endif
 
 TEST(growing_entry_storage_keeps_all_entries)
 {

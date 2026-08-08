@@ -10,6 +10,11 @@
 
 #include "../../src/neovifm/preview_task.h"
 
+#ifdef _WIN32
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name) _putenv_s(name, "")
+#endif
+
 static void
 make_bytes(const char path[], const unsigned char bytes[], size_t length)
 {
@@ -722,6 +727,7 @@ TEST(preview_queue_reports_expired_request_as_timeout)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_rejects_fifo_without_blocking_worker)
 {
 	const char *const dir = SANDBOX_PATH "/preview-fifo";
@@ -748,6 +754,7 @@ TEST(preview_queue_rejects_fifo_without_blocking_worker)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */

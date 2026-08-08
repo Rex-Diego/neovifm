@@ -8,6 +8,11 @@
 #include "../../src/neovifm/open_config.h"
 #include "../../src/neovifm/open_resolver.h"
 
+#ifdef _WIN32
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name) _putenv_s(name, "")
+#endif
+
 TEST(explicit_association_precedes_platform_fallback)
 {
 	const char *const association[] = { "viewer", "--wait" };
