@@ -1,6 +1,6 @@
 # NeoVifm 当前状态
 
-最后核对：2026-08-04
+最后核对：2026-08-08
 
 ## 阶段
 
@@ -50,11 +50,13 @@ NeoVifm 当前处于 **Workbench Alpha 0 (unreleased)**。
 
 ### Windows
 
-- Phase A 只承诺 MinGW64 能构建经典 `vifm`、`neovifm-core-probe.exe` 和 `neovifm-core-session.exe`，并通过现有基础测试。
+- MinGW64 能构建经典 `vifm`、`neovifm-core-probe.exe` 和 `neovifm-core-session.exe`，并真实运行现有 Windows C tests 和 11 个 NeoVifm focused fixtures。
+- 真实 core/TUI integration 已验证 Unicode 目录与文件名、无输入时的初始 preview、导航、pane 切换、tabs、搜索、排序和 refresh。
+- session state 路径优先级是 `NEOVIFM_SESSION_STATE`、`%LOCALAPPDATA%\neovifm\session.json`、`%USERPROFILE%\AppData\Local\neovifm\session.json`。
+- 状态文件和目录使用 Unicode Win32 路径；正常退出能创建、替换并跨进程恢复双 pane、tabs、排序和光标现场。
 - 不发布 `file-actions-v1`。
 - `open-v1` 没有默认 Win32 opener，只有显式 association 才可能解析成功。
-- 默认 session state 路径尚未采用 `LOCALAPPDATA`/`USERPROFILE`，覆盖已有状态文件的替换语义也未完成验证。
-- Windows persistence、真实 core/TUI integration 和文件操作属于 Phase B，不能宣称已经支持完成。
+- 没有 watcher；copy/move/mkdir/delete/undo 和默认 Win32 opener 仍未完成。
 
 ## 当前能做什么
 
@@ -63,13 +65,13 @@ NeoVifm 当前处于 **Workbench Alpha 0 (unreleased)**。
 - 文本、目录、图片、PDF、音频、视频和 archive 的有界预览或 metadata 降级；效果依赖可用 helper。
 - 有界 Vifm `filetype`/`filextype`/`fileviewer` association 解析和结构化 open 结果。
 - task center、action/resource task 事件、取消和历史展示。
-- 正常退出时保存 workspace session；当前只有 POSIX/macOS 有可靠证据。
+- 正常退出时保存并恢复 workspace session；POSIX/macOS 和 Windows 均有自动化证据。
 
 ## 尚未完成
 
 - 完整 Vifm keymap、marks、registers、visual、history 和命令语义。
 - 文件操作与 Vifm `ops`/`background`/`undo` 的最终收口。
-- Windows persistence 和 Windows 文件操作。
+- Linux/Windows 文件操作和 Windows watcher/default opener。
 - ZIP/SSH 跨平台真实挂载 E2E。
 - Kitty/Sixel 等原生图形协议、音频封面和完整媒体体验。
 - 安装器、发布包、稳定配置迁移和公开 release。
@@ -104,7 +106,25 @@ CFLAGS='-Wno-error=gnu-folding-constant' \
   ./configure --enable-developer --without-glib
 ```
 
-Windows CI 复用 `scripts/appveyor/win/`。三平台最终门槛见 `.github/workflows/ci.yml` 的 `CI / gate`。
+Windows 本地基线在 MSYS2/MINGW64 中执行：
+
+```bash
+bash scripts/appveyor/win/build-deps
+bash scripts/appveyor/win/build
+bash scripts/appveyor/win/test
+```
+
+随后在 PowerShell 中执行真实 core integration：
+
+```powershell
+cd clients/tui
+bun install --frozen-lockfile
+$env:NEOVIFM_CORE_PROBE = (Resolve-Path '..\..\src\neovifm-core-probe.exe')
+$env:NEOVIFM_CORE_SESSION = (Resolve-Path '..\..\src\neovifm-core-session.exe')
+bun test ./integration/core-probe.test.tsx ./integration/windows-baseline.test.ts
+```
+
+三平台最终门槛见 `.github/workflows/ci.yml` 的 `CI / gate`。B1 证据为 GitHub Actions run `31243077034`：三平台和 gate 全绿；Windows real-core integration 为 5 tests，TUI 为 145 tests，函数/行覆盖率分别为 94.44%/98.33%。
 
 ## 文档优先级
 
