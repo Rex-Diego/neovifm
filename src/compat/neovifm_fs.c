@@ -1014,7 +1014,15 @@ run_trash(const char path[], nv_fs_cancel_hook cancelled, void *cancel_arg)
 #else
 		"/usr/bin/gio" : configured;
 	char *argv[] = { (char *)executable, NULL, (char *)path, NULL };
-	if(configured == NULL || configured[0] != '/') argv[1] = (char *)"trash";
+	if(configured == NULL || configured[0] != '/')
+	{
+		argv[1] = (char *)"trash";
+	}
+	else
+	{
+		argv[1] = (char *)path;
+		argv[2] = NULL;
+	}
 #endif
 	posix_spawn_file_actions_t actions;
 	int spawn_error = posix_spawn_file_actions_init(&actions);
@@ -1173,6 +1181,15 @@ nv_fs_remove(const char path[], nv_fs_identity_t source_directory,
 		goto done;
 	}
 	run_test_before_atomic_hook(path);
+	struct stat before_move;
+	if(fstatat(entry.fd, entry.name, &before_move, AT_SYMLINK_NOFOLLOW) != 0 ||
+			!identity_matches(&before_move, source_entry))
+	{
+		saved = errno == 0 ? ESTALE : errno;
+		close(quarantine_fd);
+		(void)unlinkat(entry.fd, quarantine, AT_REMOVEDIR);
+		goto done;
+	}
 #ifdef __APPLE__
 	if(renameatx_np(entry.fd, entry.name, quarantine_fd, entry.name,
 			RENAME_EXCL) != 0)
@@ -1294,6 +1311,13 @@ nv_fs_move(const char source[], const char destination[],
 	}
 #if defined(__APPLE__) || defined(__linux__)
 	run_test_before_atomic_hook(source);
+	struct stat before_move;
+	if(fstatat(from.fd, from.name, &before_move, AT_SYMLINK_NOFOLLOW) != 0 ||
+			!identity_matches(&before_move, source_entry))
+	{
+		saved = errno == 0 ? ESTALE : errno;
+		goto done;
+	}
 #ifdef __APPLE__
 	if(test_cross_device_move)
 	{
