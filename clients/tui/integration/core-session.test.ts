@@ -664,7 +664,7 @@ test("real v3 session allows a slow but bounded image renderer to finish", async
   }
 }, { timeout: 30000 })
 
-test.skipIf(process.platform !== "darwin")("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
+test.skipIf(process.platform === "win32")("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
   left = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-left-"))

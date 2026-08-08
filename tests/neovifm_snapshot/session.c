@@ -737,6 +737,38 @@ TEST(session_file_action_uses_captured_identity_after_cursor_moves)
 	remove_test_trash(trash_helper);
 }
 
+TEST(session_delete_restores_source_when_trash_helper_fails)
+{
+	const char *const helper = SANDBOX_PATH "/neovifm-test-trash-failure";
+	const char *const left = SANDBOX_PATH "/delete-failure-left";
+	const char *const right = SANDBOX_PATH "/delete-failure-right";
+	const char *const path = SANDBOX_PATH "/delete-failure-left/file";
+	make_file(helper, "#!/bin/sh\nexit 1\n");
+	assert_success(chmod(helper, 0700));
+	assert_success(setenv("NEOVIFM_TRASH_EXECUTABLE", helper, 1));
+	create_dir(left);
+	create_dir(right);
+	make_file(path, "content");
+	nv_workspace_session_t session = {};
+	nv_snapshot_error_t error = {};
+	assert_success(nv_workspace_session_init(left, right, &session, &error));
+
+	assert_failure(apply_action(&session, NV_SESSION_LEFT, NV_SESSION_DELETE,
+			&error));
+	assert_string_equal("delete-failed", error.code);
+	assert_success(access(path, F_OK));
+	assert_int_equal(1, session.left.entry_count);
+	assert_string_equal("file", session.left.entries[0].name_display);
+
+	nv_workspace_session_free(&session);
+	nv_snapshot_error_free(&error);
+	assert_success(unsetenv("NEOVIFM_TRASH_EXECUTABLE"));
+	remove_file(path);
+	remove_dir(left);
+	remove_dir(right);
+	remove_file(helper);
+}
+
 TEST(session_rejects_copying_a_directory_into_its_own_subtree)
 {
 	const char *const left = SANDBOX_PATH "/subtree-action";
