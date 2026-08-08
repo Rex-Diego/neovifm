@@ -1,5 +1,6 @@
 #include <stic.h>
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <test-utils.h>
@@ -81,11 +82,16 @@ TEST(session_state_round_trip_restores_tabs_panes_cursors_and_sorting)
 		.pane = NV_SESSION_RIGHT,
 	}, &error));
 	assert_success(nv_workspace_session_save_state(&session, state, &error));
+	assert_success(nv_workspace_session_apply(&session, &(nv_session_command_t){
+		.kind = NV_SESSION_FOCUS,
+		.pane = NV_SESSION_LEFT,
+	}, &error));
+	assert_success(nv_workspace_session_save_state(&session, state, &error));
 
 	nv_workspace_session_t restored = {};
 	assert_success(nv_workspace_session_init(right, left, &restored, &error));
 	assert_int_equal(0, nv_workspace_session_load_state(&restored, state, &error));
-	assert_int_equal(NV_SESSION_RIGHT, restored.active_pane);
+	assert_int_equal(NV_SESSION_LEFT, restored.active_pane);
 	assert_int_equal(2, nv_workspace_session_tab_count(&restored,
 		NV_SESSION_LEFT));
 	assert_int_equal(2, nv_workspace_session_tab_count(&restored,
@@ -109,12 +115,25 @@ TEST(session_state_round_trip_restores_tabs_panes_cursors_and_sorting)
 			"\"left_active\":1e300,\"right_active\":0}");
 	assert_int_equal(1, nv_workspace_session_load_state(&restored, invalid_state,
 			&error));
+	assert_int_equal(1, nv_workspace_session_load_state(&restored,
+			SANDBOX_PATH "/missing-session-state.json", &error));
+	const size_t oversized_length = 256U*1024U + 1U;
+	char *const oversized = malloc(oversized_length + 1U);
+	assert_non_null(oversized);
+	memset(oversized, 'x', oversized_length);
+	oversized[oversized_length] = '\0';
+	const char *const oversized_state = SANDBOX_PATH "/oversized-session-state.json";
+	make_file(oversized_state, oversized);
+	free(oversized);
+	assert_int_equal(1, nv_workspace_session_load_state(&restored,
+			oversized_state, &error));
 
 	nv_workspace_session_free(&restored);
 	nv_workspace_session_free(&session);
 	nv_snapshot_error_free(&error);
 	remove_file(state);
 	remove_file(invalid_state);
+	remove_file(oversized_state);
 	remove_file(SANDBOX_PATH "/state-left/alpha");
 	remove_file(SANDBOX_PATH "/state-left/zulu");
 	remove_file(SANDBOX_PATH "/state-left/child/inside");

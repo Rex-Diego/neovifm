@@ -95,10 +95,7 @@ suites += ioeta ionotif iop ior
 # ui
 suites += colmgr column_view viewcolumns_parser
 # everything else
-suites += bmarks escape fileops filetype filter lua menus misc
-ifdef unix_env
-suites += neovifm_snapshot
-endif
+suites += bmarks escape fileops filetype filter lua menus misc neovifm_snapshot
 suites += undo utils
 
 # these are built, but not automatically executed
@@ -106,12 +103,9 @@ apps := fuzz io_tester_app regs_shmem_app
 
 # obtain list of sources that are being tested
 vifm_src := ./ cfg/ compat/ engine/ int/ io/ io/private/ lua/ lua/lua/ menus/
-vifm_src += modes/ modes/dialogs/ ui/ utils/
-ifdef unix_env
-vifm_src += neovifm/
-endif
+vifm_src += modes/ modes/dialogs/ neovifm/ ui/ utils/
 vifm_src := $(wildcard $(addprefix ../src/, $(addsuffix *.c, $(vifm_src))))
-vifm_src := $(filter-out %/tags.c %/xxhash.c %/neovifm/core_probe.c %/neovifm/core_session.c %/neovifm/undo_compat.c, $(vifm_src))
+vifm_src := $(filter-out %/tags.c %/xxhash.c %/neovifm/core_probe.c %/neovifm/core_session.c %/neovifm/undo_compat.c %/neovifm/win_core_compat_win.c, $(vifm_src))
 
 # filter out generally non-testable or sources for another platform
 vifm_src := $(filter-out %/src/./vifm.c %/win_helper.c, $(vifm_src))
@@ -138,6 +132,8 @@ ifdef win_env
     make_args  += -f $(abspath ../src/Makefile.win)
     make_args  += "CFLAGS=$(TESTS_CFLAGS)" "LDFLAGS=$(TESTS_LDFLAGS)"
     exe_suffix := .exe
+    core_probe_target := neovifm-core-probe.exe
+    core_session_target := neovifm-core-session.exe
 endif
 
 CC = $(CROSS)gcc
