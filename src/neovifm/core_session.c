@@ -16,6 +16,8 @@
 
 #ifndef _WIN32
 # include <unistd.h>
+#else
+# include <wchar.h>
 #endif
 
 #ifdef __APPLE__
@@ -29,6 +31,7 @@
 #include "session_platform.h"
 #include "workspace_session.h"
 #include "../utils/parson.h"
+#include "../utils/utf8.h"
 
 #define NV_SESSION_MAX_COMMAND_BYTES (16U*1024U)
 #define NV_SESSION_MAX_RETRY_HISTORY 64U
@@ -2450,8 +2453,8 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 }
 #endif
 
-int
-main(int argc, char *argv[])
+static int
+core_main(int argc, char *argv[])
 {
 	if(argc != 3)
 	{
@@ -2697,3 +2700,32 @@ main(int argc, char *argv[])
 	nv_workspace_session_free(&session);
 	return result != 0 || ferror(stdin) ? 1 : 0;
 }
+
+#ifdef _WIN32
+int
+wmain(int argc, wchar_t *wide_argv[])
+{
+	char **const argv = calloc((size_t)argc + 1U, sizeof(*argv));
+	if(argv == NULL) return 1;
+	for(int i = 0; i < argc; ++i)
+	{
+		argv[i] = utf8_from_utf16(wide_argv[i]);
+		if(argv[i] == NULL)
+		{
+			while(i-- > 0) free(argv[i]);
+			free(argv);
+			return 1;
+		}
+	}
+	const int result = core_main(argc, argv);
+	for(int i = 0; i < argc; ++i) free(argv[i]);
+	free(argv);
+	return result;
+}
+#else
+int
+main(int argc, char *argv[])
+{
+	return core_main(argc, argv);
+}
+#endif

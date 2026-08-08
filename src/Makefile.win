@@ -146,12 +146,12 @@ ifeq ($(RELEASE),1)
 	$(STRIP) -S --strip-unneeded $@
 endif
 $(neovifm_core_probe_EXECUTABLE): $(neovifm_core_probe_OBJECTS) | ../build-aux/config.h
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+	$(CC) $^ -o $@ -municode $(LDFLAGS) $(LIBS)
 ifeq ($(RELEASE),1)
 	$(STRIP) -S --strip-unneeded $@
 endif
 $(neovifm_core_session_EXECUTABLE): $(neovifm_core_session_OBJECTS) | ../build-aux/config.h
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+	$(CC) $^ -o $@ -municode $(LDFLAGS) $(LIBS)
 ifeq ($(RELEASE),1)
 	$(STRIP) -S --strip-unneeded $@
 endif
