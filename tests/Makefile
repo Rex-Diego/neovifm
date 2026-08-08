@@ -381,6 +381,9 @@ endef
 # walk throw list of suites+apps and instantiate template for each one
 $(foreach suite, $(suites) $(apps), $(eval $(call suite_template,$(suite))))
 
+.PHONY: check-excluding-neovifm-snapshot
+check-excluding-neovifm-snapshot: build $(filter-out neovifm_snapshot,$(suites))
+
 # extra dependencies between test fixtures
 misc: | $(regs_shmem_app.bin)
 lua: | $(io_tester_app.bin)

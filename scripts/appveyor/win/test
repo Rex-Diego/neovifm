@@ -4,12 +4,22 @@
 mkdir -p tests/bin
 cp src/mingw-libgnurx-2.5.1/*.dll tests/bin
 
-# build tests in parallel
-make -C tests/ -j3 build \
-    'TESTS_CFLAGS=-I ../src/PDCurses-3.8/ -I ../src/mingw-libgnurx-2.5.1' \
+test_args=(
+    'TESTS_CFLAGS=-I ../src/PDCurses-3.8/ -I ../src/mingw-libgnurx-2.5.1'
     'TESTS_LDFLAGS=-L ../src/PDCurses-3.8/wincon -L ../src/mingw-libgnurx-2.5.1'
+)
 
-# but run sequentially for serial output
-make -C tests/ \
-    'TESTS_CFLAGS=-I ../src/PDCurses-3.8/ -I ../src/mingw-libgnurx-2.5.1' \
-    'TESTS_LDFLAGS=-L ../src/PDCurses-3.8/wincon -L ../src/mingw-libgnurx-2.5.1'
+# build tests in parallel
+make -C tests/ -j3 build "${test_args[@]}"
+
+# Run the existing suites sequentially for serial output.  The NeoVifm focused
+# fixtures use separate processes on Windows so asynchronous helpers and
+# environment changes cannot leak into later fixtures.
+make -C tests/ check-excluding-neovifm-snapshot "${test_args[@]}"
+for source in tests/neovifm_snapshot/*.c; do
+    fixture="$(basename "$source" .c)"
+    case "$fixture" in
+        action_task|suite|undo_bridge) continue ;;
+    esac
+    make -C tests/ "neovifm_snapshot.$fixture" "${test_args[@]}"
+done
