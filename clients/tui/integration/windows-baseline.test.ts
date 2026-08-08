@@ -67,8 +67,8 @@ test.skipIf(process.platform !== "win32")("real Windows cores handle Unicode pat
   const left = resolve(root, "左侧目录")
   const right = resolve(root, "右侧目录")
   await Promise.all([mkdir(left), mkdir(right)])
-  await writeFile(resolve(left, "阿尔法.txt"), "alpha")
-  await writeFile(resolve(left, "贝塔.txt"), "beta")
+  await writeFile(resolve(left, "a-阿尔法.txt"), "alpha")
+  await writeFile(resolve(left, "b-贝塔.txt"), "beta")
   await writeFile(resolve(right, "右侧.txt"), "right")
 
   const probe = await runCoreProbe({
@@ -77,13 +77,13 @@ test.skipIf(process.platform !== "win32")("real Windows cores handle Unicode pat
     rightPath: right,
   })
   if (!("workspace" in probe)) throw new Error("expected Windows workspace probe")
-  expect(probe.workspace.left.entries.some((entry) => entry.name_display === "阿尔法.txt")).toBe(true)
+  expect(probe.workspace.left.entries.some((entry) => entry.name_display === "a-阿尔法.txt")).toBe(true)
 
   const running = startTracked(left, right)
   await waitFor(() => {
     const state = running.state()
     return state.phase === "ready" && "session" in state && state.preview?.content === "alpha"
-  }, 15_000, () => JSON.stringify({ phase: running.state().phase, records: running.records.slice(0, 4), errors: running.errors.map(String) }))
+  }, 15_000, () => JSON.stringify({ state: running.state(), records: running.records.slice(-4), errors: running.errors.map(String) }))
   let state = running.state()
   if (!(state.phase === "ready" && "session" in state)) throw new Error("expected ready Windows session")
   expect(state.hello.capabilities).not.toContain("file-actions-v1")
@@ -92,7 +92,7 @@ test.skipIf(process.platform !== "win32")("real Windows cores handle Unicode pat
   await waitFor(() => {
     const current = running.state()
     return current.phase === "ready" && "session" in current
-      && current.workspace.left.entries[current.workspace.left.cursor]?.name_display === "贝塔.txt"
+      && current.workspace.left.entries[current.workspace.left.cursor]?.name_display === "b-贝塔.txt"
   })
   expect(await running.session.send({ action: "focus", pane: "right" })).toBe(true)
   expect(await running.session.send({ action: "new-tab", pane: "right" })).toBe(true)
@@ -146,7 +146,7 @@ test.skipIf(process.platform !== "win32")("Windows default state path restores a
       const state = second.state()
       return state.phase === "ready" && "session" in state
         && state.workspace.active_pane === "right" && state.workspace.right_tabs?.length === 2
-    })
+    }, 15_000, () => JSON.stringify({ state: second.state(), records: second.records.slice(-4), errors: second.errors.map(String) }))
     expect(await second.session.send({ action: "focus", pane: "left" })).toBe(true)
     await waitFor(() => {
       const state = second.state()
