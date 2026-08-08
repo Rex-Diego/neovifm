@@ -18,7 +18,11 @@
 static void
 make_bytes(const char path[], const unsigned char bytes[], size_t length)
 {
-	const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC |
+#ifdef _WIN32
+		O_BINARY |
+#endif
+		0, 0600);
 	assert_true(fd >= 0);
 	assert_int_equal((long long)length, (long long)write(fd, bytes, length));
 	assert_int_equal(0, close(fd));
