@@ -451,12 +451,14 @@ build_entry(nv_dir_t *dir, const char directory[], const char name[],
 	{
 		set_stat(entry, &st, is_symlink);
 		entry->resource_kind = entry_resource_kind(name, entry->kind);
+#ifndef _WIN32
 		if(entry->owner_display == NULL || entry->group_display == NULL)
 		{
 			free(raw_path);
 			entry_free(entry);
 			return BUILD_ENTRY_NO_MEMORY;
 		}
+#endif
 	}
 	else
 	{

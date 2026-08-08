@@ -12,7 +12,10 @@ import { openFile as launchOpenFile, openResolvedFile as launchResolvedOpenFile 
 import type { OpenFileDependencies } from "./open-file.js"
 
 export function defaultCoreProbePath(): string {
-	return resolve(import.meta.dir, "../../../src/neovifm-core-session")
+	const executable = process.platform === "win32"
+		? "neovifm-core-session.exe"
+		: "neovifm-core-session"
+	return resolve(import.meta.dir, "../../../src", executable)
 }
 
 export interface MainDependencies {

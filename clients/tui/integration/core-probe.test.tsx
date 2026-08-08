@@ -23,7 +23,7 @@ afterEach(async () => {
     await rm(rightDirectory, { recursive: true })
     rightDirectory = undefined
   }
-})
+}, 60_000)
 
 test("renders a real C core workspace in wide and compact layouts", async () => {
   const executable = process.env.NEOVIFM_CORE_PROBE

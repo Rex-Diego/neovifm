@@ -12,7 +12,7 @@ Git 远端约定：
 - `upstream`：只读 `vifm/vifm`，push URL 必须为 `DISABLED`。
 - 上游同步使用独立 merge commit，不与 NeoVifm 功能提交混合。
 
-Phase A 已把 Vifm 上游同步到 `6083f5297`，修复干净 Linux developer 构建，并增加 Linux、macOS、Windows GitHub Actions。`CI / gate` 只有三平台全部成功才通过。
+Phase A 建立了三平台构建与 CI 基线。Phase B1 已将 Vifm 上游同步到 `f5d60eaa`，并让 Windows focused C、真实 core/TUI session、Unicode preview 和 session persistence 获得远端证据。`CI / gate` 只有三平台全部成功才通过。
 
 ## 启动与验证
 
@@ -31,20 +31,20 @@ bun run dev
 
 Linux 使用同一流程，但 configure 不需要 Apple Clang flag。完整验证命令见 `docs/CURRENT_STATE.md`。
 
-Windows 当前只通过 `Makefile.win` 和 CI 构建基础二进制；不要把它描述成完整可用的 OpenTUI 产品。
+Windows 使用 `scripts/appveyor/win/` 构建和运行 C tests；真实 core integration 命令见 `docs/CURRENT_STATE.md`。它已能运行 Alpha 0 会话，但仍不是带文件操作、安装器和默认 opener 的完整产品。
 
 ## 当前功能
 
 - 双 pane、pane tabs、排序、选择和当前目录文件名搜索。
 - protocol v3 preview/task/resource event。
 - 快速对面 pane 预览、task center 和结构化 open。
-- POSIX/macOS 正常退出 session 保存和恢复。
+- POSIX/macOS 和 Windows 正常退出 session 保存和恢复。
 - macOS `file-actions-v1` 文件任务和 undo bridge。
 
 ## 已知边界
 
-- Windows session state 默认路径和原子替换尚未完成。
 - Linux/Windows 不发布 `file-actions-v1`。
+- Windows 没有 watcher 和默认 Win32 opener。
 - ZIP/SSH 真实挂载依赖 helper，跨平台 E2E 未完成。
 - Vifm marks、registers、完整 visual/history、批量重命名、compare/sync 和完整 background facade 未完成。
 - 安装、发布、插件 SDK、agent session 和全仓品牌重命名不属于 Alpha 0 基线。

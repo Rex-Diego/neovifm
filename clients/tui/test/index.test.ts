@@ -98,7 +98,9 @@ test("derives loading, workspace-ready, and core-error app props from immutable 
 })
 
 test("uses a stable default location and sanitizes unknown errors", () => {
-  expect(defaultCoreProbePath()).toContain("neovifm-core-session")
+  expect(defaultCoreProbePath()).toEndWith(process.platform === "win32"
+    ? "neovifm-core-session.exe"
+    : "neovifm-core-session")
   expect(toUiErrorMessage(new Error("bad\u001bmessage"))).toBe("bad�message")
 })
 

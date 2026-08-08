@@ -9,9 +9,14 @@
 
 #include <errno.h> /* E2BIG */
 #include <stdio.h> /* EOF fflush() fputc() fputs() fprintf() */
+#include <stdlib.h> /* calloc() free() */
+#ifdef _WIN32
+# include <wchar.h> /* wchar_t */
+#endif
 
 #include "pane_snapshot.h"
 #include "snapshot_json.h"
+#include "../utils/utf8.h"
 
 static int
 write_json_line(const char json[])
@@ -133,8 +138,8 @@ run_workspace_probe(const char left_path[], const char right_path[])
 	return (result == 0) ? 0 : 1;
 }
 
-int
-main(int argc, char *argv[])
+static int
+core_main(int argc, char *argv[])
 {
 	if(argc == 3)
 	{
@@ -187,6 +192,35 @@ main(int argc, char *argv[])
 	nv_protocol_json_free(json);
 	return (result == 0) ? 0 : 1;
 }
+
+#ifdef _WIN32
+int
+wmain(int argc, wchar_t *wide_argv[])
+{
+	char **const argv = calloc((size_t)argc + 1U, sizeof(*argv));
+	if(argv == NULL) return 1;
+	for(int i = 0; i < argc; ++i)
+	{
+		argv[i] = utf8_from_utf16(wide_argv[i]);
+		if(argv[i] == NULL)
+		{
+			while(i-- > 0) free(argv[i]);
+			free(argv);
+			return 1;
+		}
+	}
+	const int result = core_main(argc, argv);
+	for(int i = 0; i < argc; ++i) free(argv[i]);
+	free(argv);
+	return result;
+}
+#else
+int
+main(int argc, char *argv[])
+{
+	return core_main(argc, argv);
+}
+#endif
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */

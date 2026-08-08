@@ -149,7 +149,7 @@ jobs:
           test -f src/neovifm-core-probe.exe
           test -f src/neovifm-core-session.exe
 
-      - name: Run Windows C tests
+      - name: Run Windows C tests, including NeoVifm focused suite
         shell: msys2 {0}
         run: bash scripts/appveyor/win/test
 
@@ -173,6 +173,13 @@ jobs:
       - name: Audit TUI dependencies
         working-directory: clients/tui
         run: bun audit
+
+      - name: Run real Windows core integration
+        working-directory: clients/tui
+        env:
+          NEOVIFM_CORE_PROBE: ${{ github.workspace }}\src\neovifm-core-probe.exe
+          NEOVIFM_CORE_SESSION: ${{ github.workspace }}\src\neovifm-core-session.exe
+        run: bun test ./integration/core-probe.test.tsx ./integration/windows-baseline.test.ts
 
       - name: Check generated worktree and whitespace
         run: git diff --check
