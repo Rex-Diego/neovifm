@@ -796,7 +796,6 @@ TEST(classic_adapter_deep_copies_loaded_view_without_retaining_entries)
 	free(view.dir_entry[1].name);
 	free(view.dir_entry);
 }
-
 TEST(classic_workspace_adapter_copies_both_panes_atomically)
 {
 	view_t left = {}, right = {};
