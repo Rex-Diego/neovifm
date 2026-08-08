@@ -13,14 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #ifndef _WIN32
-# include <sys/select.h>
 # include <unistd.h>
-#else
-# include <direct.h>
-# define mkdir(path, mode) _mkdir(path)
 #endif
 
 #ifdef __APPLE__
@@ -31,6 +26,7 @@
 #include "snapshot_json.h"
 #include "undo_bridge.h"
 #include "open_config.h"
+#include "session_platform.h"
 #include "workspace_session.h"
 #include "../utils/parson.h"
 
@@ -175,13 +171,6 @@ static int watcher_handle_events(nv_session_watcher_t *watcher,
 		unsigned int command_sequence, int *stdin_ready,
 		nv_action_queue_t *action_queue);
 #endif
-
-#ifndef _WIN32
-static int poll_stdin(int *stdin_ready);
-#endif
-
-static char *session_state_path(void);
-static int ensure_session_state_directory(const char path[]);
 
 static int
 set_error(nv_snapshot_error_t *error, const char code[], const char message[])
@@ -2461,97 +2450,6 @@ watcher_handle_events(nv_session_watcher_t *watcher,
 }
 #endif
 
-#ifndef _WIN32
-static int
-poll_stdin(int *stdin_ready)
-{
-	fd_set read_fds;
-	FD_ZERO(&read_fds);
-	FD_SET(STDIN_FILENO, &read_fds);
-	struct timeval timeout = { .tv_sec = 0, .tv_usec = 12000 };
-	const int result = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
-	if(result < 0) return errno == EINTR ? 0 : -1;
-	*stdin_ready = result != 0;
-	return 0;
-}
-#endif
-
-static char *
-session_state_path(void)
-{
-	const char *const configured = getenv("NEOVIFM_SESSION_STATE");
-	if(configured != NULL && configured[0] != '\0') return strdup(configured);
-	const char *base = getenv("XDG_STATE_HOME");
-	char *owned_base = NULL;
-	if(base == NULL || base[0] == '\0')
-	{
-		const char *const home = getenv("HOME");
-		if(home == NULL || home[0] == '\0') return NULL;
-		const size_t length = strlen(home);
-		const size_t suffix_length = strlen("/.local/state");
-		owned_base = malloc(length + suffix_length + 1U);
-		if(owned_base == NULL) return NULL;
-		if(snprintf(owned_base, length + suffix_length + 1U,
-				"%s/.local/state", home) < 0)
-		{
-			free(owned_base);
-			return NULL;
-		}
-		base = owned_base;
-	}
-	const size_t length = strlen(base);
-	const size_t suffix_length = strlen("/neovifm/session.json");
-	char *const result = malloc(length + suffix_length + 1U);
-	if(result != NULL && snprintf(result, length + suffix_length + 1U,
-			"%s/neovifm/session.json", base) < 0)
-	{
-		free(result);
-		free(owned_base);
-		return NULL;
-	}
-	free(owned_base);
-	return result;
-}
-
-static int
-ensure_session_state_directory(const char path[])
-{
-	if(path == NULL || path[0] == '\0') return -1;
-	char *const directory = strdup(path);
-	if(directory == NULL) return -1;
-	char *const slash = strrchr(directory, '/');
-	if(slash == NULL)
-	{
-		free(directory);
-		return 0;
-	}
-	*slash = '\0';
-	if(directory[0] == '\0')
-	{
-		free(directory);
-		return 0;
-	}
-	char *cursor = directory + (directory[0] == '/' ? 1 : 0);
-	for(; *cursor != '\0'; ++cursor)
-	{
-		if(*cursor != '/') continue;
-		*cursor = '\0';
-		if(directory[0] != '\0' && mkdir(directory, 0700) != 0 && errno != EEXIST)
-		{
-			free(directory);
-			return -1;
-		}
-		*cursor = '/';
-	}
-	if(mkdir(directory, 0700) != 0 && errno != EEXIST)
-	{
-		free(directory);
-		return -1;
-	}
-	free(directory);
-	return 0;
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -2560,9 +2458,9 @@ main(int argc, char *argv[])
 		fputs("neovifm-core-session: expected left and right directory arguments\n", stderr);
 		return 2;
 	}
-	/* The macOS watcher loop uses select(2) before fgets().  Keep stdin
-	 * unbuffered so a second command already present in the pipe is not hidden
-	 * inside stdio after select reports the descriptor as drained. */
+	/* Readiness checks happen before fgets().  Keep stdin unbuffered so a second
+	 * command already present in the pipe is not hidden inside stdio after the
+	 * descriptor is reported as drained. */
 	(void)setvbuf(stdin, NULL, _IONBF, 0);
 	nv_workspace_session_t session = {};
 	nv_snapshot_error_t error = {};
@@ -2613,7 +2511,7 @@ main(int argc, char *argv[])
 		strcmp(getenv("NEOVIFM_SESSION_PERSIST"), "1") == 0;
 	const int resume_requested = getenv("NEOVIFM_SESSION_RESUME") != NULL &&
 		strcmp(getenv("NEOVIFM_SESSION_RESUME"), "1") == 0;
-	char *const state_path = persistence_enabled ? session_state_path() : NULL;
+	char *const state_path = persistence_enabled ? nv_session_state_path() : NULL;
 	if(resume_requested && state_path != NULL)
 	{
 		nv_snapshot_error_t restore_error = {};
@@ -2714,15 +2612,11 @@ main(int argc, char *argv[])
 	for(;;)
 	{
 		int stdin_ready = 0;
-#ifndef _WIN32
-		if(poll_stdin(&stdin_ready) != 0)
+		if(nv_session_poll_stdin(&stdin_ready) != 0)
 		{
 			result = 1;
 			break;
 		}
-#else
-		stdin_ready = 1;
-#endif
 			if(drain_preview_events(preview_queue, &output_sequence) != 0 ||
 					drain_action_events(action_queue, &session, &output_sequence,
 						command_sequence, preview_queue, &preview_generation,
@@ -2766,7 +2660,7 @@ main(int argc, char *argv[])
 			&pending_resources) != 0) result = 1;
 	if(persistence_enabled && state_path != NULL)
 	{
-		if(ensure_session_state_directory(state_path) != 0)
+		if(nv_session_ensure_parent_directory(state_path) != 0)
 		{
 			fputs("neovifm-core-session: unable to create session state directory\n",
 				stderr);
