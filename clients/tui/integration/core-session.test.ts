@@ -664,17 +664,22 @@ test("real v3 session allows a slow but bounded image renderer to finish", async
   }
 }, { timeout: 30000 })
 
-test.skipIf(process.platform !== "darwin")("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
+test.skipIf(process.platform === "win32")("real v3 session undoes completed copy and move through the core-owned bridge", async () => {
   const executable = process.env.NEOVIFM_CORE_SESSION
   if (executable === undefined || executable.length === 0) throw new Error("NEOVIFM_CORE_SESSION must point to the built core session")
   left = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-left-"))
   right = await mkdtemp(resolve(tmpdir(), "neovifm-session-undo-right-"))
   const sourcePath = resolve(left, "note.txt")
   const destinationPath = resolve(right, "note.txt")
+  const trashHelper = resolve(left, "test-trash.sh")
   await writeFile(sourcePath, "source")
+  await writeFile(trashHelper, "#!/bin/sh\nexec /bin/rm -rf -- \"$1\"\n")
+  await chmod(trashHelper, 0o700)
 
   let state: ProbeState = initialProbeState()
   const errors: Error[] = []
+  const originalTrash = process.env.NEOVIFM_TRASH_EXECUTABLE
+  process.env.NEOVIFM_TRASH_EXECUTABLE = trashHelper
   const session = startCoreSession({
     executable,
     leftPath: left,
@@ -731,6 +736,8 @@ test.skipIf(process.platform !== "darwin")("real v3 session undoes completed cop
   } finally {
     session.close()
     await session.completion
+    if (originalTrash === undefined) delete process.env.NEOVIFM_TRASH_EXECUTABLE
+    else process.env.NEOVIFM_TRASH_EXECUTABLE = originalTrash
   }
 }, { timeout: 30000 })
 

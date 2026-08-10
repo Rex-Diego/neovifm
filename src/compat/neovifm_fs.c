@@ -367,6 +367,10 @@ nv_fs_move(const char source[], const char destination[],
 #include <signal.h> /* SIGTERM kill() */
 #include <spawn.h> /* posix_spawn() */
 #include <stdio.h> /* rename() */
+#ifdef __linux__
+#include <linux/fs.h> /* RENAME_NOREPLACE */
+#include <sys/syscall.h> /* SYS_renameat2 */
+#endif
 #include <sys/wait.h> /* waitpid() */
 #include <time.h> /* nanosleep() */
 #include <unistd.h> /* close() link() read() readlink() symlink() unlink() write() */
@@ -390,7 +394,7 @@ nv_fs_test_force_cross_device_move(int enabled)
 	test_cross_device_move = enabled;
 }
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 static void
 run_test_before_atomic_hook(const char path[])
 {
@@ -549,7 +553,7 @@ stat_ctime_ns(const struct stat *st)
 #if defined(__APPLE__)
 	const time_t seconds = st->st_ctimespec.tv_sec;
 	const long nanoseconds = st->st_ctimespec.tv_nsec;
-#elif defined(HAVE_STRUCT_STAT_ST_CTIM)
+#elif defined(__linux__) || defined(HAVE_STRUCT_STAT_ST_CTIM)
 	const time_t seconds = st->st_ctim.tv_sec;
 	const long nanoseconds = st->st_ctim.tv_nsec;
 #else
@@ -882,7 +886,26 @@ copy_entry_at(int source_fd, const char source_name[], int destination_fd,
 	return result;
 }
 
-#ifdef __APPLE__
+#ifdef __linux__
+static int
+rename_no_replace(int source_fd, const char source_name[], int destination_fd,
+		const char destination_name[])
+{
+#ifdef SYS_renameat2
+	return (int)syscall(SYS_renameat2, source_fd, source_name, destination_fd,
+			destination_name, RENAME_NOREPLACE);
+#else
+	(void)source_fd;
+	(void)source_name;
+	(void)destination_fd;
+	(void)destination_name;
+	errno = ENOTSUP;
+	return -1;
+#endif
+}
+#endif
+
+#if defined(__APPLE__) || defined(__linux__)
 static char *
 join_parent_name(const char parent[], const char name[])
 {
@@ -970,8 +993,12 @@ restore_no_replace(int source_fd, const char source_name[], int parent_fd,
 	if(fstatat(source_fd, source_name, &current, AT_SYMLINK_NOFOLLOW) == 0 &&
 		current.st_dev == moved->st_dev && current.st_ino == moved->st_ino)
 	{
+#ifdef __APPLE__
 		(void)renameatx_np(source_fd, source_name, parent_fd, original_name,
 				RENAME_EXCL);
+#else
+		(void)rename_no_replace(source_fd, source_name, parent_fd, original_name);
+#endif
 	}
 }
 
@@ -981,8 +1008,22 @@ run_trash(const char path[], nv_fs_cancel_hook cancelled, void *cancel_arg)
 	pid_t child;
 	const char *const configured = getenv("NEOVIFM_TRASH_EXECUTABLE");
 	const char *const executable = configured == NULL || configured[0] != '/' ?
+#ifdef __APPLE__
 		"/usr/bin/trash" : configured;
-	char *const argv[] = { (char *)executable, (char *)path, NULL };
+	char *argv[] = { (char *)executable, (char *)path, NULL };
+#else
+		"/usr/bin/gio" : configured;
+	char *argv[] = { (char *)executable, NULL, (char *)path, NULL };
+	if(configured == NULL || configured[0] != '/')
+	{
+		argv[1] = (char *)"trash";
+	}
+	else
+	{
+		argv[1] = (char *)path;
+		argv[2] = NULL;
+	}
+#endif
 	posix_spawn_file_actions_t actions;
 	int spawn_error = posix_spawn_file_actions_init(&actions);
 	const int actions_initialized = spawn_error == 0;
@@ -1130,7 +1171,7 @@ nv_fs_remove(const char path[], nv_fs_identity_t source_directory,
 		saved = errno;
 		goto done;
 	}
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 	char quarantine[64];
 	int quarantine_fd = -1;
 	if(create_quarantine_directory(entry.fd, quarantine, sizeof(quarantine),
@@ -1140,8 +1181,21 @@ nv_fs_remove(const char path[], nv_fs_identity_t source_directory,
 		goto done;
 	}
 	run_test_before_atomic_hook(path);
+	struct stat before_move;
+	if(fstatat(entry.fd, entry.name, &before_move, AT_SYMLINK_NOFOLLOW) != 0 ||
+			!identity_matches(&before_move, source_entry))
+	{
+		saved = errno == 0 ? ESTALE : errno;
+		close(quarantine_fd);
+		(void)unlinkat(entry.fd, quarantine, AT_REMOVEDIR);
+		goto done;
+	}
+#ifdef __APPLE__
 	if(renameatx_np(entry.fd, entry.name, quarantine_fd, entry.name,
 			RENAME_EXCL) != 0)
+#else
+	if(rename_no_replace(entry.fd, entry.name, quarantine_fd, entry.name) != 0)
+#endif
 	{
 		saved = errno;
 		close(quarantine_fd);
@@ -1255,14 +1309,30 @@ nv_fs_move(const char source[], const char destination[],
 			goto done;
 		}
 	}
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 	run_test_before_atomic_hook(source);
+	struct stat before_move;
+	if(fstatat(from.fd, from.name, &before_move, AT_SYMLINK_NOFOLLOW) != 0 ||
+			!identity_matches(&before_move, source_entry))
+	{
+		saved = errno == 0 ? ESTALE : errno;
+		goto done;
+	}
+#ifdef __APPLE__
 	if(test_cross_device_move)
 	{
 		saved = EXDEV;
 		goto done;
 	}
 	if(renameatx_np(from.fd, from.name, to.fd, to.name, RENAME_EXCL) != 0)
+#else
+	if(test_cross_device_move)
+	{
+		saved = EXDEV;
+		goto done;
+	}
+	if(rename_no_replace(from.fd, from.name, to.fd, to.name) != 0)
+#endif
 	{
 		saved = errno;
 		goto done;
@@ -1281,9 +1351,9 @@ nv_fs_move(const char source[], const char destination[],
 		if(moved_result == 0)
 			restore_no_replace(to.fd, to.name, from.fd, from.name, &moved);
 	}
-#else
+	#else
 	saved = ENOTSUP;
-#endif
+	#endif
 
 done:
 	parent_entry_free(&to);

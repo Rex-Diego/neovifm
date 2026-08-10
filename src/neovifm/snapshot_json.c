@@ -320,7 +320,7 @@ nv_protocol_session_hello_json(unsigned int sequence)
 char *
 nv_protocol_preview_session_hello_json(unsigned int sequence)
 {
-	#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 	return hello_json(3U, "preview-session-v3", "workspace-sort-v1",
 			"pane-tabs-v1", "file-actions-v1", "open-v1",
 			"resource-tasks-v1", sequence);
