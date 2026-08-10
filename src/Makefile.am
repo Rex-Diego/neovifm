@@ -61,6 +61,7 @@ neovifm_core_probe_SOURCES = \
 	neovifm/resource_mount.c neovifm/resource_mount.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/session_platform.c neovifm/session_platform.h \
 	neovifm/snapshot_json.c neovifm/snapshot_json.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	utils/parson.c utils/parson.h \
@@ -73,6 +74,7 @@ neovifm_core_session_SOURCES = \
 	neovifm/resource_mount.c neovifm/resource_mount.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/session_platform.c neovifm/session_platform.h \
 	neovifm/undo_bridge.c neovifm/undo_bridge.h \
 	neovifm/undo_compat.c \
 	neovifm/action_task.c neovifm/action_task.h \
@@ -303,6 +305,7 @@ vifm_SOURCES = \
 	neovifm/classic_pane_adapter.c neovifm/classic_pane_adapter.h \
 	neovifm/pane_snapshot.c neovifm/pane_snapshot.h \
 	neovifm/workspace_session.c neovifm/workspace_session.h \
+	neovifm/session_platform.c neovifm/session_platform.h \
 	neovifm/preview_task.c neovifm/preview_task.h \
 	compat/neovifm_fs.c compat/neovifm_fs.h \
 	\

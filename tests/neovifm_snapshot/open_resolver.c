@@ -8,6 +8,11 @@
 #include "../../src/neovifm/open_config.h"
 #include "../../src/neovifm/open_resolver.h"
 
+#ifdef _WIN32
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name) _putenv_s(name, "")
+#endif
+
 TEST(explicit_association_precedes_platform_fallback)
 {
 	const char *const association[] = { "viewer", "--wait" };
@@ -32,6 +37,11 @@ TEST(empty_association_uses_platform_fallback)
 	assert_int_equal(0, unsetenv("MYVIFMRC"));
 	nv_open_resolution_t resolution = {};
 	nv_open_error_t error = {};
+#ifdef _WIN32
+	assert_failure(nv_open_resolve(NV_OPEN_INTENT_OPEN, "/tmp/a b.pdf",
+			NULL, 0U, &resolution, &error));
+	assert_string_equal("unsupported-platform", error.code);
+#else
 	assert_success(nv_open_resolve(NV_OPEN_INTENT_OPEN, "/tmp/a b.pdf",
 			NULL, 0U, &resolution, &error));
 	assert_string_equal("platform", nv_open_source_name(resolution.source));
@@ -42,6 +52,7 @@ TEST(empty_association_uses_platform_fallback)
 	assert_string_equal("xdg-open", resolution.argv[0]);
 	#endif
 	assert_string_equal("/tmp/a b.pdf", resolution.argv[1]);
+#endif
 	nv_open_resolution_free(&resolution);
 	nv_open_error_free(&error);
 	if(old_copy == NULL)
@@ -157,9 +168,15 @@ TEST(vifm_rules_fall_back_only_for_open_and_bound_rule_count)
 	};
 	nv_open_resolution_t resolution = {};
 	nv_open_error_t error = {};
-	assert_success(nv_open_resolve_rules(NV_OPEN_INTENT_OPEN,
-			"/tmp/unknown.bin", &viewer_rule, 1U, &resolution, &error));
+	const int fallback = nv_open_resolve_rules(NV_OPEN_INTENT_OPEN,
+			"/tmp/unknown.bin", &viewer_rule, 1U, &resolution, &error);
+#ifdef _WIN32
+	assert_failure(fallback);
+	assert_string_equal("unsupported-platform", error.code);
+#else
+	assert_success(fallback);
 	assert_string_equal("platform", nv_open_source_name(resolution.source));
+#endif
 	nv_open_resolution_free(&resolution);
 	nv_open_error_free(&error);
 	assert_failure(nv_open_resolve_rules(NV_OPEN_INTENT_PREVIEW,

@@ -10,6 +10,7 @@
 
 #include "../../src/neovifm/resource_task.h"
 
+#ifndef _WIN32
 static const char *const FUSE_ZIP = SANDBOX_PATH "/resource-fuse-zip";
 static const char *const UNMOUNT = SANDBOX_PATH "/resource-umount";
 static const char *const ARCHIVE = SANDBOX_PATH "/resource-bundle.zip";
@@ -183,6 +184,7 @@ TEST(resource_task_reports_missing_mounter_when_started)
 	nv_resource_task_queue_free(queue);
 	remove_helpers();
 }
+#endif
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */

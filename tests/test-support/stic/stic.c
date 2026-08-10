@@ -692,6 +692,9 @@ void stic_testrunner_create(stic_testrunner_t* runner, int argc, char** argv )
 
 int stic_testrunner(int argc, char** argv, stic_void_void tests, stic_void_void setup, stic_void_void teardown)
 {
+	#ifdef WIN32
+	setvbuf(stdout, NULL, _IONBF, 0);
+	#endif
 	stic_testrunner_t runner;
 	stic_testrunner_create(&runner, argc, argv);
 	switch(runner.action)

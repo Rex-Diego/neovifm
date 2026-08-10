@@ -13,7 +13,7 @@ NeoVifm 的主线入口是 OpenTUI，当前阶段是 **Workbench Alpha 0 (unrele
 - `neovifm-core-probe` 发布无用户配置污染的目录快照；`neovifm-core-session` 为 OpenTUI 提供版本化 JSONL 会话协议。
 - `clients/tui` 已接入双 pane、pane tab、Vifm 风格键位基础、搜索、排序、任务中心、资源任务和 F3/Space 文本与媒体预览。
 - 当前仍未完成：完整 Vifm filetype/fileviewer/running 语义、删除/Trash undo、真实 ZIP/SSH 挂载 E2E、图形图片/PDF/视频/音频渲染和完整低色彩/终端尺寸验收。
-- `file-actions-v1` 和 kqueue watcher 当前只在 macOS 提供；Windows 只承诺构建与基础测试，persistence 和文件操作仍未完成。
+- `file-actions-v1` 和 kqueue watcher 当前只在 macOS 提供；Windows 已验证真实 core/TUI session 和 persistence，但文件操作、watcher 与默认 Win32 opener 仍未完成。
 - 经典 Vifm 默认行为不被替换；OpenTUI 缺少 capability 时必须降级为可读的文本或结构化错误。
 - 当前平台和能力事实见 [CURRENT_STATE](docs/CURRENT_STATE.md)，架构决策见 [ADR 0001](docs/adr/0001-hybrid-core-opentui.md)，协议见 [NeoVifm Core Protocol](protocol/README.md)。
 
@@ -152,7 +152,7 @@ bun run dev ../.. /tmp
 
 前两个路径参数分别是左、右 pane；省略右路径时会复制左路径。`q` 或 `Ctrl-C` 退出，`Tab` 切换当前 pane。也可通过 `NEOVIFM_CORE_PROBE=/path/to/probe` 指定 core probe。
 
-不传路径启动时，OpenTUI 会在正常退出后恢复上次现场：包括左右 pane 路径、每个 pane 的 tab 顺序与活动 tab、活动 pane 和各目录中的光标目标。在 POSIX 环境，状态默认保存到 `$XDG_STATE_HOME/neovifm/session.json`，未设置时使用 `~/.local/state/neovifm/session.json`；可用 `NEOVIFM_SESSION_STATE=/path/to/session.json` 覆盖。Windows 默认状态目录和替换语义仍属于 Phase B，当前应显式设置 `NEOVIFM_SESSION_STATE`，不能宣称 persistence 已完成。已挂载的 ZIP/SSH 资源不会被伪造为普通本地目录恢复。
+不传路径启动时，OpenTUI 会在正常退出后恢复上次现场：包括左右 pane 路径、每个 pane 的 tab 顺序与活动 tab、活动 pane 和各目录中的光标目标。在 POSIX 环境，状态默认保存到 `$XDG_STATE_HOME/neovifm/session.json`，未设置时使用 `~/.local/state/neovifm/session.json`。Windows 默认使用 `%LOCALAPPDATA%\neovifm\session.json`，缺失时回退到 `%USERPROFILE%\AppData\Local\neovifm\session.json`。所有平台都可用 `NEOVIFM_SESSION_STATE` 覆盖；Windows 中文用户名和目录、已有状态替换及跨进程恢复已经过真实 core/TUI integration 验证。已挂载的 ZIP/SSH 资源不会被伪造为普通本地目录恢复。
 
 方向键遵循 Vifm 直觉：`↑/↓/←/→` 分别等同于 `k/j/h/l`；排序切换保留在排序控件和命令入口，不再占用左右方向键。
 
@@ -172,6 +172,8 @@ env -u VIFM -u MYVIFMRC make check
 ```
 
 测试必须串行执行。现有 suite 会使用共享相对路径，`make -jN check` 存在竞态。
+
+Windows 的 MSYS2/MINGW64 构建、focused C 和真实 core integration 命令见 [CURRENT_STATE](docs/CURRENT_STATE.md)。
 
 ## 上游同步
 

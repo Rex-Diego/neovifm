@@ -25,6 +25,7 @@
 
 #include "../compat/neovifm_fs.h"
 #include "../utils/parson.h"
+#include "session_platform.h"
 
 #define NV_SESSION_STATE_VERSION 1U
 #define NV_SESSION_STATE_MAX_BYTES (256U*1024U)
@@ -843,29 +844,8 @@ write_state_json_atomic(const JSON_Value *value, const char path[])
 {
 	char *const serialized = json_serialize_to_string_pretty(value);
 	if(serialized == NULL) return -1;
-	const size_t path_length = strlen(path);
-	const size_t suffix_length = strlen(".tmp-XXXXXX");
-	char *const temporary = malloc(path_length + suffix_length + 1U);
-	if(temporary == NULL)
-	{
-		json_free_serialized_string(serialized);
-		return -1;
-	}
-	if(snprintf(temporary, path_length + suffix_length + 1U,
-			"%s.tmp-XXXXXX", path) < 0)
-	{
-		free(temporary);
-		json_free_serialized_string(serialized);
-		return -1;
-	}
-	int descriptor = -1;
-#ifndef _WIN32
-	descriptor = mkstemp(temporary);
-#else
-	if(_mktemp_s(temporary, path_length + suffix_length + 1U) == 0)
-		descriptor = _open(temporary, _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
-				_S_IREAD | _S_IWRITE);
-#endif
+	char *temporary = NULL;
+	const int descriptor = nv_session_open_temporary(path, &temporary);
 	FILE *const file = descriptor < 0 ? NULL :
 #ifndef _WIN32
 		fdopen(descriptor, "wb");
@@ -880,7 +860,7 @@ write_state_json_atomic(const JSON_Value *value, const char path[])
 #else
 			_close(descriptor);
 #endif
-		if(descriptor >= 0) remove(temporary);
+		if(descriptor >= 0) nv_session_remove_file(temporary);
 		free(temporary);
 		json_free_serialized_string(serialized);
 		return -1;
@@ -894,8 +874,8 @@ write_state_json_atomic(const JSON_Value *value, const char path[])
 	if(result && _commit(_fileno(file)) != 0) result = 0;
 #endif
 	if(fclose(file) != 0) result = 0;
-	if(result && rename(temporary, path) != 0) result = 0;
-	if(!result) remove(temporary);
+	if(result && nv_session_replace_file(temporary, path) != 0) result = 0;
+	if(!result) nv_session_remove_file(temporary);
 	free(temporary);
 	json_free_serialized_string(serialized);
 	return result ? 0 : -1;
@@ -919,8 +899,7 @@ persisted_directory_exists(const char bytes_hex[])
 {
 	char *const path = hex_decode(bytes_hex);
 	if(path == NULL) return 0;
-	struct stat info = {};
-	const int result = stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+	const int result = nv_session_directory_exists(path);
 	free(path);
 	return result;
 }
@@ -990,11 +969,37 @@ parse_persisted_tabs(JSON_Object *root, const char field[],
 static int
 parse_persisted_state(const char path[], nv_persisted_state_t *state)
 {
+	FILE *const file = nv_session_fopen(path, "rb");
+	if(file == NULL) return 1;
 	struct stat info = {};
-	if(stat(path, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
-			(uintmax_t)info.st_size > NV_SESSION_STATE_MAX_BYTES)
+#ifndef _WIN32
+	const int descriptor = fileno(file);
+#else
+	const int descriptor = _fileno(file);
+#endif
+	if(descriptor < 0 || fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) ||
+			info.st_size < 0 || (uintmax_t)info.st_size > NV_SESSION_STATE_MAX_BYTES)
+	{
+		fclose(file);
 		return 1;
-	JSON_Value *const value = json_parse_file(path);
+	}
+	const size_t length = (size_t)info.st_size;
+	char *const contents = malloc(length + 1U);
+	if(contents == NULL)
+	{
+		fclose(file);
+		return -1;
+	}
+	const int complete = fread(contents, 1U, length, file) == length &&
+		fgetc(file) == EOF && !ferror(file);
+	if(fclose(file) != 0 || !complete)
+	{
+		free(contents);
+		return 1;
+	}
+	contents[length] = '\0';
+	JSON_Value *const value = json_parse_string(contents);
+	free(contents);
 	JSON_Object *const root = value == NULL ? NULL : json_value_get_object(value);
 	if(root == NULL || !json_object_has_value_of_type(root, "version", JSONNumber) ||
 			json_object_get_number(root, "version") != NV_SESSION_STATE_VERSION ||

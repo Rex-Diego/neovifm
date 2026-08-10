@@ -45,6 +45,7 @@ TEST(session_refreshes_an_inactive_tab_by_stable_id)
 	remove_dir(right);
 }
 
+#ifndef _WIN32
 TEST(session_keeps_resource_ownership_with_a_tab_and_restores_origin)
 {
 	const char *const left = SANDBOX_PATH "/resource-session-left";
@@ -84,3 +85,4 @@ TEST(session_keeps_resource_ownership_with_a_tab_and_restores_origin)
 	remove_dir(left);
 	remove_dir(right);
 }
+#endif

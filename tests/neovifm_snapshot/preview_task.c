@@ -10,10 +10,19 @@
 
 #include "../../src/neovifm/preview_task.h"
 
+#ifdef _WIN32
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name) _putenv_s(name, "")
+#endif
+
 static void
 make_bytes(const char path[], const unsigned char bytes[], size_t length)
 {
-	const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC |
+#ifdef _WIN32
+		O_BINARY |
+#endif
+		0, 0600);
 	assert_true(fd >= 0);
 	assert_int_equal((long long)length, (long long)write(fd, bytes, length));
 	assert_int_equal(0, close(fd));
@@ -174,6 +183,7 @@ TEST(preview_queue_treats_markdown_as_bounded_text)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
 {
 	const char *const dir = SANDBOX_PATH "/preview-fileviewer";
@@ -212,7 +222,9 @@ TEST(preview_queue_uses_structured_fileviewer_argv_before_builtin_renderer)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
+#ifndef _WIN32
 TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 {
 	const char *const dir = SANDBOX_PATH "/preview-image";
@@ -248,6 +260,9 @@ TEST(preview_queue_reports_image_dimensions_without_streaming_binary_pixels)
 	remove_dir(dir);
 }
 
+#endif
+
+#ifndef _WIN32
 TEST(preview_queue_uses_bounded_block_chafa_before_metadata_fallback)
 {
 	const char *const dir = SANDBOX_PATH "/preview-chafa";
@@ -344,6 +359,7 @@ TEST(preview_queue_prefers_ascii_image_over_metadata_fileviewer)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
 {
@@ -391,6 +407,7 @@ TEST(preview_queue_reports_audio_and_video_metadata_fallbacks)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_renders_pdf_first_page_after_empty_viewer_with_raster_helper)
 {
 	const char *const dir = SANDBOX_PATH "/preview-pdf-raster";
@@ -546,6 +563,7 @@ TEST(preview_queue_uses_ffprobe_for_audio_metadata_before_header_fallback)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 TEST(preview_queue_cancels_queued_generation_before_worker_runs_it)
 {
@@ -722,6 +740,7 @@ TEST(preview_queue_reports_expired_request_as_timeout)
 	remove_dir(dir);
 }
 
+#ifndef _WIN32
 TEST(preview_queue_rejects_fifo_without_blocking_worker)
 {
 	const char *const dir = SANDBOX_PATH "/preview-fifo";
@@ -748,6 +767,7 @@ TEST(preview_queue_rejects_fifo_without_blocking_worker)
 	remove_file(path);
 	remove_dir(dir);
 }
+#endif
 
 /* vim: set tabstop=2 softtabstop=2 shiftwidth=2 noexpandtab cinoptions-=(0 : */
 /* vim: set cinoptions+=t0 filetype=c : */
