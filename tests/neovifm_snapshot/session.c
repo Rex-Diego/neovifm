@@ -13,7 +13,7 @@
 #include "../../src/ui/ui.h"
 #include "../../src/utils/matchers.h"
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 
 static nv_pane_snapshot_t *
 test_pane(nv_workspace_session_t *session, nv_session_pane_t pane)
@@ -161,7 +161,7 @@ remove_test_trash(const char helper[])
 	remove_file(helper);
 }
 
-#endif /* __APPLE__ */
+#endif /* __APPLE__ || __linux__ */
 
 TEST(session_keeps_panes_independent_while_moving_and_selecting)
 {
@@ -558,7 +558,7 @@ TEST(session_sorts_by_core_owned_column_and_preserves_cursor_identity)
 	remove_dir(right);
 }
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 
 TEST(session_function_actions_copy_move_mkdir_and_delete_real_files)
 {
@@ -761,7 +761,7 @@ TEST(session_rejects_copying_a_directory_into_its_own_subtree)
 	remove_dir(left);
 }
 
-#endif /* __APPLE__ */
+#endif /* __APPLE__ || __linux__ */
 
 #ifndef _WIN32
 TEST(classic_adapter_deep_copies_loaded_view_without_retaining_entries)

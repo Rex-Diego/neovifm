@@ -25,6 +25,9 @@ typedef struct
 {
 	unsigned int pane;
 	uint64_t tab_id;
+	int has_destination;
+	unsigned int destination_pane;
+	uint64_t destination_tab_id;
 } nv_undo_bridge_location_t;
 
 typedef struct
